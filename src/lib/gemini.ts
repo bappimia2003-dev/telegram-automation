@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { getNextModel, getFirstModel, AVAILABLE_MODELS } from './models';
+import { getNextModel, getFirstModel, AVAILABLE_MODELS, DEFAULT_MODEL } from './models';
 import { getAllApiKeys, updateApiKey, updateBot } from './db';
 import { Bot, ApiKey } from './types';
 
@@ -14,9 +14,11 @@ export async function generateResponse(
   userMessage: string,
   assignedApiKey: ApiKey
 ): Promise<GenerateResult> {
-  // Build ordered list of API keys to try: assigned first, then others
+  // Build ordered list of API keys to try: assigned first, then other active keys
   const allKeys = await getAllApiKeys();
   const activeKeys = allKeys.filter(k => k.status !== 'exhausted');
+  
+  // Make sure assignedApiKey is prioritized if active
   const orderedKeys = [
     assignedApiKey,
     ...activeKeys.filter(k => k.id !== assignedApiKey.id),
@@ -25,31 +27,30 @@ export async function generateResponse(
   let lastError: Error | null = null;
 
   for (const apiKey of orderedKeys) {
-    // For each API key, try all models in priority order
-    const startModel = apiKey.id === assignedApiKey.id ? bot.currentModel : getFirstModel().name;
+    if (!apiKey.key) continue;
+
+    // Check if bot's current model is valid, otherwise use DEFAULT_MODEL (gemini-3.8-flash)
+    const isModelValid = AVAILABLE_MODELS.some(m => m.name === bot.currentModel);
+    const startModel = isModelValid ? bot.currentModel : DEFAULT_MODEL;
     let currentModelName: string | null = startModel;
 
     while (currentModelName) {
       try {
-        const genAI = new GoogleGenerativeAI(apiKey.key);
+        const genAI = new GoogleGenerativeAI(apiKey.key.trim());
         const model = genAI.getGenerativeModel({ model: currentModelName });
 
         const systemPrompt = buildSystemPrompt(bot);
-        const chat = model.startChat({
-          history: [],
-          generationConfig: {
-            maxOutputTokens: bot.maxTokens,
-            temperature: 0.7,
-          },
-        });
 
-        // Send system context as first message, then user message
+        // Generate response with Gemini
         const result = await model.generateContent({
           contents: [
-            { role: 'user', parts: [{ text: systemPrompt + '\n\nUser message: ' + userMessage }] },
+            { 
+              role: 'user', 
+              parts: [{ text: `${systemPrompt}\n\nUser message: ${userMessage}` }] 
+            },
           ],
           generationConfig: {
-            maxOutputTokens: bot.maxTokens,
+            maxOutputTokens: bot.maxTokens || 500,
             temperature: 0.7,
           },
         });
@@ -57,82 +58,76 @@ export async function generateResponse(
         const response = result.response;
         const text = response.text();
 
-        if (!text) {
+        if (!text || text.trim() === '') {
           throw new Error('Empty response from model');
         }
 
-        // Success! Update the bot's current model and API key stats
+        // Success! Update bot model & key metrics
         await updateBot(bot.id, { currentModel: currentModelName });
         await updateApiKey(apiKey.id, {
-          requestsToday: apiKey.requestsToday + 1,
+          requestsToday: (apiKey.requestsToday || 0) + 1,
           lastUsed: new Date().toISOString(),
           status: 'active',
         });
 
+        console.log(`[Gemini Success] Bot "${bot.name}" replied using ${currentModelName} via ${apiKey.gmail}`);
+
         return {
-          text,
+          text: text.trim(),
           model: currentModelName,
           apiKeyId: apiKey.id,
         };
       } catch (error: any) {
         lastError = error;
         const errorMessage = error?.message || '';
-        const isQuotaError =
-          errorMessage.includes('429') ||
-          errorMessage.includes('quota') ||
-          errorMessage.includes('rate') ||
-          errorMessage.includes('RESOURCE_EXHAUSTED') ||
-          errorMessage.includes('Too Many Requests');
+        console.warn(`[Gemini Attempt Failed] Model ${currentModelName} on key ${apiKey.gmail}: ${errorMessage.substring(0, 150)}`);
 
-        if (isQuotaError) {
-          console.log(`Model ${currentModelName} quota exceeded on key ${apiKey.gmail}, rotating...`);
-          // Try next model
-          const nextModel = getNextModel(currentModelName);
-          currentModelName = nextModel ? nextModel.name : null;
+        // Automatically rotate to the next available model
+        const nextModel = getNextModel(currentModelName);
+        if (nextModel) {
+          console.log(`[Rotating Model] Switching to next fallback model: ${nextModel.name}...`);
+          currentModelName = nextModel.name;
         } else {
-          // Non-quota error, skip to next key
-          console.error(`Error with model ${currentModelName}:`, errorMessage);
+          console.warn(`[All Models Exhausted] No more models left on key ${apiKey.gmail}. Rotating to next API key...`);
+          currentModelName = null;
           break;
         }
       }
     }
-
-    // All models exhausted for this key, mark it
-    await updateApiKey(apiKey.id, { status: 'rate_limited' });
   }
 
   // All keys and models exhausted
-  console.error('All API keys and models exhausted. Last error:', lastError);
+  console.error('[Gemini Fatal] All API keys and fallback models failed. Last error:', lastError);
   return {
-    text: "I'm temporarily unavailable due to high demand. Please try again in a few minutes. 🙏",
+    text: "I'm temporarily experiencing high demand. Please try sending your message again in a moment! 🙏",
     model: 'fallback',
     apiKeyId: 'none',
   };
 }
 
 function buildSystemPrompt(bot: Bot): string {
-  let prompt = bot.aiPersonality || 'You are a helpful assistant.';
+  let prompt = bot.aiPersonality || 'You are a helpful and polite AI assistant.';
 
   if (bot.aiDetails) {
-    prompt += `\n\nAdditional context and knowledge:\n${bot.aiDetails}`;
+    prompt += `\n\nAdditional Knowledge and Context:\n${bot.aiDetails}`;
   }
 
   switch (bot.responseStyle) {
     case 'formal':
-      prompt += '\n\nPlease respond in a formal, professional tone.';
+      prompt += '\n\nPlease maintain a formal, polite, and professional tone.';
       break;
     case 'casual':
-      prompt += '\n\nPlease respond in a casual, relaxed tone.';
+      prompt += '\n\nPlease speak in a relaxed, friendly, and casual tone.';
       break;
     case 'friendly':
-      prompt += '\n\nPlease respond in a warm, friendly tone with occasional emojis.';
+      prompt += '\n\nPlease speak in a warm, welcoming, and helpful tone.';
       break;
     case 'custom':
-      // Custom style is defined in aiPersonality
+      // Custom behavior is specified in personality
       break;
   }
 
-  prompt += '\n\nKeep responses concise and relevant. Do not mention that you are an AI unless directly asked.';
+  prompt += '\n\nAnswer helpfully in the user’s language (e.g. Bengali or English). Keep your reply natural and conversational.';
 
   return prompt;
 }
