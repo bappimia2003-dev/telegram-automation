@@ -62,6 +62,28 @@ export async function getBotInfo(botToken: string): Promise<any> {
   return res.json();
 }
 
+export async function sendChatAction(
+  botToken: string,
+  chatId: number | string,
+  action: 'typing' | 'upload_photo' | 'record_video' | 'choose_sticker' = 'typing'
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${TELEGRAM_API}/bot${botToken}/sendChatAction`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        action,
+      }),
+    });
+    const data = await res.json();
+    return data.ok === true;
+  } catch {
+    return false;
+  }
+}
+
+
 export interface TelegramUpdate {
   update_id: number;
   message?: {

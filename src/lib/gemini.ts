@@ -1,5 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { getNextModel, getFirstModel, AVAILABLE_MODELS, DEFAULT_MODEL } from './models';
+import { getModelCandidateList, AVAILABLE_MODELS, DEFAULT_MODEL } from './models';
 import { getAllApiKeys, updateApiKey, updateBot } from './db';
 import { Bot, ApiKey } from './types';
 
@@ -9,97 +8,152 @@ interface GenerateResult {
   apiKeyId: string;
 }
 
+// In-memory cooldown tracker to avoid hitting models during temporary spikes (503) or rate limits (429)
+const modelCooldowns = new Map<string, number>();
+
+function markCooldown(modelName: string, durationMs: number) {
+  modelCooldowns.set(modelName, Date.now() + durationMs);
+}
+
+function getSortedCandidates(preferredModel?: string): string[] {
+  const candidates = getModelCandidateList(preferredModel);
+  const now = Date.now();
+
+  const healthy: string[] = [];
+  const coolingDown: string[] = [];
+
+  for (const model of candidates) {
+    const expireAt = modelCooldowns.get(model) || 0;
+    if (now >= expireAt) {
+      healthy.push(model);
+    } else {
+      coolingDown.push(model);
+    }
+  }
+
+  // Always attempt healthy models first, followed by cooling down ones as fallback
+  return [...healthy, ...coolingDown];
+}
+
 export async function generateResponse(
   bot: Bot,
   userMessage: string,
   assignedApiKey: ApiKey
 ): Promise<GenerateResult> {
-  // Build ordered list of API keys to try: assigned first, then other active keys
+  // Ordered API keys: assigned first, then other active keys
   const allKeys = await getAllApiKeys();
   const activeKeys = allKeys.filter(k => k.status !== 'exhausted');
-  
-  // Make sure assignedApiKey is prioritized if active
+
   const orderedKeys = [
     assignedApiKey,
     ...activeKeys.filter(k => k.id !== assignedApiKey.id),
   ];
 
-  let lastError: Error | null = null;
+  const systemPrompt = buildSystemPrompt(bot);
+  let lastErrorMsg = '';
 
   for (const apiKey of orderedKeys) {
     if (!apiKey.key) continue;
 
-    // Check if bot's current model is valid, otherwise use DEFAULT_MODEL (gemini-3.8-flash)
-    const isModelValid = AVAILABLE_MODELS.some(m => m.name === bot.currentModel);
-    const startModel = isModelValid ? bot.currentModel : DEFAULT_MODEL;
-    let currentModelName: string | null = startModel;
+    const trimmedKey = apiKey.key.trim();
+    // Get candidate models ordered: healthy models first, circular fallback
+    const candidateModels = getSortedCandidates(bot.currentModel);
 
-    while (currentModelName) {
+    console.log(`[Gemini Engine] Trying key (${apiKey.gmail || apiKey.label}), candidate models: ${candidateModels.join(', ')}`);
+
+    for (const modelName of candidateModels) {
+      const startTime = Date.now();
       try {
-        const genAI = new GoogleGenerativeAI(apiKey.key.trim());
-        const model = genAI.getGenerativeModel({ model: currentModelName });
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${trimmedKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: {
+                parts: [{ text: systemPrompt }],
+              },
+              contents: [
+                {
+                  role: 'user',
+                  parts: [{ text: userMessage }],
+                },
+              ],
+              generationConfig: {
+                maxOutputTokens: bot.maxTokens || 600,
+                temperature: 0.7,
+              },
+            }),
+            signal: AbortSignal.timeout(6500), // 6.5s timeout per model attempt
+          }
+        );
 
-        const systemPrompt = buildSystemPrompt(bot);
+        const data = await response.json();
+        const duration = Date.now() - startTime;
 
-        // Generate response with Gemini
-        const result = await model.generateContent({
-          contents: [
-            { 
-              role: 'user', 
-              parts: [{ text: `${systemPrompt}\n\nUser message: ${userMessage}` }] 
-            },
-          ],
-          generationConfig: {
-            maxOutputTokens: bot.maxTokens || 500,
-            temperature: 0.7,
-          },
-        });
+        if (response.ok) {
+          const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
-        const response = result.response;
-        const text = response.text();
+          if (replyText && replyText.trim() !== '') {
+            // Model succeeded! Clear any past cooldown
+            modelCooldowns.delete(modelName);
 
-        if (!text || text.trim() === '') {
-          throw new Error('Empty response from model');
+            // Save this working model to the bot so subsequent messages use it directly
+            if (bot.currentModel !== modelName) {
+              await updateBot(bot.id, { currentModel: modelName }).catch(() => {});
+            }
+
+            // Update API key statistics
+            await updateApiKey(apiKey.id, {
+              requestsToday: (apiKey.requestsToday || 0) + 1,
+              lastUsed: new Date().toISOString(),
+              status: 'active',
+            }).catch(() => {});
+
+            console.log(`[Gemini Success] Bot "${bot.name}" replied using ${modelName} in ${duration}ms via ${apiKey.gmail || apiKey.label}`);
+
+            return {
+              text: replyText.trim(),
+              model: modelName,
+              apiKeyId: apiKey.id,
+            };
+          } else {
+            throw new Error(`Empty response candidates from ${modelName}`);
+          }
         }
 
-        // Success! Update bot model & key metrics
-        await updateBot(bot.id, { currentModel: currentModelName });
-        await updateApiKey(apiKey.id, {
-          requestsToday: (apiKey.requestsToday || 0) + 1,
-          lastUsed: new Date().toISOString(),
-          status: 'active',
-        });
+        // Handle specific HTTP error codes
+        const status = response.status;
+        const errDetail = data.error?.message || response.statusText;
+        lastErrorMsg = `[HTTP ${status}] ${errDetail}`;
 
-        console.log(`[Gemini Success] Bot "${bot.name}" replied using ${currentModelName} via ${apiKey.gmail}`);
-
-        return {
-          text: text.trim(),
-          model: currentModelName,
-          apiKeyId: apiKey.id,
-        };
-      } catch (error: any) {
-        lastError = error;
-        const errorMessage = error?.message || '';
-        console.warn(`[Gemini Attempt Failed] Model ${currentModelName} on key ${apiKey.gmail}: ${errorMessage.substring(0, 150)}`);
-
-        // Automatically rotate to the next available model
-        const nextModel = getNextModel(currentModelName);
-        if (nextModel) {
-          console.log(`[Rotating Model] Switching to next fallback model: ${nextModel.name}...`);
-          currentModelName = nextModel.name;
+        if (status === 503) {
+          console.warn(`[Gemini High Demand] ${modelName} is busy/overloaded (503). Setting 30s cooldown and switching model immediately...`);
+          markCooldown(modelName, 30_000);
+        } else if (status === 429) {
+          console.warn(`[Gemini Rate Limit] ${modelName} exceeded quota/rate limit (429). Setting 60s cooldown and switching model immediately...`);
+          markCooldown(modelName, 60_000);
         } else {
-          console.warn(`[All Models Exhausted] No more models left on key ${apiKey.gmail}. Rotating to next API key...`);
-          currentModelName = null;
-          break;
+          console.warn(`[Gemini Model Error] ${modelName} failed with ${status}: ${errDetail}. Switching to next model...`);
+          markCooldown(modelName, 15_000);
         }
+      } catch (err: any) {
+        const duration = Date.now() - startTime;
+        if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+          console.warn(`[Gemini Timeout] ${modelName} timed out after ${duration}ms. Switching to next model immediately...`);
+          markCooldown(modelName, 30_000);
+        } else {
+          console.warn(`[Gemini Attempt Failed] ${modelName} error (${duration}ms): ${err.message}. Switching to next model...`);
+        }
+        lastErrorMsg = err.message || 'Unknown network error';
       }
     }
   }
 
-  // All keys and models exhausted
-  console.error('[Gemini Fatal] All API keys and fallback models failed. Last error:', lastError);
+  // If every model on every key failed
+  console.error('[Gemini Fatal] All API keys and fallback models failed. Last error:', lastErrorMsg);
   return {
-    text: "I'm temporarily experiencing high demand. Please try sending your message again in a moment! 🙏",
+    text: "আমি এই মুহূর্তে অতিরিক্ত ট্রাফিকের কারণে একটু ব্যস্ত। দয়া করে কয়েক সেকেন্ড পর আবার মেসেজ দিন! 🙏",
     model: 'fallback',
     apiKeyId: 'none',
   };
@@ -123,11 +177,10 @@ function buildSystemPrompt(bot: Bot): string {
       prompt += '\n\nPlease speak in a warm, welcoming, and helpful tone.';
       break;
     case 'custom':
-      // Custom behavior is specified in personality
       break;
   }
 
-  prompt += '\n\nAnswer helpfully in the user’s language (e.g. Bengali or English). Keep your reply natural and conversational.';
+  prompt += '\n\nAlways answer helpfully in the user’s language (Bangla by default unless user requests otherwise). Keep your reply natural, smooth, and conversational.';
 
   return prompt;
 }

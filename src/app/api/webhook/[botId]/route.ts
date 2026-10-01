@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getBotById, getApiKeyById, getActiveApiKeys, addMessage, incrementBotMessageCount } from '@/lib/db';
-import { sendMessage, TelegramUpdate } from '@/lib/telegram';
+import { sendMessage, sendChatAction, TelegramUpdate } from '@/lib/telegram';
 import { generateResponse } from '@/lib/gemini';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -89,8 +89,12 @@ export async function POST(
       return NextResponse.json({ ok: true });
     }
 
+    // Show typing status in Telegram immediately
+    sendChatAction(bot.telegramToken, chatId, 'typing').catch(() => {});
+
     // Generate AI response with automatic model rotation
     const result = await generateResponse(bot, userText, apiKey);
+
 
     // Send response to Telegram
     await sendMessage(bot.telegramToken, chatId, result.text);
