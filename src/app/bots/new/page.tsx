@@ -11,13 +11,14 @@ export default function NewBotPage() {
   const [apiKeys, setApiKeys] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     const fetchApiKeys = async () => {
       try {
         const res = await fetch('/api/api-keys');
         const data = await res.json();
-        setApiKeys(data.keys || []);
+        setApiKeys(Array.isArray(data) ? data : data.keys || []);
       } catch (error) {
         console.error('Failed to fetch API keys:', error);
       } finally {
@@ -29,22 +30,35 @@ export default function NewBotPage() {
 
   const handleSubmit = async (formData: any) => {
     setSubmitting(true);
+    setErrorMsg('');
     try {
       const res = await fetch('/api/bots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
-      if (res.ok) {
-        // Here you would typically dispatch a success toast
-        router.push('/dashboard');
-        router.refresh();
-      } else {
-        throw new Error('Failed to create bot');
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create bot');
       }
-    } catch (error) {
+
+      const newBot = await res.json();
+
+      // If user enabled auto-activate, trigger the webhook registration right away
+      if (formData.autoActivate && newBot?.id) {
+        try {
+          await fetch(`/api/bots/${newBot.id}/webhook`, { method: 'POST' });
+        } catch (wbErr) {
+          console.error('Auto-activate webhook warning:', wbErr);
+        }
+      }
+
+      router.push('/dashboard');
+      router.refresh();
+    } catch (error: any) {
       console.error(error);
-      // Here you would typically dispatch an error toast
+      setErrorMsg(error?.message || 'Failed to create bot');
     } finally {
       setSubmitting(false);
     }
@@ -63,6 +77,12 @@ export default function NewBotPage() {
           <p className="text-muted-foreground">Configure a new Telegram AI bot for your system.</p>
         </div>
       </div>
+
+      {errorMsg && (
+        <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+          {errorMsg}
+        </div>
+      )}
 
       <div className="bg-card/50 border border-border/50 rounded-xl p-6 backdrop-blur-sm">
         {loading ? (

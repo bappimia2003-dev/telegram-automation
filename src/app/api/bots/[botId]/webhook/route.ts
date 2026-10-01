@@ -12,7 +12,13 @@ export async function POST(request: Request, { params }: { params: { botId: stri
     const host = request.headers.get('host');
     const webhookUrl = `https://${host}/api/webhook/${params.botId}`;
     
-    await setWebhook(bot.telegramToken, webhookUrl);
+    const ok = await setWebhook(bot.telegramToken, webhookUrl);
+    if (!ok) {
+      return NextResponse.json(
+        { error: 'Failed to connect to Telegram. Please check that your Bot Token from @BotFather is correct.' }, 
+        { status: 400 }
+      );
+    }
     
     const updatedBot = { ...bot, isActive: true, webhookUrl };
     await updateBot(params.botId, updatedBot);

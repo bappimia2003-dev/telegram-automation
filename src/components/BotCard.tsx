@@ -8,22 +8,18 @@ import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog"
 
-export interface Bot {
-  id: string;
-  name: string;
-  status: "Active" | "Inactive";
-  model: string;
-  messageCount: number;
-  aiPersonality: string;
-}
-
 interface BotCardProps {
-  bot: Bot;
+  bot: any;
   onDelete: (id: string) => void;
 }
 
 export function BotCard({ bot, onDelete }: BotCardProps) {
   const [isDeleting, setIsDeleting] = React.useState(false)
+
+  const isActive = bot.isActive !== undefined ? Boolean(bot.isActive) : (bot.status === "Active" || bot.status === "active");
+  const model = bot.currentModel || bot.model || 'gemini-2.0-flash';
+  const messageCount = bot.messageCount ?? bot.messagesProcessed ?? 0;
+  const personality = bot.aiPersonality || bot.systemPrompt || 'Helpful Assistant';
 
   const handleDelete = () => {
     setIsDeleting(true)
@@ -36,12 +32,12 @@ export function BotCard({ bot, onDelete }: BotCardProps) {
       <CardHeader className="pb-4">
         <div className="flex items-start justify-between">
           <div>
-            <h3 className="text-lg font-bold">{bot.name}</h3>
+            <h3 className="text-lg font-bold text-foreground">{bot.name}</h3>
             <div className="mt-2 flex gap-2">
-              <Badge variant={bot.status === "Active" ? "success" : "destructive"}>
-                {bot.status}
+              <Badge variant={isActive ? "success" : "destructive"}>
+                {isActive ? "Active" : "Inactive"}
               </Badge>
-              <Badge variant="outline">{bot.model}</Badge>
+              <Badge variant="outline">{model}</Badge>
             </div>
           </div>
         </div>
@@ -49,13 +45,13 @@ export function BotCard({ bot, onDelete }: BotCardProps) {
       
       <CardContent className="flex-1 pb-4">
         <div className="flex items-center text-sm text-muted-foreground mb-4">
-          <MessageSquare className="mr-2 h-4 w-4" />
-          {bot.messageCount} messages
+          <MessageSquare className="mr-2 h-4 w-4 text-blue-500" />
+          {messageCount} messages
         </div>
-        <div className="text-sm text-muted-foreground bg-secondary/50 p-3 rounded-md">
-          {bot.aiPersonality.length > 80 
-            ? `${bot.aiPersonality.substring(0, 80)}...` 
-            : bot.aiPersonality}
+        <div className="text-sm text-muted-foreground bg-secondary/50 p-3 rounded-md border border-border/50">
+          {personality.length > 80 
+            ? `${personality.substring(0, 80)}...` 
+            : personality}
         </div>
       </CardContent>
       
@@ -63,7 +59,7 @@ export function BotCard({ bot, onDelete }: BotCardProps) {
         <Button variant="outline" size="sm" asChild>
           <Link href={`/bots/${bot.id}`}>
             <Edit2 className="h-4 w-4 mr-2" />
-            Edit
+            Manage
           </Link>
         </Button>
         

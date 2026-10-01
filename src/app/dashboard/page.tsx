@@ -23,10 +23,18 @@ export default function DashboardPage() {
         fetch('/api/bots'),
         fetch('/api/stats')
       ]);
-      const botsData = await botsRes.json();
-      const statsData = await statsRes.json();
-      setBots(botsData.bots || []);
-      setStats(statsData.stats || { totalBots: botsData.bots?.length || 0, activeBots: botsData.bots?.filter((b: any) => b.status === 'active').length || 0, totalMessages: 0, apiKeys: 0 });
+      const botsData = await botsRes.json().catch(() => []);
+      const statsData = await statsRes.json().catch(() => ({}));
+      const botList = Array.isArray(botsData) ? botsData : botsData.bots || [];
+      setBots(botList);
+      
+      const activeCount = botList.filter((b: any) => b.isActive || b.status === 'active' || b.status === 'Active').length;
+      setStats({
+        totalBots: statsData.totalBots ?? botList.length,
+        activeBots: statsData.activeBots ?? activeCount,
+        totalMessages: statsData.totalMessages ?? botList.reduce((acc: number, b: any) => acc + (b.messageCount || 0), 0),
+        apiKeys: statsData.totalApiKeys ?? statsData.apiKeys ?? 0
+      });
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
     } finally {

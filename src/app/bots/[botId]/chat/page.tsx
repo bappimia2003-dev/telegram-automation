@@ -24,17 +24,18 @@ export default function BotChatLogPage() {
       const botRes = await fetch(`/api/bots/${botId}`);
       if (botRes.ok) {
         const botData = await botRes.json();
-        setBotName(botData.bot?.name || 'Unknown Bot');
+        setBotName(botData.name || botData.bot?.name || 'Unknown Bot');
       }
       
       const res = await fetch(`/api/bots/${botId}/messages`);
       const data = await res.json();
-      setMessages(data.messages || []);
+      const msgList = Array.isArray(data) ? data : data.messages || [];
+      setMessages(msgList);
       
       // Calculate basic stats
       const today = new Date().setHours(0,0,0,0);
-      const todaysMsgs = (data.messages || []).filter((m: any) => new Date(m.timestamp).getTime() >= today).length;
-      setStats({ total: data.messages?.length || 0, today: todaysMsgs });
+      const todaysMsgs = msgList.filter((m: any) => new Date(m.timestamp).getTime() >= today).length;
+      setStats({ total: msgList.length, today: todaysMsgs });
       
     } catch (error) {
       console.error('Failed to fetch messages:', error);

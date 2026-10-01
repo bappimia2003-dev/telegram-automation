@@ -15,6 +15,7 @@ export default function BotSettingsPage() {
   const [apiKeys, setApiKeys] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -25,8 +26,8 @@ export default function BotSettingsPage() {
         ]);
         const botData = await botRes.json();
         const keysData = await keysRes.json();
-        setBot(botData.bot);
-        setApiKeys(keysData.keys || []);
+        setBot(botData.bot || botData);
+        setApiKeys(Array.isArray(keysData) ? keysData : keysData.keys || []);
       } catch (error) {
         console.error('Failed to fetch data:', error);
       } finally {
@@ -38,27 +39,49 @@ export default function BotSettingsPage() {
 
   const handleSubmit = async (formData: any) => {
     setSubmitting(true);
+    setErrorMsg('');
     try {
       const res = await fetch(`/api/bots/${botId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
-      if (res.ok) {
-        router.push(`/bots/${botId}`);
-        router.refresh();
-      } else {
-        throw new Error('Failed to update bot');
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to update bot');
       }
-    } catch (error) {
+
+      // If auto-activate status changed, handle webhook accordingly
+      const shouldBeActive = Boolean(formData.autoActivate || formData.isActive);
+      const wasActive = Boolean(bot?.isActive);
+      if (shouldBeActive !== wasActive) {
+        try {
+          await fetch(`/api/bots/${botId}/webhook`, {
+            method: shouldBeActive ? 'POST' : 'DELETE'
+          });
+        } catch (wbErr) {
+          console.error('Webhook sync warning:', wbErr);
+        }
+      }
+
+      router.push(`/bots/${botId}`);
+      router.refresh();
+    } catch (error: any) {
       console.error(error);
+      setErrorMsg(error?.message || 'Failed to update bot');
     } finally {
       setSubmitting(false);
     }
   };
 
   if (loading) {
-    return <div className="max-w-3xl mx-auto h-96 animate-pulse bg-card rounded-xl" />;
+    return (
+      <div className="max-w-3xl mx-auto space-y-8 animate-pulse">
+        <div className="h-8 w-48 bg-card rounded" />
+        <div className="h-96 bg-card rounded-xl" />
+      </div>
+    );
   }
 
   return (
@@ -76,6 +99,12 @@ export default function BotSettingsPage() {
           <p className="text-muted-foreground">Update configuration for {bot?.name}</p>
         </div>
       </div>
+
+      {errorMsg && (
+        <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+          {errorMsg}
+        </div>
+      )}
 
       <div className="bg-card/50 border border-border/50 rounded-xl p-6 backdrop-blur-sm">
         <BotForm 
