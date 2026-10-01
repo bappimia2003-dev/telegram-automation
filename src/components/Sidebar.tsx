@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { LayoutDashboard, Bot, Key, LogOut, Menu } from "lucide-react"
+import { LayoutDashboard, Bot, Key, LogOut, Menu, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "./ui/button"
 
@@ -18,36 +18,61 @@ export function Sidebar() {
   const router = useRouter()
   const [isOpen, setIsOpen] = React.useState(false)
 
+  // Close sidebar automatically when route changes
+  React.useEffect(() => {
+    setIsOpen(false)
+  }, [pathname])
+
   const handleLogout = async () => {
-    // Basic logout logic to clear cookie
-    document.cookie = "auth-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
+    try {
+      await fetch('/api/auth', { method: 'DELETE' });
+    } catch (e) {
+      console.error(e);
+    }
     router.push("/")
     router.refresh()
   }
 
   return (
     <>
+      {/* Mobile Hamburger Button */}
       <button 
-        className="md:hidden fixed top-4 left-4 z-50"
+        type="button"
+        aria-label="Toggle navigation menu"
+        className="md:hidden fixed top-3 left-3 z-40 w-10 h-10 flex items-center justify-center rounded-lg bg-card/90 border border-border shadow-lg backdrop-blur-md text-foreground hover:bg-secondary transition-colors"
         onClick={() => setIsOpen(!isOpen)}
       >
-        <Menu className="h-6 w-6 text-foreground" />
+        {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
       </button>
 
-      <div className={cn(
-        "fixed inset-y-0 left-0 z-40 w-64 transform flex-col justify-between bg-card border-r border-border transition-transform duration-200 ease-in-out md:translate-x-0",
-        isOpen ? "translate-x-0" : "-translate-x-full flex",
-        "md:flex"
+      {/* Sidebar Panel */}
+      <aside className={cn(
+        "fixed inset-y-0 left-0 z-40 w-64 flex flex-col justify-between bg-card border-r border-border/60 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none",
+        isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
       )}>
         <div>
-          <div className="flex h-16 items-center px-6 border-b border-border">
-            <Bot className="h-6 w-6 mr-2 text-primary" />
-            <span className="text-lg font-bold">TG Auto</span>
+          {/* Header */}
+          <div className="flex h-16 items-center justify-between px-6 border-b border-border/50">
+            <Link href="/dashboard" className="flex items-center space-x-2.5">
+              <div className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary">
+                <Bot className="h-5 w-5" />
+              </div>
+              <span className="text-lg font-bold tracking-tight text-white">TG Auto</span>
+            </Link>
+
+            {/* Mobile close button inside panel */}
+            <button 
+              className="md:hidden text-muted-foreground hover:text-white p-1"
+              onClick={() => setIsOpen(false)}
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
           
-          <nav className="space-y-1 p-4">
+          {/* Nav Items */}
+          <nav className="space-y-1.5 p-4">
             {navItems.map((item) => {
-              const isActive = pathname === item.href
+              const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
               const Icon = item.icon
               
               return (
@@ -55,14 +80,14 @@ export function Sidebar() {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex items-center space-x-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    "flex items-center space-x-3 rounded-lg px-3.5 py-2.5 text-sm font-medium transition-all",
                     isActive 
-                      ? "bg-primary/10 text-primary border-l-2 border-primary rounded-l-none" 
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      ? "bg-primary text-primary-foreground shadow-sm" 
+                      : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
                   )}
                   onClick={() => setIsOpen(false)}
                 >
-                  <Icon className="h-5 w-5" />
+                  <Icon className="h-4 w-4 shrink-0" />
                   <span>{item.label}</span>
                 </Link>
               )
@@ -70,18 +95,20 @@ export function Sidebar() {
           </nav>
         </div>
 
-        <div className="p-4 border-t border-border">
+        {/* Footer Logout */}
+        <div className="p-4 border-t border-border/50">
           <Button 
             variant="ghost" 
-            className="w-full justify-start text-muted-foreground hover:text-foreground"
+            className="w-full justify-start text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
             onClick={handleLogout}
           >
-            <LogOut className="mr-2 h-5 w-5" />
+            <LogOut className="mr-2 h-4 w-4" />
             Logout
           </Button>
         </div>
-      </div>
+      </aside>
       
+      {/* Mobile Backdrop Overlay */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-background/80 backdrop-blur-sm z-30 md:hidden"

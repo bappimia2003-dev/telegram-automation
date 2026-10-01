@@ -2,6 +2,6 @@
 
 import { DashboardLayoutWrapper } from '@/components/DashboardLayoutWrapper';
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function ApiKeysLayout({ children }: { children: React.ReactNode }) {
   return <DashboardLayoutWrapper>{children}</DashboardLayoutWrapper>;
 }

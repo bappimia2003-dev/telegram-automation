@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getAllBots, createBot } from '@/lib/db';
+import { getAllBots, createBot, createApiKey } from '@/lib/db';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 
 const botSchema = z.object({
-  name: z.string().min(1),
-  telegramToken: z.string().min(1),
-  apiKeyId: z.string().min(1),
-  aiPersonality: z.string().min(1),
+  name: z.string().min(1, 'Bot name is required'),
+  telegramToken: z.string().min(1, 'Telegram token is required'),
+  apiKeyId: z.string().min(1, 'API key is required'),
+  aiPersonality: z.string().min(1, 'AI personality is required'),
   responseStyle: z.string().default('friendly'),
   maxTokens: z.number().default(500),
   currentModel: z.string().default('gemini-2.0-flash'),
@@ -25,7 +25,30 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const validatedData = botSchema.parse(body);
+    
+    let apiKeyId = body.apiKeyId;
+
+    // Support creating API Key inline directly when creating a new bot
+    if ((!apiKeyId || apiKeyId === 'new') && body.newApiKey?.key && body.newApiKey?.gmail) {
+      const createdKey = await createApiKey({
+        id: uuidv4(),
+        key: body.newApiKey.key.trim(),
+        gmail: body.newApiKey.gmail.trim(),
+        label: body.newApiKey.label || body.newApiKey.gmail.split('@')[0],
+        status: 'active',
+        requestsToday: 0,
+        tokensUsed: 0,
+        lastUsed: new Date().toISOString(),
+        lastReset: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      });
+      apiKeyId = createdKey.id;
+    }
+
+    const validatedData = botSchema.parse({
+      ...body,
+      apiKeyId
+    });
 
     const newBot = {
       id: uuidv4(),
@@ -43,8 +66,9 @@ export async function POST(request: Request) {
     return NextResponse.json(newBot, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
+      return NextResponse.json({ error: error.errors[0]?.message || 'Validation error' }, { status: 400 });
     }
+    console.error('Error creating bot:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

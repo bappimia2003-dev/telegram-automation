@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Input } from "./ui/input"
 import { Button } from "./ui/button"
+import { Mail, Key, Tag } from "lucide-react"
 
 export interface ApiKey {
   id: string;
@@ -24,45 +25,68 @@ export function ApiKeyForm({ apiKey, onSubmit, loading }: ApiKeyFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSubmit({ key, gmail, label })
+    onSubmit({ 
+      key: key.trim(), 
+      gmail: gmail.trim(), 
+      label: label.trim() || gmail.trim().split('@')[0] 
+    })
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <label className="text-sm font-medium">API Key</label>
+      <div className="space-y-1.5">
+        <label className="text-xs sm:text-sm font-medium text-foreground flex items-center gap-1.5">
+          <Key size={14} className="text-amber-500" />
+          Google AI Studio API Key
+        </label>
         <Input 
           required 
-          className="font-mono" 
+          className="font-mono text-xs sm:text-sm h-11" 
           value={key} 
           onChange={e => setKey(e.target.value)} 
           placeholder="AIzaSy..." 
         />
+        <p className="text-[11px] text-muted-foreground">
+          Free key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google AI Studio</a>
+        </p>
       </div>
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Gmail Account</label>
+      <div className="space-y-1.5">
+        <label className="text-xs sm:text-sm font-medium text-foreground flex items-center gap-1.5">
+          <Mail size={14} className="text-muted-foreground" />
+          Gmail Account
+        </label>
         <Input 
           required 
           type="email" 
+          className="text-base sm:text-sm h-11"
           value={gmail} 
           onChange={e => setGmail(e.target.value)} 
-          placeholder="account@gmail.com" 
+          placeholder="youraccount@gmail.com" 
         />
+        <p className="text-[11px] text-muted-foreground">
+          This lets you easily identify which Google account this key belongs to.
+        </p>
       </div>
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Label</label>
+      <div className="space-y-1.5">
+        <label className="text-xs sm:text-sm font-medium text-foreground flex items-center gap-1.5">
+          <Tag size={14} className="text-muted-foreground" />
+          Label / Tag (optional)
+        </label>
         <Input 
+          className="text-base sm:text-sm h-11"
           value={label} 
           onChange={e => setLabel(e.target.value)} 
-          placeholder="e.g., Main Account, Backup #2" 
+          placeholder="e.g. Main Account, Work Account" 
         />
       </div>
 
-      <Button type="submit" disabled={loading}>
-        {loading ? "Saving..." : (apiKey ? "Update Key" : "Add API Key")}
-      </Button>
+      <div className="pt-2">
+        <Button type="submit" className="w-full h-11 text-sm font-medium shadow-md" disabled={loading}>
+          {loading ? "Saving..." : (apiKey ? "Update API Key" : "Save & Add Key")}
+        </Button>
+      </div>
     </form>
   )
 }
