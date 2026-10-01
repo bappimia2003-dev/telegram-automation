@@ -105,7 +105,7 @@ export async function generateResponse(
         }
 
         const timeoutMs = media ? 12000 : 7000;
-        const response = await fetch(
+        let response = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${trimmedKey}`,
           {
             method: 'POST',
@@ -115,8 +115,26 @@ export async function generateResponse(
           }
         );
 
-        const data = await response.json();
+        let data = await response.json();
+
+        // If Google Search tool caused 429/400 (quota or billing restrictions), retry immediately without tools
+        if (!response.ok && requestBody.tools) {
+          console.warn(`[Gemini Search Quota Fallback] Google Search tool failed with ${response.status}. Retrying directly without search tools...`);
+          delete requestBody.tools;
+          response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${trimmedKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(requestBody),
+              signal: AbortSignal.timeout(timeoutMs),
+            }
+          );
+          data = await response.json();
+        }
+
         const duration = Date.now() - startTime;
+
 
 
         if (response.ok) {
