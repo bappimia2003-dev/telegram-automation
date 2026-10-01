@@ -35,10 +35,16 @@ function getSortedCandidates(preferredModel?: string): string[] {
   return [...healthy, ...coolingDown];
 }
 
+export interface MediaInput {
+  mimeType: string;
+  base64Data: string;
+}
+
 export async function generateResponse(
   bot: Bot,
   userMessage: string,
-  assignedApiKey: ApiKey
+  assignedApiKey: ApiKey,
+  media?: MediaInput
 ): Promise<GenerateResult> {
   // Ordered API keys: assigned first, then other active keys
   const allKeys = await getAllApiKeys();
@@ -64,32 +70,54 @@ export async function generateResponse(
     for (const modelName of candidateModels) {
       const startTime = Date.now();
       try {
+        const parts: any[] = [];
+        if (media && media.base64Data) {
+          parts.push({
+            inlineData: {
+              mimeType: media.mimeType,
+              data: media.base64Data,
+            },
+          });
+        }
+        parts.push({
+          text: userMessage || 'Please analyze this input and respond helpfully in Bengali.',
+        });
+
+        const requestBody: any = {
+          systemInstruction: {
+            parts: [{ text: systemPrompt }],
+          },
+          contents: [
+            {
+              role: 'user',
+              parts,
+            },
+          ],
+          generationConfig: {
+            maxOutputTokens: bot.maxTokens || 600,
+            temperature: 0.7,
+          },
+        };
+
+        // Enable live Google Web Search grounding if enabled in bot settings
+        if (bot.enableWebSearch && (!media || !media.mimeType.startsWith('audio/'))) {
+          requestBody.tools = [{ googleSearch: {} }];
+        }
+
+        const timeoutMs = media ? 12000 : 7000;
         const response = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${trimmedKey}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              systemInstruction: {
-                parts: [{ text: systemPrompt }],
-              },
-              contents: [
-                {
-                  role: 'user',
-                  parts: [{ text: userMessage }],
-                },
-              ],
-              generationConfig: {
-                maxOutputTokens: bot.maxTokens || 600,
-                temperature: 0.7,
-              },
-            }),
-            signal: AbortSignal.timeout(6500), // 6.5s timeout per model attempt
+            body: JSON.stringify(requestBody),
+            signal: AbortSignal.timeout(timeoutMs),
           }
         );
 
         const data = await response.json();
         const duration = Date.now() - startTime;
+
 
         if (response.ok) {
           const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;

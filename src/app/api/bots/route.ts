@@ -58,9 +58,14 @@ export async function POST(request: Request) {
       isActive: false,
       webhookUrl: '',
       messageCount: 0,
+      enableVoice: body.enableVoice !== undefined ? Boolean(body.enableVoice) : true,
+      enableVision: body.enableVision !== undefined ? Boolean(body.enableVision) : true,
+      enableFiles: body.enableFiles !== undefined ? Boolean(body.enableFiles) : true,
+      enableWebSearch: body.enableWebSearch !== undefined ? Boolean(body.enableWebSearch) : false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
 
     await createBot(newBot);
     return NextResponse.json(newBot, { status: 201 });

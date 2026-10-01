@@ -83,12 +83,40 @@ export async function sendChatAction(
   }
 }
 
+export async function getFile(
+  botToken: string,
+  fileId: string
+): Promise<{ ok: boolean; result?: { file_id: string; file_path: string; file_size?: number } }> {
+  try {
+    const res = await fetch(`${TELEGRAM_API}/bot${botToken}/getFile?file_id=${encodeURIComponent(fileId)}`);
+    return await res.json();
+  } catch (e) {
+    console.error('Error in getFile:', e);
+    return { ok: false };
+  }
+}
+
+export async function downloadTelegramFileAsBase64(
+  botToken: string,
+  filePath: string
+): Promise<string | null> {
+  try {
+    const fileUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+    const res = await fetch(fileUrl);
+    if (!res.ok) return null;
+    const arrayBuffer = await res.arrayBuffer();
+    return Buffer.from(arrayBuffer).toString('base64');
+  } catch (e) {
+    console.error('Error downloading Telegram file:', e);
+    return null;
+  }
+}
 
 export interface TelegramUpdate {
   update_id: number;
   message?: {
     message_id: number;
-    from: {
+    from?: {
       id: number;
       is_bot: boolean;
       first_name: string;
@@ -102,5 +130,38 @@ export interface TelegramUpdate {
     };
     date: number;
     text?: string;
+    caption?: string;
+    voice?: {
+      file_id: string;
+      file_unique_id: string;
+      duration: number;
+      mime_type?: string;
+      file_size?: number;
+    };
+    audio?: {
+      file_id: string;
+      file_unique_id: string;
+      duration: number;
+      performer?: string;
+      title?: string;
+      file_name?: string;
+      mime_type?: string;
+      file_size?: number;
+    };
+    photo?: Array<{
+      file_id: string;
+      file_unique_id: string;
+      width: number;
+      height: number;
+      file_size?: number;
+    }>;
+    document?: {
+      file_id: string;
+      file_unique_id: string;
+      file_name?: string;
+      mime_type?: string;
+      file_size?: number;
+    };
   };
 }
+

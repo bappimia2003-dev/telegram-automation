@@ -10,20 +10,48 @@ const memoryStore = {
 
 // Row mappers for PostgreSQL snake_case <-> TypeScript camelCase
 function rowToBot(r: any): Bot {
+  let aiDetails = r.ai_details || '';
+  let enableVoice = true;
+  let enableVision = true;
+  let enableFiles = true;
+  let enableWebSearch = false;
+
+  if (typeof aiDetails === 'string' && aiDetails.trim().startsWith('{') && aiDetails.includes('"enableVoice"')) {
+    try {
+      const parsed = JSON.parse(aiDetails);
+      aiDetails = parsed.details !== undefined ? parsed.details : '';
+      if (parsed.enableVoice !== undefined) enableVoice = Boolean(parsed.enableVoice);
+      if (parsed.enableVision !== undefined) enableVision = Boolean(parsed.enableVision);
+      if (parsed.enableFiles !== undefined) enableFiles = Boolean(parsed.enableFiles);
+      if (parsed.enableWebSearch !== undefined) enableWebSearch = Boolean(parsed.enableWebSearch);
+    } catch {
+      // Keep plain text
+    }
+  }
+
+  if (r.enable_voice !== undefined) enableVoice = Boolean(r.enable_voice);
+  if (r.enable_vision !== undefined) enableVision = Boolean(r.enable_vision);
+  if (r.enable_files !== undefined) enableFiles = Boolean(r.enable_files);
+  if (r.enable_web_search !== undefined) enableWebSearch = Boolean(r.enable_web_search);
+
   return {
     id: r.id,
     name: r.name,
     telegramToken: r.telegram_token,
     chatId: r.chat_id || undefined,
     aiPersonality: r.ai_personality || '',
-    aiDetails: r.ai_details || '',
+    aiDetails,
     responseStyle: (r.response_style as any) || 'friendly',
     maxTokens: r.max_tokens ?? 500,
     apiKeyId: r.api_key_id || '',
-    currentModel: r.current_model || 'gemini-2.0-flash',
+    currentModel: r.current_model || 'gemini-2.5-flash',
     isActive: Boolean(r.is_active),
     webhookUrl: r.webhook_url || '',
     messageCount: r.message_count ?? 0,
+    enableVoice,
+    enableVision,
+    enableFiles,
+    enableWebSearch,
     createdAt: r.created_at || new Date().toISOString(),
     updatedAt: r.updated_at || new Date().toISOString(),
   };
@@ -36,7 +64,18 @@ function botToRow(b: Partial<Bot>): any {
   if (b.telegramToken !== undefined) row.telegram_token = b.telegramToken;
   if (b.chatId !== undefined) row.chat_id = b.chatId;
   if (b.aiPersonality !== undefined) row.ai_personality = b.aiPersonality;
-  if (b.aiDetails !== undefined) row.ai_details = b.aiDetails;
+  
+  if (b.aiDetails !== undefined || b.enableVoice !== undefined || b.enableVision !== undefined || b.enableFiles !== undefined || b.enableWebSearch !== undefined) {
+    const details = b.aiDetails !== undefined ? b.aiDetails : '';
+    row.ai_details = JSON.stringify({
+      details,
+      enableVoice: b.enableVoice !== undefined ? Boolean(b.enableVoice) : true,
+      enableVision: b.enableVision !== undefined ? Boolean(b.enableVision) : true,
+      enableFiles: b.enableFiles !== undefined ? Boolean(b.enableFiles) : true,
+      enableWebSearch: b.enableWebSearch !== undefined ? Boolean(b.enableWebSearch) : false,
+    });
+  }
+
   if (b.responseStyle !== undefined) row.response_style = b.responseStyle;
   if (b.maxTokens !== undefined) row.max_tokens = b.maxTokens;
   if (b.apiKeyId !== undefined) row.api_key_id = b.apiKeyId;
@@ -48,6 +87,7 @@ function botToRow(b: Partial<Bot>): any {
   if (b.updatedAt !== undefined) row.updated_at = b.updatedAt;
   return row;
 }
+
 
 function rowToApiKey(r: any): ApiKey {
   return {

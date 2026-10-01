@@ -5,8 +5,10 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
   ChevronRight, Power, Settings, MessageSquare, Trash2, 
-  Bot, Clock, Calendar, ArrowRight
+  Bot, Clock, Calendar, ArrowRight,
+  Mic, Image as ImageIcon, FileText, Globe, Sparkles
 } from 'lucide-react';
+
 
 export default function BotDetailPage() {
   const params = useParams();
@@ -218,8 +220,60 @@ export default function BotDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* AI Superpowers Status Card */}
+          <div className="bg-card border border-purple-500/20 rounded-xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-border/40">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-purple-400" />
+                <h3 className="font-semibold text-white text-sm">AI Superpowers</h3>
+              </div>
+              <Link href={`/bots/${botId}/settings`} className="text-xs text-primary hover:underline">
+                Configure
+              </Link>
+            </div>
+            
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <Mic className="w-3.5 h-3.5 text-blue-400" /> Voice & Audio
+                </span>
+                <span className={`px-2 py-0.5 rounded-full font-medium ${bot.enableVoice !== false ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-secondary text-muted-foreground'}`}>
+                  {bot.enableVoice !== false ? 'Active' : 'Off'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <ImageIcon className="w-3.5 h-3.5 text-emerald-400" /> Image Vision
+                </span>
+                <span className={`px-2 py-0.5 rounded-full font-medium ${bot.enableVision !== false ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-secondary text-muted-foreground'}`}>
+                  {bot.enableVision !== false ? 'Active' : 'Off'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <FileText className="w-3.5 h-3.5 text-amber-400" /> Document Reader
+                </span>
+                <span className={`px-2 py-0.5 rounded-full font-medium ${bot.enableFiles !== false ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-secondary text-muted-foreground'}`}>
+                  {bot.enableFiles !== false ? 'Active' : 'Off'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <Globe className="w-3.5 h-3.5 text-cyan-400" /> Live Web Search
+                </span>
+                <span className={`px-2 py-0.5 rounded-full font-medium ${bot.enableWebSearch ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-secondary text-muted-foreground'}`}>
+                  {bot.enableWebSearch ? 'Active' : 'Off'}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
+
   );
 }

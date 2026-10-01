@@ -7,7 +7,8 @@ import { Select } from "./ui/select"
 import { Slider } from "./ui/slider"
 import { Switch } from "./ui/switch"
 import { Button } from "./ui/button"
-import { Key, Plus, Sparkles, Mail } from "lucide-react"
+import { Key, Plus, Sparkles, Mail, Mic, Image as ImageIcon, FileText, Globe } from "lucide-react"
+
 
 export interface ApiKey {
   id: string;
@@ -45,6 +46,20 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
     bot?.isActive !== undefined ? Boolean(bot.isActive) : (bot?.status === "Active" || bot?.status === "active" || true)
   )
 
+  // AI Multimodal & Tool Capabilities Toggles
+  const [enableVoice, setEnableVoice] = React.useState(
+    bot?.enableVoice !== undefined ? Boolean(bot.enableVoice) : true
+  )
+  const [enableVision, setEnableVision] = React.useState(
+    bot?.enableVision !== undefined ? Boolean(bot.enableVision) : true
+  )
+  const [enableFiles, setEnableFiles] = React.useState(
+    bot?.enableFiles !== undefined ? Boolean(bot.enableFiles) : true
+  )
+  const [enableWebSearch, setEnableWebSearch] = React.useState(
+    bot?.enableWebSearch !== undefined ? Boolean(bot.enableWebSearch) : false
+  )
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -62,7 +77,12 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
       maxLength: Number(maxLength),
       autoActivate,
       isActive: autoActivate,
+      enableVoice,
+      enableVision,
+      enableFiles,
+      enableWebSearch,
     }
+
 
     if (keyMode === 'existing' && selectedKeyId) {
       payload.apiKeyId = selectedKeyId;
@@ -253,6 +273,82 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
         </div>
       </div>
 
+      {/* AI Superpowers & Multimodal Capabilities */}
+      <div className="p-4 sm:p-5 border border-purple-500/30 bg-purple-950/15 rounded-2xl space-y-4">
+        <div className="flex items-center justify-between pb-2 border-b border-border/40">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm sm:text-base text-foreground">AI Superpowers & Capabilities (ফিচারসমূহ)</h3>
+              <p className="text-xs text-muted-foreground">Turn features ON or OFF for this bot</p>
+            </div>
+          </div>
+          <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+            Multimodal
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-1">
+          {/* 1. Voice & Audio */}
+          <div className="flex items-center justify-between p-3.5 rounded-xl border border-border/60 bg-card/60 hover:border-blue-500/40 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
+                <Mic className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium text-foreground">Voice & Audio Messages</p>
+                <p className="text-[11px] text-muted-foreground">ভয়েস ও অডিও শুনে উত্তর দেবে</p>
+              </div>
+            </div>
+            <Switch checked={enableVoice} onCheckedChange={setEnableVoice} />
+          </div>
+
+          {/* 2. Image Vision */}
+          <div className="flex items-center justify-between p-3.5 rounded-xl border border-border/60 bg-card/60 hover:border-emerald-500/40 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+                <ImageIcon className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium text-foreground">Image Vision & Reading</p>
+                <p className="text-[11px] text-muted-foreground">ছবি ও ফটো দেখে বুঝতে পারবে</p>
+              </div>
+            </div>
+            <Switch checked={enableVision} onCheckedChange={setEnableVision} />
+          </div>
+
+          {/* 3. Document & File Reading */}
+          <div className="flex items-center justify-between p-3.5 rounded-xl border border-border/60 bg-card/60 hover:border-amber-500/40 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
+                <FileText className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium text-foreground">Document & File Reading</p>
+                <p className="text-[11px] text-muted-foreground">PDF ও টেক্সট ফাইল পড়ে বিশ্লেষণ করবে</p>
+              </div>
+            </div>
+            <Switch checked={enableFiles} onCheckedChange={setEnableFiles} />
+          </div>
+
+          {/* 4. Live Web Search */}
+          <div className="flex items-center justify-between p-3.5 rounded-xl border border-border/60 bg-card/60 hover:border-cyan-500/40 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400">
+                <Globe className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium text-foreground">Live Web Search</p>
+                <p className="text-[11px] text-muted-foreground">গুগল লাইভ সার্চ করে সাম্প্রতিক তথ্য দেবে</p>
+              </div>
+            </div>
+            <Switch checked={enableWebSearch} onCheckedChange={setEnableWebSearch} />
+          </div>
+        </div>
+      </div>
+
       {/* Auto-Activate Switch */}
       <div className="flex items-center justify-between p-4 border border-border rounded-xl bg-secondary/40">
         <div>
@@ -261,6 +357,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
         </div>
         <Switch checked={autoActivate} onCheckedChange={setAutoActivate} />
       </div>
+
 
       {/* Submit Button */}
       <Button 

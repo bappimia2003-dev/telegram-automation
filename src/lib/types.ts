@@ -12,9 +12,14 @@ export interface Bot {
   isActive: boolean;
   webhookUrl: string;
   messageCount: number;
+  enableVoice?: boolean;
+  enableVision?: boolean;
+  enableFiles?: boolean;
+  enableWebSearch?: boolean;
   createdAt: string;
   updatedAt: string;
 }
+
 
 export interface ApiKey {
   id: string;
