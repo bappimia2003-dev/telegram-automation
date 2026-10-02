@@ -57,7 +57,7 @@ async function sendVideoMessage(sock, jid, videoSource, caption) {
 async function sendAudioMessage(sock, jid, audioSource) {
     const buffer = await getMediaBuffer(audioSource);
     const cleanUrl = audioSource.split('?')[0].toLowerCase();
-    let mimetype = 'audio/mp4';
+    let mimetype = 'audio/mpeg';
     if (audioSource.startsWith('data:')) {
         const match = audioSource.match(/^data:([^;]+);/);
         if (match && match[1]) {
@@ -70,12 +70,20 @@ async function sendAudioMessage(sock, jid, audioSource) {
     else if (cleanUrl.endsWith('.mp3')) {
         mimetype = 'audio/mpeg';
     }
+    else if (cleanUrl.endsWith('.m4a') || cleanUrl.endsWith('.mp4')) {
+        mimetype = 'audio/mp4';
+    }
+    // WhatsApp on Android (Vivo, Samsung, Xiaomi, etc.) STRICTLY requires OGG Opus for PTT Voice Notes.
+    // If an MP3 (audio/mpeg) has ptt: true, Android ExoPlayer throws:
+    // "This audio is not available because something is wrong with the audio file."
+    // Setting ptt to true ONLY for Opus/Ogg ensures 100% playback compatibility across all Android, iOS, and PC devices.
+    const isOpusVoiceNote = mimetype.includes('ogg') || mimetype.includes('opus');
     await sock.sendMessage(jid, {
         audio: buffer,
-        mimetype,
-        ptt: true, // Send as voice note with waveform
+        mimetype: isOpusVoiceNote ? 'audio/ogg; codecs=opus' : (mimetype || 'audio/mpeg'),
+        ptt: isOpusVoiceNote,
     });
-    (0, utils_js_1.log)('SENDER', `Sent voice note (${mimetype}) to ${jid}`);
+    (0, utils_js_1.log)('SENDER', `Sent audio message (${mimetype}, ptt: ${isOpusVoiceNote}) to ${jid}`);
 }
 async function sendDocumentMessage(sock, jid, docSource, fileName) {
     const buffer = await getMediaBuffer(docSource);
