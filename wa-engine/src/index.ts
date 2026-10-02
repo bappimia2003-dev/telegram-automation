@@ -1,7 +1,14 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { startWhatsApp, disconnectWhatsApp, getConnectionInfo } from './whatsapp.js';
+import {
+  startWhatsApp,
+  disconnectWhatsApp,
+  getConnectionInfo,
+  getAllAccountsInfo,
+  removeWhatsAppAccount,
+  initAllAccounts,
+} from './whatsapp.js';
 import { log, errLog } from './utils.js';
 
 dotenv.config();
@@ -17,9 +24,66 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true, timestamp: new Date().toISOString() });
 });
 
-// 2. Connection status
-app.get('/status', (_req, res) => {
-  const info = getConnectionInfo();
+// 2. Multi-Account: Get all accounts info
+app.get('/accounts', (_req, res) => {
+  const accounts = getAllAccountsInfo();
+  res.json({ ok: true, accounts });
+});
+
+// 3. Multi-Account: Create and connect new account
+app.post('/accounts', async (req, res) => {
+  try {
+    const name = (req.body?.name || '').trim() || `SIM ${Date.now().toString().slice(-4)}`;
+    const accountId = req.body?.id || `acc_${Date.now()}`;
+    const info = await startWhatsApp(accountId, name);
+    res.json({ ok: true, account: info });
+  } catch (err: any) {
+    errLog('API', 'Create account error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// 4. Multi-Account: Connect specific account
+app.post('/accounts/:id/connect', async (req, res) => {
+  try {
+    const accountId = req.params.id;
+    const name = req.body?.name;
+    const info = await startWhatsApp(accountId, name);
+    res.json({ ok: true, account: info });
+  } catch (err: any) {
+    errLog('API', 'Account connect error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// 5. Multi-Account: Disconnect specific account
+app.post('/accounts/:id/disconnect', async (req, res) => {
+  try {
+    const accountId = req.params.id;
+    await disconnectWhatsApp(accountId);
+    res.json({ ok: true, disconnected: true });
+  } catch (err: any) {
+    errLog('API', 'Account disconnect error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// 6. Multi-Account: Delete account completely
+app.delete('/accounts/:id', async (req, res) => {
+  try {
+    const accountId = req.params.id;
+    await removeWhatsAppAccount(accountId);
+    res.json({ ok: true, deleted: true });
+  } catch (err: any) {
+    errLog('API', 'Delete account error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// --- Legacy / Default routes for 'main' account ---
+app.get('/status', (req, res) => {
+  const accountId = (req.query?.accountId as string) || 'main';
+  const info = getConnectionInfo(accountId);
   res.json({
     status: info.status,
     phoneNumber: info.phoneNumber,
@@ -27,9 +91,9 @@ app.get('/status', (_req, res) => {
   });
 });
 
-// 3. Get QR code
-app.get('/qr', (_req, res) => {
-  const info = getConnectionInfo();
+app.get('/qr', (req, res) => {
+  const accountId = (req.query?.accountId as string) || 'main';
+  const info = getConnectionInfo(accountId);
   res.json({
     status: info.status,
     qrCode: info.qrCode,
@@ -37,33 +101,31 @@ app.get('/qr', (_req, res) => {
   });
 });
 
-// 4. Trigger connect
-app.post('/connect', async (_req, res) => {
+app.post('/connect', async (req, res) => {
   try {
-    const info = await startWhatsApp();
+    const accountId = (req.body?.accountId as string) || 'main';
+    const info = await startWhatsApp(accountId);
     res.json({ ok: true, ...info });
   } catch (err: any) {
-    errLog('API', 'Connect error:', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-// 5. Trigger disconnect
-app.post('/disconnect', async (_req, res) => {
+app.post('/disconnect', async (req, res) => {
   try {
-    await disconnectWhatsApp();
+    const accountId = (req.body?.accountId as string) || 'main';
+    await disconnectWhatsApp(accountId);
     res.json({ ok: true });
   } catch (err: any) {
-    errLog('API', 'Disconnect error:', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  log('SERVER', `🚀 WhatsApp Automation Engine listening on 0.0.0.0:${PORT}`);
+  log('SERVER', `🚀 Multi-Session WhatsApp Automation Engine listening on 0.0.0.0:${PORT}`);
 
-  // Automatically start WhatsApp on boot
-  startWhatsApp().catch((err) => {
-    errLog('SERVER', 'Error auto-starting WhatsApp on boot:', err.message);
+  // Automatically start all registered accounts
+  initAllAccounts().catch((err) => {
+    errLog('SERVER', 'Error initializing accounts on boot:', err.message);
   });
 });

@@ -23,6 +23,9 @@ export interface WaCampaign {
   sendOrder: string; // comma-separated: 'message,image,video,audio,document'
   delayBetweenSends: number; // seconds
 
+  // WhatsApp Account Assignment
+  accountId?: string; // 'all' or specific account id
+
   // Controls
   isActive: boolean;
   chatReplyEnabled: boolean;
@@ -58,12 +61,15 @@ export interface WaMessageLog {
 
 export interface WaConnection {
   id: string;
+  name?: string; // e.g. 'SIM 1 - Gemini', 'SIM 2 - Courses'
   phoneNumber: string;
   status: 'connected' | 'disconnected' | 'qr_pending' | 'connecting';
   qrCode: string;
   lastConnected: string;
   createdAt: string;
 }
+
+export type WaAccount = WaConnection;
 
 export interface WaDashboardStats {
   totalCampaigns: number;

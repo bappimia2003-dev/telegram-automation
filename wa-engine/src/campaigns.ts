@@ -16,8 +16,14 @@ import {
 import { WaCampaign } from './types.js';
 import { log, errLog, sleep } from './utils.js';
 
-export async function matchCampaign(messageText: string): Promise<WaCampaign | null> {
-  const activeCampaigns = await getActiveCampaigns();
+export async function matchCampaign(messageText: string, accountId?: string): Promise<WaCampaign | null> {
+  const allActive = await getActiveCampaigns();
+  if (allActive.length === 0) return null;
+
+  // Filter campaigns assigned to this account (or assigned to 'all')
+  const activeCampaigns = allActive.filter(
+    (c) => !c.accountId || c.accountId === 'all' || !accountId || c.accountId === accountId
+  );
   if (activeCampaigns.length === 0) return null;
 
   const normalizedText = (messageText || '').toLowerCase().trim();
@@ -34,7 +40,7 @@ export async function matchCampaign(messageText: string): Promise<WaCampaign | n
 
       for (const kw of keywords) {
         if (normalizedText.includes(kw)) {
-          log('CAMPAIGN', `Matched keyword "${kw}" for campaign: "${campaign.name}"`);
+          log('CAMPAIGN', `[Acc: ${accountId || 'all'}] Matched keyword "${kw}" for campaign: "${campaign.name}"`);
           return campaign;
         }
       }
@@ -44,7 +50,7 @@ export async function matchCampaign(messageText: string): Promise<WaCampaign | n
   // 2. Fallback to default campaign if set
   const defaultCamp = activeCampaigns.find((c) => c.isDefault);
   if (defaultCamp) {
-    log('CAMPAIGN', `No keyword match. Using default fallback campaign: "${defaultCamp.name}"`);
+    log('CAMPAIGN', `[Acc: ${accountId || 'all'}] Using default fallback campaign: "${defaultCamp.name}"`);
     return defaultCamp;
   }
 
@@ -55,16 +61,17 @@ export async function processIncomingMessage(
   sock: any,
   sender: string,
   pushName: string,
-  messageText: string
+  messageText: string,
+  accountId?: string
 ): Promise<void> {
   try {
-    const campaign = await matchCampaign(messageText);
+    const campaign = await matchCampaign(messageText, accountId);
     if (!campaign) {
-      log('CAMPAIGN', `No matching campaign keyword for message: "${messageText}". Ignoring.`);
+      log('CAMPAIGN', `[Acc: ${accountId || 'all'}] No matching campaign keyword for message: "${messageText}". Ignoring.`);
       return;
     }
 
-    log('CAMPAIGN', `🚀 Triggered by keyword! Starting delivery for ${sender} (${pushName}) -> Campaign: "${campaign.name}"`);
+    log('CAMPAIGN', `🚀 [Acc: ${accountId || 'all'}] Triggered by keyword! Starting delivery for ${sender} (${pushName}) -> Campaign: "${campaign.name}"`);
 
     const orderList = campaign.sendOrder
       .split(',')

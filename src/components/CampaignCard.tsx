@@ -17,7 +17,8 @@ import {
   ExternalLink, 
   Trash2, 
   Clock,
-  Sparkles
+  Sparkles,
+  Phone
 } from 'lucide-react';
 import { WaCampaign } from '@/lib/whatsappTypes';
 
@@ -82,6 +83,10 @@ export function CampaignCard({ campaign, onToggleActive, onDelete }: CampaignCar
                     Default
                   </Badge>
                 )}
+                <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-300 border-emerald-500/30 flex items-center gap-1">
+                  <Phone className="w-2.5 h-2.5" />
+                  {campaign.accountId && campaign.accountId !== 'all' ? campaign.accountId : 'All Numbers'}
+                </Badge>
               </div>
               {campaign.description && (
                 <p className="text-xs text-muted-foreground line-clamp-1">{campaign.description}</p>

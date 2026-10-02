@@ -2,53 +2,95 @@ import fs from 'fs';
 import path from 'path';
 import QRCode from 'qrcode';
 import pino from 'pino';
-import { updateWaConnectionState } from './db.js';
+import { updateWaConnectionState, getAllDbAccounts, deleteDbAccount } from './db.js';
 import { processIncomingMessage } from './campaigns.js';
 import { log, errLog } from './utils.js';
 
-let sock: any = null;
-let currentQrCode: string = '';
-let connectionStatus: 'disconnected' | 'connecting' | 'qr_pending' | 'connected' = 'disconnected';
-let connectedPhone: string = '';
+interface AccountSession {
+  id: string;
+  name: string;
+  sock: any;
+  status: 'disconnected' | 'connecting' | 'qr_pending' | 'connected';
+  qrCode: string;
+  phoneNumber: string;
+}
 
-const AUTH_DIR = path.resolve(process.cwd(), 'whatsapp-auth');
+const sessions = new Map<string, AccountSession>();
+const AUTH_BASE_DIR = path.resolve(process.cwd(), 'whatsapp-auth');
 
-export function getConnectionInfo() {
+function getOrCreateSession(id: string, name?: string): AccountSession {
+  if (!sessions.has(id)) {
+    sessions.set(id, {
+      id,
+      name: name || (id === 'main' ? 'Primary WhatsApp' : `SIM ${id.slice(-4)}`),
+      sock: null,
+      status: 'disconnected',
+      qrCode: '',
+      phoneNumber: '',
+    });
+  }
+  const s = sessions.get(id)!;
+  if (name) s.name = name;
+  return s;
+}
+
+export function getConnectionInfo(accountId = 'main') {
+  const session = getOrCreateSession(accountId);
   return {
-    status: connectionStatus,
-    qrCode: currentQrCode,
-    phoneNumber: connectedPhone,
+    id: session.id,
+    name: session.name,
+    status: session.status,
+    qrCode: session.qrCode,
+    phoneNumber: session.phoneNumber,
   };
 }
 
-export async function startWhatsApp(): Promise<any> {
-  if (sock && connectionStatus === 'connected') {
-    return getConnectionInfo();
+export function getAllAccountsInfo() {
+  const list: any[] = [];
+  for (const session of sessions.values()) {
+    list.push({
+      id: session.id,
+      name: session.name,
+      status: session.status,
+      qrCode: session.qrCode,
+      phoneNumber: session.phoneNumber,
+    });
+  }
+  return list;
+}
+
+export async function startWhatsApp(accountId = 'main', accountName?: string): Promise<any> {
+  const session = getOrCreateSession(accountId, accountName);
+
+  if (session.sock && session.status === 'connected') {
+    return getConnectionInfo(accountId);
   }
 
   const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } =
     await import('@whiskeysockets/baileys');
 
-  if (!fs.existsSync(AUTH_DIR)) {
-    fs.mkdirSync(AUTH_DIR, { recursive: true });
+  const authDir = path.join(AUTH_BASE_DIR, accountId);
+  if (!fs.existsSync(authDir)) {
+    fs.mkdirSync(authDir, { recursive: true });
   }
 
-  connectionStatus = 'connecting';
-  await updateWaConnectionState({ status: 'connecting', qrCode: '' });
+  session.status = 'connecting';
+  await updateWaConnectionState(accountId, { status: 'connecting', qrCode: '', name: session.name });
 
   try {
-    const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
+    const { state, saveCreds } = await useMultiFileAuthState(authDir);
     const { version } = await fetchLatestBaileysVersion();
     const logger = pino({ level: 'silent' });
 
-    sock = makeWASocket({
+    const sock = makeWASocket({
       version,
       auth: state,
       logger,
-      printQRInTerminal: true, // Also prints in Railway / console logs
-      browser: ['Auto Ad File Send', 'Chrome', '1.0.0'],
+      printQRInTerminal: true,
+      browser: [`Auto Ad Sender (${session.name})`, 'Chrome', '1.0.0'],
       generateHighQualityLinkPreview: false,
     });
+    session.sock = sock;
 
     sock.ev.on('creds.update', saveCreds);
 
@@ -57,58 +99,62 @@ export async function startWhatsApp(): Promise<any> {
 
       if (qr) {
         try {
-          currentQrCode = await QRCode.toDataURL(qr, { width: 320, margin: 2 });
-          connectionStatus = 'qr_pending';
-          await updateWaConnectionState({
+          session.qrCode = await QRCode.toDataURL(qr, { width: 320, margin: 2 });
+          session.status = 'qr_pending';
+          await updateWaConnectionState(accountId, {
             status: 'qr_pending',
-            qrCode: currentQrCode,
+            qrCode: session.qrCode,
+            name: session.name,
           });
-          log('WA', 'QR Code generated and synced to DB. Scan from WhatsApp!');
+          log('WA', `[${session.name}] QR Code generated! Scan from WhatsApp.`);
         } catch (e: any) {
-          errLog('WA', 'Failed generating QR Code:', e.message);
+          errLog('WA', `[${session.name}] Failed generating QR Code:`, e.message);
         }
       }
 
       if (connection === 'open') {
-        connectionStatus = 'connected';
-        currentQrCode = '';
+        session.status = 'connected';
+        session.qrCode = '';
         const rawId = sock?.user?.id || '';
-        connectedPhone = rawId.split(':')[0] || rawId.split('@')[0] || '';
+        session.phoneNumber = rawId.split(':')[0] || rawId.split('@')[0] || '';
 
-        await updateWaConnectionState({
+        await updateWaConnectionState(accountId, {
           status: 'connected',
           qrCode: '',
-          phoneNumber: connectedPhone,
+          phoneNumber: session.phoneNumber,
           lastConnected: new Date().toISOString(),
+          name: session.name,
         });
-        log('WA', `🎉 WhatsApp connected successfully! Number: ${connectedPhone}`);
+        log('WA', `🎉 [${session.name}] WhatsApp connected successfully! Number: ${session.phoneNumber}`);
       }
 
       if (connection === 'close') {
         const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-        connectionStatus = 'disconnected';
-        currentQrCode = '';
-        connectedPhone = '';
-        await updateWaConnectionState({
+        session.status = 'disconnected';
+        session.qrCode = '';
+        session.phoneNumber = '';
+
+        await updateWaConnectionState(accountId, {
           status: 'disconnected',
           qrCode: '',
           phoneNumber: '',
+          name: session.name,
         });
 
         if (shouldReconnect) {
-          log('WA', 'Connection closed. Attempting reconnect in 5s...');
-          setTimeout(() => startWhatsApp().catch(() => {}), 5000);
+          log('WA', `[${session.name}] Connection closed. Reconnecting in 5s...`);
+          setTimeout(() => startWhatsApp(accountId, session.name).catch(() => {}), 5000);
         } else {
-          log('WA', 'Device was logged out. Clearing auth credentials...');
-          sock = null;
+          log('WA', `[${session.name}] Logged out. Clearing auth files...`);
+          session.sock = null;
           try {
-            if (fs.existsSync(AUTH_DIR)) {
-              fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+            if (fs.existsSync(authDir)) {
+              fs.rmSync(authDir, { recursive: true, force: true });
             }
           } catch (e: any) {
-            errLog('WA', 'Error removing auth dir:', e.message);
+            errLog('WA', `Error clearing auth for ${accountId}:`, e.message);
           }
         }
       }
@@ -131,51 +177,79 @@ export async function startWhatsApp(): Promise<any> {
           msg.message?.videoMessage?.caption ||
           '';
 
-        log('WA', `📩 Incoming from ${sender} (${pushName}): "${messageText}"`);
+        log('WA', `📩 [${session.name}] Incoming from ${sender} (${pushName}): "${messageText}"`);
 
-        // Process in background without blocking socket event loop
-        processIncomingMessage(sock, sender, pushName, messageText).catch((err) => {
-          errLog('WA', 'Error handling incoming message:', err.message);
+        // Process message in background with accountId
+        processIncomingMessage(sock, sender, pushName, messageText, accountId).catch((err) => {
+          errLog('WA', `Error handling incoming message on ${session.name}:`, err.message);
         });
       }
     });
 
-    return getConnectionInfo();
+    return getConnectionInfo(accountId);
   } catch (err: any) {
-    errLog('WA', 'Failed starting WhatsApp socket:', err.message);
-    connectionStatus = 'disconnected';
-    await updateWaConnectionState({ status: 'disconnected', qrCode: '' });
+    errLog('WA', `Failed starting WhatsApp socket for ${accountId}:`, err.message);
+    session.status = 'disconnected';
+    await updateWaConnectionState(accountId, { status: 'disconnected', qrCode: '', name: session.name });
     throw err;
   }
 }
 
-export async function disconnectWhatsApp(): Promise<void> {
-  if (sock) {
+export async function disconnectWhatsApp(accountId = 'main'): Promise<void> {
+  const session = sessions.get(accountId);
+  if (session?.sock) {
     try {
-      await sock.logout();
+      await session.sock.logout();
     } catch (e: any) {
-      errLog('WA', 'Error logging out socket:', e.message);
+      errLog('WA', `Error logging out socket ${accountId}:`, e.message);
     }
-    sock = null;
+    session.sock = null;
   }
 
-  connectionStatus = 'disconnected';
-  currentQrCode = '';
-  connectedPhone = '';
+  if (session) {
+    session.status = 'disconnected';
+    session.qrCode = '';
+    session.phoneNumber = '';
+  }
 
-  await updateWaConnectionState({
+  await updateWaConnectionState(accountId, {
     status: 'disconnected',
     qrCode: '',
     phoneNumber: '',
   });
 
+  const authDir = path.join(AUTH_BASE_DIR, accountId);
   try {
-    if (fs.existsSync(AUTH_DIR)) {
-      fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+    if (fs.existsSync(authDir)) {
+      fs.rmSync(authDir, { recursive: true, force: true });
     }
   } catch (e: any) {
-    errLog('WA', 'Error removing auth dir:', e.message);
+    errLog('WA', `Error removing auth dir for ${accountId}:`, e.message);
   }
 
-  log('WA', 'WhatsApp disconnected and credentials purged.');
+  log('WA', `[${accountId}] WhatsApp disconnected and credentials purged.`);
+}
+
+export async function removeWhatsAppAccount(accountId: string): Promise<void> {
+  await disconnectWhatsApp(accountId);
+  await deleteDbAccount(accountId);
+  sessions.delete(accountId);
+  log('WA', `Account ${accountId} completely removed.`);
+}
+
+export async function initAllAccounts(): Promise<void> {
+  const dbAccounts = await getAllDbAccounts();
+  if (dbAccounts.length === 0) {
+    // Start default 'main' account
+    startWhatsApp('main', 'Primary WhatsApp').catch((e) => {
+      errLog('WA', 'Auto-start main error:', e.message);
+    });
+  } else {
+    for (const acc of dbAccounts) {
+      getOrCreateSession(acc.id, acc.name);
+      startWhatsApp(acc.id, acc.name).catch((e) => {
+        errLog('WA', `Auto-start account ${acc.id} error:`, e.message);
+      });
+    }
+  }
 }

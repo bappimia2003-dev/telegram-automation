@@ -20,10 +20,22 @@ if (SUPABASE_URL && SUPABASE_KEY) {
 }
 
 function rowToCampaign(r: any): WaCampaign {
+  let description = r.description || '';
+  let accountId = 'all';
+
+  if (description.startsWith('[acc:')) {
+    const endIdx = description.indexOf(']');
+    if (endIdx !== -1) {
+      accountId = description.substring(5, endIdx);
+      description = description.substring(endIdx + 1).trim();
+    }
+  }
+
   return {
     id: r.id,
     name: r.name,
-    description: r.description || '',
+    description,
+    accountId,
     keywords: r.keywords || '',
     isDefault: Boolean(r.is_default),
     welcomeMessage: r.welcome_message || '',
@@ -135,17 +147,58 @@ export async function addMessageLog(logEntry: WaMessageLog): Promise<void> {
   }
 }
 
-export async function updateWaConnectionState(updates: Partial<WaConnection>): Promise<void> {
+export async function updateWaConnectionState(accountId: string, updates: Partial<WaConnection>): Promise<void> {
   if (!supabase) return;
   try {
-    const row: any = {};
-    if (updates.phoneNumber !== undefined) row.phone_number = updates.phoneNumber;
+    const targetId = accountId || 'main';
+    const row: any = { id: targetId };
+    if (updates.phoneNumber !== undefined || updates.name !== undefined) {
+      const rawPhone = updates.phoneNumber !== undefined ? updates.phoneNumber : '';
+      const rawName = updates.name || (targetId === 'main' ? 'Primary WhatsApp' : `SIM ${targetId.slice(-4)}`);
+      row.phone_number = `${rawName}|${rawPhone}`;
+    }
     if (updates.status !== undefined) row.status = updates.status;
     if (updates.qrCode !== undefined) row.qr_code = updates.qrCode;
     if (updates.lastConnected !== undefined) row.last_connected = updates.lastConnected;
 
-    await supabase.from('wa_connection').upsert({ id: 'main', ...row });
+    await supabase.from('wa_connection').upsert(row);
   } catch (e: any) {
     errLog('DB', 'Exception updating wa_connection state:', e.message);
+  }
+}
+
+export async function getAllDbAccounts(): Promise<WaConnection[]> {
+  if (!supabase) return [];
+  try {
+    const { data } = await supabase.from('wa_connection').select('*').order('created_at', { ascending: true });
+    return (data || []).map((r: any) => {
+      let name = r.id === 'main' ? 'Primary WhatsApp' : `SIM ${r.id.slice(-4)}`;
+      let phoneNumber = r.phone_number || '';
+      if (phoneNumber.includes('|')) {
+        const parts = phoneNumber.split('|');
+        name = parts[0];
+        phoneNumber = parts[1];
+      }
+      return {
+        id: r.id,
+        name,
+        phoneNumber,
+        status: r.status,
+        qrCode: r.qr_code || '',
+        lastConnected: r.last_connected,
+        createdAt: r.created_at,
+      };
+    });
+  } catch (e: any) {
+    return [];
+  }
+}
+
+export async function deleteDbAccount(accountId: string): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.from('wa_connection').delete().eq('id', accountId);
+  } catch (e: any) {
+    errLog('DB', 'Exception deleting account from db:', e.message);
   }
 }

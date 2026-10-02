@@ -12,6 +12,7 @@ export interface WaCampaign {
   documentName: string;
   sendOrder: string;
   delayBetweenSends: number;
+  accountId?: string;
   isActive: boolean;
   chatReplyEnabled: boolean;
   totalSent: number;
@@ -42,9 +43,12 @@ export interface WaMessageLog {
 
 export interface WaConnection {
   id: string;
+  name?: string;
   phoneNumber: string;
   status: 'connected' | 'disconnected' | 'qr_pending' | 'connecting';
   qrCode: string;
   lastConnected: string;
   createdAt: string;
 }
+
+export type WaAccount = WaConnection;

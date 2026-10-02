@@ -22,10 +22,22 @@ const waMemory = {
 // Row Mappers (snake_case <-> camelCase)
 // =============================================
 function rowToCampaign(r: any): WaCampaign {
+  let description = r.description || '';
+  let accountId = 'all';
+
+  if (description.startsWith('[acc:')) {
+    const endIdx = description.indexOf(']');
+    if (endIdx !== -1) {
+      accountId = description.substring(5, endIdx);
+      description = description.substring(endIdx + 1).trim();
+    }
+  }
+
   return {
     id: r.id,
     name: r.name,
-    description: r.description || '',
+    description,
+    accountId,
     keywords: r.keywords || '',
     isDefault: Boolean(r.is_default),
     welcomeMessage: r.welcome_message || '',
@@ -48,7 +60,13 @@ function campaignToRow(c: Partial<WaCampaign>): any {
   const row: any = {};
   if (c.id !== undefined) row.id = c.id;
   if (c.name !== undefined) row.name = c.name;
-  if (c.description !== undefined) row.description = c.description;
+  if (c.description !== undefined || c.accountId !== undefined) {
+    let desc = c.description || '';
+    if (c.accountId && c.accountId !== 'all') {
+      desc = `[acc:${c.accountId}] ${desc}`;
+    }
+    row.description = desc;
+  }
   if (c.keywords !== undefined) row.keywords = c.keywords;
   if (c.isDefault !== undefined) row.is_default = c.isDefault;
   if (c.welcomeMessage !== undefined) row.welcome_message = c.welcomeMessage;
@@ -93,9 +111,18 @@ function rowToMessageLog(r: any): WaMessageLog {
 }
 
 function rowToConnection(r: any): WaConnection {
+  let name = r.id === 'main' ? 'Primary WhatsApp' : `SIM ${r.id.slice(-4)}`;
+  let phoneNumber = r.phone_number || '';
+  if (phoneNumber.includes('|')) {
+    const parts = phoneNumber.split('|');
+    name = parts[0];
+    phoneNumber = parts[1];
+  }
+
   return {
     id: r.id || 'main',
-    phoneNumber: r.phone_number || '',
+    name,
+    phoneNumber,
     status: (r.status as any) || 'disconnected',
     qrCode: r.qr_code || '',
     lastConnected: r.last_connected || new Date().toISOString(),
@@ -320,42 +347,69 @@ export async function getMessageLogs(campaignId?: string, limit = 100): Promise<
 // =============================================
 // CONNECTION STATE
 // =============================================
-export async function getWaConnection(): Promise<WaConnection> {
+export async function getAllWaConnections(): Promise<WaConnection[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [waMemory.connection];
+
+  const { data, error } = await supabase.from('wa_connection').select('*').order('created_at', { ascending: true });
+  if (error || !data || data.length === 0) {
+    if (error) console.error('Error fetching wa_connection:', error.message);
+    return [waMemory.connection];
+  }
+  return data.map(rowToConnection);
+}
+
+export async function getWaConnection(id = 'main'): Promise<WaConnection> {
   const supabase = getSupabase();
   if (!supabase) return waMemory.connection;
 
-  const { data, error } = await supabase.from('wa_connection').select('*').eq('id', 'main').maybeSingle();
+  const { data, error } = await supabase.from('wa_connection').select('*').eq('id', id).maybeSingle();
   if (error || !data) {
     if (error) console.error('Error fetching wa_connection:', error.message);
-    return waMemory.connection;
+    return { ...waMemory.connection, id };
   }
   return rowToConnection(data);
 }
 
-export async function updateWaConnection(updates: Partial<WaConnection>): Promise<WaConnection> {
+export async function updateWaConnection(updates: Partial<WaConnection> & { id?: string }): Promise<WaConnection> {
+  const targetId = updates.id || 'main';
   const supabase = getSupabase();
 
-  waMemory.connection = { ...waMemory.connection, ...updates };
+  if (targetId === 'main') {
+    waMemory.connection = { ...waMemory.connection, ...updates };
+  }
 
-  if (!supabase) return waMemory.connection;
+  if (!supabase) return { ...waMemory.connection, ...updates, id: targetId };
 
-  const row: any = {};
-  if (updates.phoneNumber !== undefined) row.phone_number = updates.phoneNumber;
+  const row: any = { id: targetId };
+  if (updates.phoneNumber !== undefined || updates.name !== undefined) {
+    const rawPhone = updates.phoneNumber !== undefined ? updates.phoneNumber : '';
+    const rawName = updates.name || (targetId === 'main' ? 'Primary WhatsApp' : `SIM ${targetId.slice(-4)}`);
+    row.phone_number = `${rawName}|${rawPhone}`;
+  }
   if (updates.status !== undefined) row.status = updates.status;
   if (updates.qrCode !== undefined) row.qr_code = updates.qrCode;
   if (updates.lastConnected !== undefined) row.last_connected = updates.lastConnected;
 
   const { data, error } = await supabase
     .from('wa_connection')
-    .upsert({ id: 'main', ...row })
+    .upsert(row)
     .select()
     .maybeSingle();
 
   if (error) {
     console.error('Error updating wa_connection:', error.message);
-    return waMemory.connection;
+    return { ...waMemory.connection, ...updates, id: targetId };
   }
-  return data ? rowToConnection(data) : waMemory.connection;
+  return data ? rowToConnection(data) : { ...waMemory.connection, ...updates, id: targetId };
+}
+
+export async function deleteWaConnection(id: string): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return true;
+  const { error } = await supabase.from('wa_connection').delete().eq('id', id);
+  if (error) console.error('Error deleting wa_connection:', error.message);
+  return !error;
 }
 
 // =============================================

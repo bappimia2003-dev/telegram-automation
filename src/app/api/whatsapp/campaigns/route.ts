@@ -23,6 +23,7 @@ export async function POST(request: Request) {
       id: uuidv4(),
       name: body.name.trim(),
       description: body.description || '',
+      accountId: body.accountId || 'all',
       keywords: body.keywords || '',
       isDefault: Boolean(body.isDefault),
       welcomeMessage: body.welcomeMessage || '',

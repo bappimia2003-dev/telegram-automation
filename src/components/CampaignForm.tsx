@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Input } from './ui/input';
@@ -21,7 +21,8 @@ import {
   CheckCircle,
   HelpCircle,
   Clock,
-  Layers
+  Layers,
+  Phone
 } from 'lucide-react';
 import { WaCampaign } from '@/lib/whatsappTypes';
 import Link from 'next/link';
@@ -36,8 +37,21 @@ export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
 
   const [name, setName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
+  const [accountId, setAccountId] = useState(initialData?.accountId || 'all');
+  const [accounts, setAccounts] = useState<Array<{ id: string; name: string; phoneNumber?: string; status: string }>>([]);
   const [keywords, setKeywords] = useState(initialData?.keywords || '');
   const [isDefault, setIsDefault] = useState(initialData?.isDefault ?? false);
+
+  useEffect(() => {
+    fetch('/api/whatsapp/accounts')
+      .then(res => res.json())
+      .then(data => {
+        if (data.ok && Array.isArray(data.accounts)) {
+          setAccounts(data.accounts);
+        }
+      })
+      .catch(err => console.error('Failed to load accounts in form:', err));
+  }, []);
 
   const [welcomeMessage, setWelcomeMessage] = useState(initialData?.welcomeMessage || '');
   const [imageUrl, setImageUrl] = useState(initialData?.imageUrl || '');
@@ -106,6 +120,7 @@ export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
     const payload = {
       name,
       description,
+      accountId,
       keywords,
       isDefault,
       welcomeMessage,
@@ -199,14 +214,33 @@ export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-medium text-foreground">Description (Optional)</label>
-              <Input
-                placeholder="e.g. 18 months subscription promo"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="bg-background/50 border-border/60"
-              />
+              <label className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Assigned WhatsApp Number (কোন সিমে চলবে?)</span>
+              </label>
+              <select
+                value={accountId}
+                onChange={(e) => setAccountId(e.target.value)}
+                className="w-full h-10 px-3 rounded-md bg-background/50 border border-border/60 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="all">🌐 All Numbers (যেকোনো কানেক্টেড নাম্বার)</option>
+                {accounts.map(acc => (
+                  <option key={acc.id} value={acc.id}>
+                    📱 {acc.name} {acc.phoneNumber ? `(${acc.phoneNumber})` : ''} - {acc.status === 'connected' ? '🟢 Connected' : '⚪ Disconnected'}
+                  </option>
+                ))}
+              </select>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-foreground">Description (Optional)</label>
+            <Input
+              placeholder="e.g. 18 months subscription promo"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="bg-background/50 border-border/60"
+            />
           </div>
 
           <div className="space-y-2">
