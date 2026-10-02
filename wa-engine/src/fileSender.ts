@@ -46,12 +46,20 @@ export async function sendVideoMessage(sock: any, jid: string, videoSource: stri
 
 export async function sendAudioMessage(sock: any, jid: string, audioSource: string): Promise<void> {
   const buffer = await getMediaBuffer(audioSource);
+  const cleanUrl = audioSource.split('?')[0].toLowerCase();
+  let mimetype = 'audio/mp4';
+  if (cleanUrl.endsWith('.ogg') || cleanUrl.endsWith('.opus')) {
+    mimetype = 'audio/ogg; codecs=opus';
+  } else if (cleanUrl.endsWith('.mp3')) {
+    mimetype = 'audio/mpeg';
+  }
+
   await sock.sendMessage(jid, {
     audio: buffer,
-    mimetype: 'audio/mp4',
-    ptt: true, // Voice note style
+    mimetype,
+    ptt: true, // Send as voice note with waveform
   });
-  log('SENDER', `Sent voice note to ${jid}`);
+  log('SENDER', `Sent voice note (${mimetype}) to ${jid}`);
 }
 
 export async function sendDocumentMessage(

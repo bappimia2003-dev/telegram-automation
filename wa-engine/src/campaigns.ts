@@ -44,14 +44,8 @@ export async function matchCampaign(messageText: string): Promise<WaCampaign | n
   // 2. Fallback to default campaign if set
   const defaultCamp = activeCampaigns.find((c) => c.isDefault);
   if (defaultCamp) {
-    log('CAMPAIGN', `No keyword match. Using default campaign: "${defaultCamp.name}"`);
+    log('CAMPAIGN', `No keyword match. Using default fallback campaign: "${defaultCamp.name}"`);
     return defaultCamp;
-  }
-
-  // 3. Fallback to the first active campaign if only 1 active
-  if (activeCampaigns.length === 1) {
-    log('CAMPAIGN', `Only 1 active campaign available: "${activeCampaigns[0].name}"`);
-    return activeCampaigns[0];
   }
 
   return null;
@@ -66,18 +60,11 @@ export async function processIncomingMessage(
   try {
     const campaign = await matchCampaign(messageText);
     if (!campaign) {
-      log('CAMPAIGN', `No matching campaign found for message: "${messageText}". Ignoring.`);
+      log('CAMPAIGN', `No matching campaign keyword for message: "${messageText}". Ignoring.`);
       return;
     }
 
-    // Check one-time contact guarantee
-    const alreadyContacted = await isAlreadyContacted(campaign.id, sender);
-    if (alreadyContacted) {
-      log('CAMPAIGN', `Sender ${sender} already received campaign "${campaign.name}". Skipping.`);
-      return;
-    }
-
-    log('CAMPAIGN', `🚀 Starting auto-delivery for ${sender} (${pushName}) -> Campaign: "${campaign.name}"`);
+    log('CAMPAIGN', `🚀 Triggered by keyword! Starting delivery for ${sender} (${pushName}) -> Campaign: "${campaign.name}"`);
 
     const orderList = campaign.sendOrder
       .split(',')
