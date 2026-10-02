@@ -152,11 +152,21 @@ export async function updateWaConnectionState(accountId: string, updates: Partia
   try {
     const targetId = accountId || 'main';
     const row: any = { id: targetId };
-    if (updates.phoneNumber !== undefined || updates.name !== undefined) {
-      const rawPhone = updates.phoneNumber !== undefined ? updates.phoneNumber : '';
-      const rawName = updates.name || (targetId === 'main' ? 'Primary WhatsApp' : `SIM ${targetId.slice(-4)}`);
-      row.phone_number = `${rawName}|${rawPhone}`;
+
+    let existingName = targetId === 'main' ? 'Primary WhatsApp' : `SIM ${targetId.slice(-4)}`;
+    let existingPhone = '';
+
+    const { data: existing } = await supabase.from('wa_connection').select('phone_number').eq('id', targetId).maybeSingle();
+    if (existing?.phone_number && existing.phone_number.includes('|')) {
+      const parts = existing.phone_number.split('|');
+      existingName = parts[0] || existingName;
+      existingPhone = parts.slice(1).join('|');
     }
+
+    const finalName = updates.name !== undefined ? updates.name : existingName;
+    const finalPhone = (updates.phoneNumber !== undefined && updates.phoneNumber !== '') ? updates.phoneNumber : existingPhone;
+    row.phone_number = `${finalName}|${finalPhone}`;
+
     if (updates.status !== undefined) row.status = updates.status;
     if (updates.qrCode !== undefined) row.qr_code = updates.qrCode;
     if (updates.lastConnected !== undefined) row.last_connected = updates.lastConnected;

@@ -27,10 +27,10 @@ export async function GET() {
       ok: true,
       stats,
       connection: {
-        status: liveStatus?.status || conn.status,
-        phoneNumber: liveStatus?.phoneNumber || conn.phoneNumber,
-        qrCode: conn.qrCode || '',
-        lastConnected: conn.lastConnected,
+        status: liveStatus?.status || conn?.status || 'disconnected',
+        phoneNumber: liveStatus?.phoneNumber || conn?.phoneNumber || '',
+        qrCode: conn?.qrCode || '',
+        lastConnected: conn?.lastConnected || null,
       },
       engineReachable: Boolean(liveStatus),
     });

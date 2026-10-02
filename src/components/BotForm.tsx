@@ -399,7 +399,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
           required 
           value={name} 
           onChange={e => setName(e.target.value)} 
-          placeholder="e.g. Smart Customer Assistant" 
+          placeholder="" 
           className="text-base sm:text-sm h-11"
         />
       </div>
@@ -415,7 +415,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
           className="font-mono text-xs sm:text-sm h-11" 
           value={token} 
           onChange={e => setToken(e.target.value)} 
-          placeholder="7839210452:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw" 
+          placeholder="" 
         />
         <p className="text-xs text-muted-foreground">
           Create a bot on Telegram with <code className="text-primary">@BotFather</code> and paste the HTTP API token here.
@@ -519,7 +519,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
           rows={4}
           value={personality} 
           onChange={e => setPersonality(e.target.value)} 
-          placeholder="You are a warm, polite assistant. Speak fluent Bengali and English. Always assist the user politely and helpfully." 
+          placeholder="" 
           className="text-base sm:text-sm"
         />
       </div>
@@ -531,7 +531,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
           rows={3}
           value={details} 
           onChange={e => setDetails(e.target.value)} 
-          placeholder="Working hours: 10 AM - 10 PM. We offer 24/7 online support. Product prices start at 500 BDT." 
+          placeholder="" 
           className="text-base sm:text-sm"
         />
       </div>
@@ -587,7 +587,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
             rows={5}
             value={workInfo} 
             onChange={e => setWorkInfo(e.target.value)} 
-            placeholder="এখানে আপনার দোকানের নাম, পণ্যের নাম, দাম, সাইজ, কালার, স্টক, ডেলিভারি চার্জ (যেমন: ঢাকার ভেতরে ৭০, বাইরে ১৩০) এবং অর্ডার নেওয়ার নিয়ম বিস্তারিত লিখে দিন..." 
+            placeholder="" 
             className="text-base sm:text-sm font-mono text-xs leading-relaxed"
           />
           <p className="text-[11px] text-muted-foreground">
@@ -827,14 +827,14 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
               </div>
               <div className="flex items-center gap-2">
                 <Input
-                  placeholder="আপনার ব্যক্তিগত Telegram User ID (যেমন: 5353767367)"
+                  placeholder=""
                   value={chatId}
                   onChange={(e) => setChatId(e.target.value)}
                   className="text-xs font-mono h-9 bg-background/80"
                 />
               </div>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                💡 <strong>নোট:</strong> এখানে আপনার <strong>ব্যক্তিগত Telegram User ID</strong> (যেমন: <code className="text-emerald-400 font-mono">5353767367</code>) থাকবে। কখনো বটের নিজের আইডি বা ইউজারনেম দিবেন না, কারণ টেলিগ্রাম বট নিজের কাছে মেসেজ পাঠাতে পারে না।
+                💡 <strong>নোট:</strong> এখানে আপনার <strong>ব্যক্তিগত Telegram User ID</strong> থাকবে। কখনো বটের নিজের আইডি বা ইউজারনেম দিবেন না, কারণ টেলিগ্রাম বট নিজের কাছে মেসেজ পাঠাতে পারে না।
               </p>
             </div>
 
@@ -848,7 +848,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                 rows={2}
                 value={welcomeMessage}
                 onChange={(e) => setWelcomeMessage(e.target.value)}
-                placeholder="যেমন: স্বাগতম আমাদের অফিসিয়াল বটে! নিচে আমাদের ইন্ট্রোডাকশন ছবি, ভয়েস মেসেজ ও ভিডিওটি দেখে নিন..."
+                placeholder=""
                 className="text-sm"
               />
             </div>
@@ -969,7 +969,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                         </label>
                       ) : (
                         <Input
-                          placeholder="https://... or Telegram file_id"
+                          placeholder=""
                           value={welcomeImageUrl}
                           onChange={(e) => setWelcomeImageUrl(e.target.value)}
                           className="text-xs font-mono h-9"
@@ -1135,7 +1135,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
 
                       {audioTab === 'url' && (
                         <Input
-                          placeholder="https://... or Telegram file_id"
+                          placeholder=""
                           value={welcomeAudioUrl}
                           onChange={(e) => setWelcomeAudioUrl(e.target.value)}
                           className="text-xs font-mono h-9"
@@ -1249,7 +1249,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                         </label>
                       ) : (
                         <Input
-                          placeholder="https://... or Telegram file_id"
+                          placeholder=""
                           value={welcomeVideoUrl}
                           onChange={(e) => setWelcomeVideoUrl(e.target.value)}
                           className="text-xs font-mono h-9"

@@ -196,16 +196,13 @@ export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
             <Sparkles className="w-5 h-5 text-emerald-400" />
             Campaign Information
           </CardTitle>
-          <CardDescription className="text-xs">
-            Product name and Facebook Ads quick reply keyword matching.
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-medium text-foreground">Campaign Name *</label>
               <Input
-                placeholder="e.g. Gemini Pro Package"
+                placeholder=""
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -216,17 +213,17 @@ export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
             <div className="space-y-2">
               <label className="text-xs font-medium text-foreground flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Assigned WhatsApp Number (কোন সিমে চলবে?)</span>
+                <span>Assigned WhatsApp Number</span>
               </label>
               <select
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
                 className="w-full h-10 px-3 rounded-md bg-background/50 border border-border/60 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
-                <option value="all">🌐 All Numbers (যেকোনো কানেক্টেড নাম্বার)</option>
+                <option value="all">🌐 All Numbers</option>
                 {accounts.map(acc => (
                   <option key={acc.id} value={acc.id}>
-                    📱 {acc.name} {acc.phoneNumber ? `(${acc.phoneNumber})` : ''} - {acc.status === 'connected' ? '🟢 Connected' : '⚪ Disconnected'}
+                    📱 {acc.name} {acc.phoneNumber ? `(${acc.phoneNumber})` : ''} - {acc.status === 'connected' ? 'Connected' : 'Disconnected'}
                   </option>
                 ))}
               </select>
@@ -236,7 +233,7 @@ export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
           <div className="space-y-2">
             <label className="text-xs font-medium text-foreground">Description (Optional)</label>
             <Input
-              placeholder="e.g. 18 months subscription promo"
+              placeholder=""
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="bg-background/50 border-border/60"
@@ -244,30 +241,20 @@ export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-foreground flex items-center gap-1.5">
-                <span>Ad Trigger Keywords (Comma-separated)</span>
-                <span className="text-[11px] text-emerald-400 font-normal">Matching with customer's message</span>
-              </label>
-            </div>
+            <label className="text-xs font-medium text-foreground">
+              Keywords (Comma-separated)
+            </label>
             <Input
-              placeholder="e.g. gemini pro, gemini, pro, কিভাবে gemini pro নেব"
+              placeholder=""
               value={keywords}
               onChange={(e) => setKeywords(e.target.value)}
               className="bg-background/50 border-border/60"
             />
-            <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-              <HelpCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              Customer যখন Facebook Ad-এর quick reply বোতাম চাপ দিয়ে মেসেজ দিবে, এই কীওয়ার্ডগুলোর যেকোনো একটি মিললে এই ক্যাম্পেইনের ফাইলগুলো অটো চলে যাবে।
-            </p>
           </div>
 
           <div className="flex items-center justify-between p-3.5 rounded-xl bg-secondary/30 border border-border/50">
             <div>
               <p className="text-sm font-medium text-white">Default Fallback Campaign</p>
-              <p className="text-xs text-muted-foreground">
-                কোনো কীওয়ার্ড না মিললে (বা কাস্টমার হাই/হ্যালো লিখলে) কি এই ক্যাম্পেইনের ফাইলগুলো যাবে?
-              </p>
             </div>
             <Switch
               checked={isDefault}
@@ -285,23 +272,11 @@ export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
             <FileText className="w-5 h-5 text-blue-400" />
             Text Message Content
           </CardTitle>
-          <CardDescription className="text-xs">
-            Product pricing, package description and payment instructions.
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           <Textarea
-            rows={8}
-            placeholder={`🔥 মাত্র ৩৫০ টাকায় Premium AI Package!
-
-১৮ মাসের সাবস্ক্রিপশনে পাচ্ছেন—
-✅ Gemini Pro — AI Chat + Image
-🎬 Google Flow & Google Vids
-💻 Antigravity Pro
-✨ Google AI Studio
-☁️ 5000 GB Cloud Storage
-
-বিকাশ / নগদ / রকেটে Send Money করে পেমেন্টের Screenshot পাঠান:`}
+            rows={6}
+            placeholder=""
             value={welcomeMessage}
             onChange={(e) => setWelcomeMessage(e.target.value)}
             className="bg-background/50 border-border/60 font-mono text-xs leading-relaxed"
@@ -316,9 +291,6 @@ export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
             <Layers className="w-5 h-5 text-purple-400" />
             Auto-Send Media Files
           </CardTitle>
-          <CardDescription className="text-xs">
-            Upload banner image, voice note, demo video, or PDF catalog.
-          </CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Image */}

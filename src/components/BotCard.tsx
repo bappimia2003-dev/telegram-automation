@@ -28,7 +28,7 @@ export function BotCard({ bot, onDelete }: BotCardProps) {
   }
 
   return (
-    <Card className="flex flex-col transition-all hover:bg-card/80 hover:shadow-md glass-hover">
+    <Card className="flex flex-col transition-all hover:bg-card/80 hover:shadow-md glass-hover overflow-hidden">
       <CardHeader className="pb-4">
         <div className="flex items-start justify-between">
           <div>
@@ -65,23 +65,23 @@ export function BotCard({ bot, onDelete }: BotCardProps) {
         </div>
       </CardContent>
       
-      <CardFooter className="flex justify-end gap-2 border-t border-border/50 pt-4">
-        <Button variant="outline" size="sm" asChild>
+      <CardFooter className="grid grid-cols-3 gap-2 border-t border-border/50 p-3 bg-secondary/15">
+        <Button variant="outline" size="sm" asChild className="h-8 px-1.5 text-xs w-full">
           <Link href={`/bots/${bot.id}/settings`}>
             Settings
           </Link>
         </Button>
-        <Button variant="outline" size="sm" asChild>
+        <Button variant="outline" size="sm" asChild className="h-8 px-1.5 text-xs w-full">
           <Link href={`/bots/${bot.id}`}>
-            <Edit2 className="h-4 w-4 mr-2" />
+            <Edit2 className="h-3.5 w-3.5 mr-1 shrink-0" />
             Manage
           </Link>
         </Button>
         
         <Dialog>
           <DialogTrigger asChild>
-            <Button variant="destructive" size="sm">
-              <Trash2 className="h-4 w-4 mr-2" />
+            <Button variant="destructive" size="sm" className="h-8 px-1.5 text-xs w-full">
+              <Trash2 className="h-3.5 w-3.5 mr-1 shrink-0" />
               Delete
             </Button>
           </DialogTrigger>

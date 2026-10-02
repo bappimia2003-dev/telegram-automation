@@ -103,9 +103,6 @@ export default function WhatsAppDashboardPage() {
             </span>
             WhatsApp Automation
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Auto-send audio, video, image & text files to Facebook Ad leads for all your WhatsApp SIMs.
-          </p>
         </div>
 
         <Link href="/whatsapp/campaigns/new">
@@ -152,11 +149,8 @@ export default function WhatsAppDashboardPage() {
           <div>
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <Layers className="w-5 h-5 text-emerald-400" />
-              All Running Campaigns (সবগুলো রানিং ক্যাম্পেইন)
+              All Running Campaigns
             </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Overview of all active ad campaigns across your connected numbers. Filter by number or manage any campaign.
-            </p>
           </div>
 
           <Link href="/whatsapp/campaigns/new">
@@ -214,12 +208,9 @@ export default function WhatsAppDashboardPage() {
             <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto mb-3">
               <Sparkles className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-semibold text-white mb-1">
+            <h3 className="text-base font-semibold text-white mb-4">
               {selectedFilter === 'all' ? 'No campaigns created yet' : 'No campaigns for this number'}
             </h3>
-            <p className="text-xs text-muted-foreground max-w-md mx-auto mb-6">
-              Create an ad campaign to automatically send audio, video, image & text when Facebook Ad leads send keywords.
-            </p>
             <Link href={selectedFilter === 'all' ? '/whatsapp/campaigns/new' : `/whatsapp/campaigns/new?accountId=${selectedFilter}`}>
               <Button className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs px-5">
                 <Plus className="w-4 h-4 mr-1.5" />

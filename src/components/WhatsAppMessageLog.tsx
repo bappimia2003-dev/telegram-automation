@@ -68,9 +68,6 @@ export function WhatsAppMessageLog({ campaignId }: WhatsAppMessageLogProps) {
             <Clock className="w-4 h-4 text-emerald-400" />
             Live Message Delivery Log
           </CardTitle>
-          <CardDescription className="text-xs">
-            Recent auto-dispatched files and delivery status to customers.
-          </CardDescription>
         </div>
 
         <Button

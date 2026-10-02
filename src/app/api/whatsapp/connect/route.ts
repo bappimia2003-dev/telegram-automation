@@ -22,9 +22,9 @@ export async function GET() {
     const conn = await getWaConnection();
     return NextResponse.json({
       ok: true,
-      status: conn.status,
-      qrCode: conn.qrCode,
-      phoneNumber: conn.phoneNumber,
+      status: conn?.status || 'disconnected',
+      qrCode: conn?.qrCode || '',
+      phoneNumber: conn?.phoneNumber || '',
     });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

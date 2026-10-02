@@ -349,24 +349,27 @@ export async function getMessageLogs(campaignId?: string, limit = 100): Promise<
 // =============================================
 export async function getAllWaConnections(): Promise<WaConnection[]> {
   const supabase = getSupabase();
-  if (!supabase) return [waMemory.connection];
+  if (!supabase) return waMemory.connection ? [waMemory.connection] : [];
 
   const { data, error } = await supabase.from('wa_connection').select('*').order('created_at', { ascending: true });
-  if (error || !data || data.length === 0) {
-    if (error) console.error('Error fetching wa_connection:', error.message);
-    return [waMemory.connection];
+  if (error) {
+    console.error('Error fetching wa_connection:', error.message);
+    return [];
+  }
+  if (!data || data.length === 0) {
+    return [];
   }
   return data.map(rowToConnection);
 }
 
-export async function getWaConnection(id = 'main'): Promise<WaConnection> {
+export async function getWaConnection(id = 'main'): Promise<WaConnection | null> {
   const supabase = getSupabase();
   if (!supabase) return waMemory.connection;
 
   const { data, error } = await supabase.from('wa_connection').select('*').eq('id', id).maybeSingle();
   if (error || !data) {
     if (error) console.error('Error fetching wa_connection:', error.message);
-    return { ...waMemory.connection, id };
+    return id === 'main' ? waMemory.connection : null;
   }
   return rowToConnection(data);
 }
@@ -375,18 +378,23 @@ export async function updateWaConnection(updates: Partial<WaConnection> & { id?:
   const targetId = updates.id || 'main';
   const supabase = getSupabase();
 
-  if (targetId === 'main') {
+  if (targetId === 'main' && waMemory.connection) {
     waMemory.connection = { ...waMemory.connection, ...updates };
   }
 
-  if (!supabase) return { ...waMemory.connection, ...updates, id: targetId };
+  if (!supabase) return { ...(waMemory.connection || {}), ...updates, id: targetId } as WaConnection;
 
-  const row: any = { id: targetId };
-  if (updates.phoneNumber !== undefined || updates.name !== undefined) {
-    const rawPhone = updates.phoneNumber !== undefined ? updates.phoneNumber : '';
-    const rawName = updates.name || (targetId === 'main' ? 'Primary WhatsApp' : `SIM ${targetId.slice(-4)}`);
-    row.phone_number = `${rawName}|${rawPhone}`;
-  }
+  // Retrieve existing to preserve phone and name if not provided
+  const existing = await getWaConnection(targetId);
+
+  const finalName = updates.name !== undefined ? updates.name : (existing?.name || (targetId === 'main' ? 'Primary WhatsApp' : `SIM ${targetId.slice(-4)}`));
+  const finalPhone = (updates.phoneNumber !== undefined && updates.phoneNumber !== '') ? updates.phoneNumber : (existing?.phoneNumber || '');
+
+  const row: any = { 
+    id: targetId,
+    phone_number: `${finalName}|${finalPhone}`,
+  };
+
   if (updates.status !== undefined) row.status = updates.status;
   if (updates.qrCode !== undefined) row.qr_code = updates.qrCode;
   if (updates.lastConnected !== undefined) row.last_connected = updates.lastConnected;
@@ -399,13 +407,16 @@ export async function updateWaConnection(updates: Partial<WaConnection> & { id?:
 
   if (error) {
     console.error('Error updating wa_connection:', error.message);
-    return { ...waMemory.connection, ...updates, id: targetId };
+    return { ...(existing || {}), ...updates, id: targetId } as WaConnection;
   }
-  return data ? rowToConnection(data) : { ...waMemory.connection, ...updates, id: targetId };
+  return data ? rowToConnection(data) : ({ ...(existing || {}), ...updates, id: targetId } as WaConnection);
 }
 
 export async function deleteWaConnection(id: string): Promise<boolean> {
   const supabase = getSupabase();
+  if (id === 'main') {
+    (waMemory as any).connection = null;
+  }
   if (!supabase) return true;
   const { error } = await supabase.from('wa_connection').delete().eq('id', id);
   if (error) console.error('Error deleting wa_connection:', error.message);
@@ -425,6 +436,6 @@ export async function getWaDashboardStats(): Promise<WaDashboardStats> {
     activeCampaigns: campaigns.filter(c => c.isActive).length,
     totalSent: campaigns.reduce((sum, c) => sum + (c.totalSent || 0), 0),
     uniqueUsers,
-    connectionStatus: connection.status,
+    connectionStatus: connection?.status || 'disconnected',
   };
 }

@@ -105,10 +105,6 @@ export function Sidebar() {
             </div>
 
             <div className="pt-2 border-t border-border/40">
-              <div className="px-3 mb-2 flex items-center justify-between text-[10px] font-semibold tracking-wider text-emerald-400 uppercase">
-                <span>WhatsApp Ads</span>
-                <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">NEW</span>
-              </div>
               <div className="space-y-1">
                 {waNavItems.map((item) => {
                   const isActive = pathname === item.href || (item.href !== '/whatsapp' && pathname.startsWith(item.href));

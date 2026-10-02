@@ -22,6 +22,10 @@ export async function GET(
     } catch {}
 
     const conn = await getWaConnection(accountId);
+    if (!conn) {
+      return NextResponse.json({ ok: false, error: 'Account not found' }, { status: 404 });
+    }
+
     const account = {
       ...conn,
       status: liveAccount?.status || conn.status,

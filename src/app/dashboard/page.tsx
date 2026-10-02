@@ -90,7 +90,7 @@ export default function DashboardPage() {
         <p className="text-muted-foreground">Overview of your automation system</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
         <StatsCard title="Total Bots" value={stats.totalBots.toString()} icon={Bot} />
         <StatsCard title="Active Bots" value={stats.activeBots.toString()} icon={Activity} />
         <StatsCard title="Total Messages" value={stats.totalMessages.toString()} icon={MessageSquare} />
@@ -127,7 +127,7 @@ export default function DashboardPage() {
             variants={container}
             initial="hidden"
             animate="show"
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6"
           >
             {bots.map(bot => (
               <motion.div key={bot.id} variants={item}>
