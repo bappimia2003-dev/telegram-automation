@@ -20,8 +20,8 @@ const path_1 = __importDefault(require("path"));
 const zlib_1 = __importDefault(require("zlib"));
 const utils_js_1 = require("./utils.js");
 dotenv_1.default.config();
-const SUPABASE_URL = process.env.SUPABASE_URL || '';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://vqnoaodavbiyenbqqbib.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_KEY || 'sb_publishable_ftsZlmW-ROg_v-d5CtmurQ_ukFS3aEF';
 let supabase = null;
 if (SUPABASE_URL && SUPABASE_KEY) {
     supabase = (0, supabase_js_1.createClient)(SUPABASE_URL, SUPABASE_KEY, {
