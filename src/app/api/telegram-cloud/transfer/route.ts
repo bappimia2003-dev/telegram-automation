@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { sendPhoto, sendAudio, sendVoice, sendVideo } from '@/lib/telegram';
 import { getSupabase } from '@/lib/supabase';
-import { updateBot, getBotById } from '@/lib/db';
+import { updateBot, getBotById, getAllBots } from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
@@ -27,10 +27,28 @@ export async function POST(request: Request) {
       );
     }
 
+    // Auto-detect if targetChatId is the bot's own ID or missing
+    const botIdFromToken = token.split(':')[0];
+    if (targetChatId && String(targetChatId).trim() === botIdFromToken) {
+      const allBots = await getAllBots();
+      const userChat = allBots.find(b => b.chatId && String(b.chatId).trim() !== botIdFromToken && !b.telegramToken.startsWith(b.chatId))?.chatId;
+      if (userChat) {
+        targetChatId = userChat;
+      }
+    }
+
+    if (!targetChatId) {
+      const allBots = await getAllBots();
+      const userChat = allBots.find(b => b.chatId && !b.telegramToken.startsWith(b.chatId))?.chatId;
+      if (userChat) {
+        targetChatId = userChat;
+      }
+    }
+
     if (!targetChatId) {
       return NextResponse.json(
         { 
-          error: 'টেলিগ্রাম ক্লাউডে ফাইল হোস্ট করার জন্য Telegram Chat ID প্রয়োজন। দয়া করে নিচে "Telegram Storage Chat ID" বক্সে আপনার টেলিগ্রাম আইডি দিন অথবা আপনার টেলিগ্রাম বটে গিয়ে /start লিখে মেসেজ পাঠান।',
+          error: 'টেলিগ্রাম ক্লাউডে ফাইল হোস্ট করার জন্য আপনার Telegram Chat ID প্রয়োজন। দয়া করে বক্সে আপনার ব্যক্তিগত টেলিগ্রাম আইডি (যেমন: 5353767367) দিন অথবা আপনার টেলিগ্রাম বটে গিয়ে /start লিখে চ্যাট শুরু করুন।',
           needsChatId: true 
         },
         { status: 400 }

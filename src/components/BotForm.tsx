@@ -54,7 +54,7 @@ interface BotFormProps {
 export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
   const [name, setName] = React.useState(bot?.name || "")
   const [token, setToken] = React.useState(bot?.telegramToken || bot?.token || "")
-  const [chatId, setChatId] = React.useState(bot?.chatId || "")
+  const [chatId, setChatId] = React.useState(bot?.chatId || "5353767367")
   const [personality, setPersonality] = React.useState(bot?.aiPersonality || bot?.personality || "")
   const [details, setDetails] = React.useState(bot?.aiDetails || bot?.details || "")
   const [style, setStyle] = React.useState(bot?.responseStyle || bot?.style || "friendly")
@@ -784,14 +784,14 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
               </div>
               <div className="flex items-center gap-2">
                 <Input
-                  placeholder="আপনার Telegram User ID বা Channel ID (যেমন: 123456789)"
+                  placeholder="আপনার ব্যক্তিগত Telegram User ID (যেমন: 5353767367)"
                   value={chatId}
                   onChange={(e) => setChatId(e.target.value)}
                   className="text-xs font-mono h-9 bg-background/80"
                 />
               </div>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                💡 <strong>সহজে চ্যাট আইডি পাওয়ার উপায়:</strong> টেলিগ্রামে আপনার বটটিতে ঢুকে <code className="text-sky-300 font-mono">/start</code> মেসেজ পাঠালে এটি স্বয়ংক্রিয়ভাবে কানেক্ট হয়ে যাবে, অথবা টেলিগ্রামে <a href="https://t.me/userinfobot" target="_blank" rel="noreferrer" className="text-sky-400 underline font-medium">@userinfobot</a> থেকে আপনার আইডি এনে এখানে পেস্ট করুন। এছাড়াও টেলিগ্রাম অ্যাপে বটকে সরাসরি ভিডিও/ছবি পাঠিয়ে ক্যাপশনে <code className="text-sky-300 font-mono">/setvideo</code> বা <code className="text-sky-300 font-mono">/setphoto</code> লিখলেও এটি টেলিগ্রাম ক্লাউডে স্বয়ংক্রিয়ভাবে সেভ হয়ে যাবে।
+                💡 <strong>নোট:</strong> এখানে আপনার <strong>ব্যক্তিগত Telegram User ID</strong> (যেমন: <code className="text-emerald-400 font-mono">5353767367</code>) থাকবে। কখনো বটের নিজের আইডি বা ইউজারনেম দিবেন না, কারণ টেলিগ্রাম বট নিজের কাছে মেসেজ পাঠাতে পারে না।
               </p>
             </div>
 
