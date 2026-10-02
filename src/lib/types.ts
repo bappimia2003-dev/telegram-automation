@@ -16,6 +16,18 @@ export interface Bot {
   enableVision?: boolean;
   enableFiles?: boolean;
   enableWebSearch?: boolean;
+  // Welcome Media Automation
+  enableWelcomeMedia?: boolean;
+  welcomeImageUrl?: string;
+  welcomeAudioUrl?: string;
+  welcomeAudioType?: 'voice' | 'audio';
+  welcomeVideoUrl?: string;
+  welcomeMessage?: string;
+  // Shop & Work Knowledge Base
+  workInfo?: string;
+  productFileUrl?: string;
+  productFileName?: string;
+  productFileContent?: string;
   createdAt: string;
   updatedAt: string;
 }

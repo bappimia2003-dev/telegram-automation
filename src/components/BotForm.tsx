@@ -7,7 +7,32 @@ import { Select } from "./ui/select"
 import { Slider } from "./ui/slider"
 import { Switch } from "./ui/switch"
 import { Button } from "./ui/button"
-import { Key, Plus, Sparkles, Mail, Mic, Image as ImageIcon, FileText, Globe } from "lucide-react"
+import { 
+  Key, 
+  Plus, 
+  Sparkles, 
+  Mail, 
+  Mic, 
+  Image as ImageIcon, 
+  FileText, 
+  Globe,
+  Video,
+  Music,
+  Trash2,
+  Upload,
+  Square,
+  Play,
+  Film,
+  Volume2,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
+  Link as LinkIcon,
+  Radio,
+  FileAudio,
+  Store,
+  FileSpreadsheet
+} from "lucide-react"
 
 
 export interface ApiKey {
@@ -60,6 +85,194 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
     bot?.enableWebSearch !== undefined ? Boolean(bot.enableWebSearch) : false
   )
 
+  // Welcome Media Automation State
+  const [enableWelcomeMedia, setEnableWelcomeMedia] = React.useState<boolean>(
+    bot?.enableWelcomeMedia !== undefined ? Boolean(bot.enableWelcomeMedia) : false
+  )
+  const [welcomeImageUrl, setWelcomeImageUrl] = React.useState(bot?.welcomeImageUrl || "")
+  const [welcomeAudioUrl, setWelcomeAudioUrl] = React.useState(bot?.welcomeAudioUrl || "")
+  const [welcomeAudioType, setWelcomeAudioType] = React.useState<'voice' | 'audio'>(
+    bot?.welcomeAudioType || "voice"
+  )
+  const [welcomeVideoUrl, setWelcomeVideoUrl] = React.useState(bot?.welcomeVideoUrl || "")
+  const [welcomeMessage, setWelcomeMessage] = React.useState(bot?.welcomeMessage || "")
+
+  // Sub-tabs for input modes
+  const [imageTab, setImageTab] = React.useState<'upload' | 'url'>('upload')
+  const [audioTab, setAudioTab] = React.useState<'record' | 'upload' | 'url'>('record')
+  const [videoTab, setVideoTab] = React.useState<'upload' | 'url'>('upload')
+
+  // Uploading indicators
+  const [uploadingImage, setUploadingImage] = React.useState(false)
+  const [uploadingAudio, setUploadingAudio] = React.useState(false)
+  const [uploadingVideo, setUploadingVideo] = React.useState(false)
+
+  // Live Audio Recording State
+  const [isRecording, setIsRecording] = React.useState(false)
+  const [recordingSeconds, setRecordingSeconds] = React.useState(0)
+  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null)
+  const audioChunksRef = React.useRef<Blob[]>([])
+  const timerRef = React.useRef<NodeJS.Timeout | null>(null)
+
+  React.useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop()
+      }
+    }
+  }, [])
+
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mediaRecorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = mediaRecorder
+      audioChunksRef.current = []
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data)
+        }
+      }
+
+      mediaRecorder.onstop = async () => {
+        const mimeType = mediaRecorder.mimeType || 'audio/ogg'
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType })
+        const formData = new FormData()
+        formData.append('file', audioBlob, `voice-note-${Date.now()}.ogg`)
+        formData.append('type', 'voice')
+
+        setUploadingAudio(true)
+        try {
+          const res = await fetch('/api/upload', { method: 'POST', body: formData })
+          const data = await res.json()
+          if (data.url) {
+            setWelcomeAudioUrl(data.url)
+            setWelcomeAudioType('voice')
+          }
+        } catch (err) {
+          console.error('Failed to upload recorded voice:', err)
+        } finally {
+          setUploadingAudio(false)
+        }
+        stream.getTracks().forEach((track) => track.stop())
+      }
+
+      mediaRecorder.start(200)
+      setIsRecording(true)
+      setRecordingSeconds(0)
+      timerRef.current = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1)
+      }, 1000)
+    } catch (err: any) {
+      alert('মাইক্রোফোন চালু করতে সমস্যা হয়েছে: ' + (err.message || 'Permission denied'))
+    }
+  }
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+    }
+  }
+
+  const handleFileUpload = async (file: File, type: 'image' | 'audio' | 'video') => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('type', type)
+
+    if (type === 'image') setUploadingImage(true)
+    if (type === 'audio') setUploadingAudio(true)
+    if (type === 'video') setUploadingVideo(true)
+
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: formData })
+      const data = await res.json()
+      if (data.url) {
+        if (type === 'image') setWelcomeImageUrl(data.url)
+        if (type === 'audio') {
+          setWelcomeAudioUrl(data.url)
+          setWelcomeAudioType('audio')
+        }
+        if (type === 'video') setWelcomeVideoUrl(data.url)
+      }
+    } catch (err) {
+      console.error(`Failed to upload ${type}:`, err)
+    } finally {
+      if (type === 'image') setUploadingImage(false)
+      if (type === 'audio') setUploadingAudio(false)
+      if (type === 'video') setUploadingVideo(false)
+    }
+  }
+
+  // Shop & Work Knowledge Base State
+  const [workInfo, setWorkInfo] = React.useState(bot?.workInfo || "")
+  const [productFileUrl, setProductFileUrl] = React.useState(bot?.productFileUrl || "")
+  const [productFileName, setProductFileName] = React.useState(bot?.productFileName || "")
+  const [productFileContent, setProductFileContent] = React.useState(bot?.productFileContent || "")
+  const [uploadingDoc, setUploadingDoc] = React.useState(false)
+
+  const handleDocumentUpload = async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('type', 'document')
+
+    setUploadingDoc(true)
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: formData })
+      const data = await res.json()
+      if (data.url) {
+        setProductFileUrl(data.url)
+        setProductFileName(data.originalName || file.name)
+        if (data.parsedContent) {
+          setProductFileContent(data.parsedContent)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to upload document:', err)
+      alert('ফাইল আপলোড করতে সমস্যা হয়েছে')
+    } finally {
+      setUploadingDoc(false)
+    }
+  }
+
+  const handleRemoveDocument = () => {
+    setProductFileUrl("")
+    setProductFileName("")
+    setProductFileContent("")
+  }
+
+  const loadSampleShopTemplate = () => {
+    const template = `[দোকানের তথ্য]
+দোকানের নাম: আমাদের দোকান
+ঠিকানা / শোরুম: ঢাকা, বাংলাদেশ
+কাস্টমার কেয়ার: সকাল ১০টা - রাত ১০টা
+
+[পণ্যের তালিকা ও সঠিক দাম]
+১. প্রোডাক্ট ১ - দাম: ৫০০ টাকা
+২. প্রোডাক্ট ২ - দাম: ১,২০০ টাকা
+৩. প্রোডাক্ট ৩ - দাম: ৮৫০ টাকা
+
+[ডেলিভারি চার্জ ও নিয়ম]
+- ঢাকার ভিতরে ডেলিভারি চার্জ: ৭০ টাকা (১-২ দিনে ডেলিভারি)
+- ঢাকার বাইরে ডেলিভারি চার্জ: ১৩০ টাকা (২-৩ দিনে ডেলিভারি)
+- ক্যাশ অন ডেলিভারি (Cash on Delivery) সুবিধা রয়েছে।
+
+[অর্ডার নেওয়ার নিয়ম]
+কাস্টমার কোনো পণ্য কিনতে চাইলে বিনয়ের সাথে তাদের নাম, মোবাইল নম্বর এবং সম্পূর্ণ ডেলিভারি ঠিকানা চেয়ে নিবে।`;
+
+    if (!workInfo.trim()) {
+      setWorkInfo(template)
+    } else {
+      setWorkInfo((prev: string) => prev + '\n\n' + template)
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -81,6 +294,16 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
       enableVision,
       enableFiles,
       enableWebSearch,
+      enableWelcomeMedia,
+      welcomeImageUrl: welcomeImageUrl.trim(),
+      welcomeAudioUrl: welcomeAudioUrl.trim(),
+      welcomeAudioType,
+      welcomeVideoUrl: welcomeVideoUrl.trim(),
+      welcomeMessage: welcomeMessage.trim(),
+      workInfo: workInfo.trim(),
+      productFileUrl: productFileUrl.trim(),
+      productFileName: productFileName.trim(),
+      productFileContent: productFileContent.trim(),
     }
 
 
@@ -256,6 +479,131 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
         />
       </div>
 
+      {/* 🏪 Shop Knowledge & Product Training (Work Info & Excel/Word File) */}
+      <div className="p-4 sm:p-5 border border-emerald-500/30 bg-emerald-950/10 rounded-2xl space-y-4">
+        <div className="flex items-center justify-between pb-2 border-b border-border/40">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+              <Store className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm sm:text-base text-foreground">
+                Shop Knowledge & Product Training (দোকানের তথ্য ও প্রোডাক্ট)
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                আপনার দোকানের পণ্য, দাম ও নিয়ম দিয়ে বটকে ট্রেইন করুন
+              </p>
+            </div>
+          </div>
+          <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            AI Sales Brain
+          </span>
+        </div>
+
+        {/* 1. Work Info Text Box */}
+        <div className="space-y-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+            <label className="text-xs sm:text-sm font-medium text-foreground flex items-center gap-1.5">
+              <FileText className="w-4 h-4 text-emerald-400" />
+              Work Info (দোকান ও প্রোডাক্টের বিস্তারিত তথ্য)
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={loadSampleShopTemplate}
+                className="text-[11px] text-emerald-400 hover:text-emerald-300 font-medium px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 transition-colors"
+              >
+                📋 Load Sample Template
+              </button>
+              {workInfo && (
+                <button
+                  type="button"
+                  onClick={() => setWorkInfo("")}
+                  className="text-[11px] text-muted-foreground hover:text-red-400 transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+          <Textarea 
+            rows={5}
+            value={workInfo} 
+            onChange={e => setWorkInfo(e.target.value)} 
+            placeholder="এখানে আপনার দোকানের নাম, পণ্যের নাম, দাম, সাইজ, কালার, স্টক, ডেলিভারি চার্জ (যেমন: ঢাকার ভেতরে ৭০, বাইরে ১৩০) এবং অর্ডার নেওয়ার নিয়ম বিস্তারিত লিখে দিন..." 
+            className="text-base sm:text-sm font-mono text-xs leading-relaxed"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            💡 কাস্টমার যেকোনো পণ্যের দাম বা তথ্য জানতে চাইলে বট এই তথ্য দেখে শতভাগ সঠিক উত্তর দেবে।
+          </p>
+        </div>
+
+        {/* 2. Product Sheet (Excel / Word Document) */}
+        <div className="space-y-2 pt-2 border-t border-border/40">
+          <div className="flex items-center justify-between">
+            <label className="text-xs sm:text-sm font-medium text-foreground flex items-center gap-1.5">
+              <FileSpreadsheet className="w-4 h-4 text-teal-400" />
+              Product Sheet (Excel / Word Document)
+            </label>
+            <span className="text-[11px] text-muted-foreground">.xlsx, .csv, .docx, .txt</span>
+          </div>
+
+          {productFileUrl ? (
+            <div className="p-3.5 rounded-xl border border-emerald-500/40 bg-card/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-emerald-500/15 text-emerald-400 shrink-0">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div className="space-y-0.5 min-w-0">
+                  <p className="text-xs sm:text-sm font-semibold text-foreground truncate">
+                    {productFileName || 'Uploaded Product Document'}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 size={12} /> Loaded into AI Knowledge Base
+                    </span>
+                    {productFileContent && (
+                      <span className="text-[10px] text-muted-foreground">
+                        ({productFileContent.length} characters parsed)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-center">
+                <button
+                  type="button"
+                  onClick={handleRemoveDocument}
+                  className="px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs font-medium flex items-center gap-1.5 transition-colors"
+                >
+                  <Trash2 size={12} /> Remove File
+                </button>
+              </div>
+            </div>
+          ) : (
+            <label className="border border-dashed border-border/80 hover:border-emerald-500/50 hover:bg-emerald-500/5 rounded-xl p-4 sm:p-5 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all">
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv,.docx,.doc,.txt,.json"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleDocumentUpload(f);
+                }}
+              />
+              <Upload className="w-5 h-5 text-muted-foreground" />
+              <span className="text-xs sm:text-sm text-foreground font-medium text-center">
+                {uploadingDoc ? 'Uploading & Parsing Product Document...' : 'Click to Upload Excel (.xlsx, .csv) or Word (.docx)'}
+              </span>
+              <span className="text-[11px] text-muted-foreground text-center">
+                এক্সেল বা ওয়ার্ড ফাইল আপলোড করলে বট স্বয়ংক্রিয়ভাবে সব পণ্য ও দাম পড়ে মুখস্থ করে নেবে
+              </span>
+            </label>
+          )}
+        </div>
+      </div>
+
       {/* Response Style & Max Tokens */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
         <div className="space-y-2">
@@ -347,6 +695,404 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
             <Switch checked={enableWebSearch} onCheckedChange={setEnableWebSearch} />
           </div>
         </div>
+      </div>
+
+      {/* Welcome Media Automation (/start trigger) */}
+      <div className={`p-4 sm:p-5 border rounded-2xl transition-all duration-300 space-y-5 ${
+        enableWelcomeMedia 
+          ? 'border-indigo-500/40 bg-gradient-to-br from-indigo-950/20 via-background to-purple-950/15 shadow-lg shadow-indigo-500/5' 
+          : 'border-border/60 bg-card/40'
+      }`}>
+        <div className="flex items-center justify-between pb-3 border-b border-border/40">
+          <div className="flex items-center gap-3">
+            <div className={`p-2.5 rounded-xl transition-colors ${
+              enableWelcomeMedia ? 'bg-indigo-500/20 text-indigo-400' : 'bg-muted text-muted-foreground'
+            }`}>
+              <Film className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-sm sm:text-base text-foreground">
+                  Welcome Media Automation (স্বাগতম মিডিয়া)
+                </h3>
+                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${
+                  enableWelcomeMedia 
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                    : 'bg-muted/40 text-muted-foreground border-border/40'
+                }`}>
+                  {enableWelcomeMedia ? 'Active (সক্রিয়)' : 'Disabled (বন্ধ)'}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                টেলিগ্রামে কেউ বটটি <code className="text-primary font-mono text-[11px]">/start</code> করলে স্বয়ংক্রিয়ভাবে ছবি, অডিও/ভয়েস ও ভিডিও চলে যাবে
+              </p>
+            </div>
+          </div>
+          <Switch 
+            checked={enableWelcomeMedia} 
+            onCheckedChange={setEnableWelcomeMedia} 
+          />
+        </div>
+
+        {enableWelcomeMedia && (
+          <div className="space-y-5 pt-1">
+            {/* Welcome Caption / Message */}
+            <div className="space-y-1.5">
+              <label className="text-xs sm:text-sm font-medium text-foreground flex items-center justify-between">
+                <span>Welcome Text / Caption (স্বাগতম বার্তা বা ক্যাপশন)</span>
+                <span className="text-[11px] text-muted-foreground">ছবির সাথে বা শুরুতে যাবে</span>
+              </label>
+              <Textarea
+                rows={2}
+                value={welcomeMessage}
+                onChange={(e) => setWelcomeMessage(e.target.value)}
+                placeholder="যেমন: স্বাগতম আমাদের অফিসিয়াল বটে! নিচে আমাদের ইন্ট্রোডাকশন ছবি, ভয়েস মেসেজ ও ভিডিওটি দেখে নিন..."
+                className="text-sm"
+              />
+            </div>
+
+            {/* 3 Media Cards Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              
+              {/* 1. Welcome Image */}
+              <div className="p-4 rounded-xl border border-border/70 bg-card/70 space-y-3 flex flex-col justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                      <ImageIcon className="w-4 h-4 text-emerald-400" />
+                      1. Welcome Image (ছবি)
+                    </span>
+                    {welcomeImageUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setWelcomeImageUrl("")}
+                        className="text-[11px] text-red-400 hover:text-red-300 flex items-center gap-1 transition-colors"
+                      >
+                        <Trash2 size={12} /> Remove
+                      </button>
+                    )}
+                  </div>
+
+                  {welcomeImageUrl ? (
+                    <div className="space-y-2">
+                      <div className="relative group rounded-lg overflow-hidden border border-border/80 bg-black/40 aspect-video flex items-center justify-center">
+                        <img 
+                          src={welcomeImageUrl} 
+                          alt="Welcome Preview" 
+                          className="w-full h-full object-cover" 
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setWelcomeImageUrl("")}
+                            className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium flex items-center gap-1 shadow"
+                          >
+                            <Trash2 size={12} /> Delete Image
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground truncate font-mono">
+                        {welcomeImageUrl}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1 text-[11px] bg-secondary/60 p-0.5 rounded-lg border border-border/40">
+                        <button
+                          type="button"
+                          onClick={() => setImageTab('upload')}
+                          className={`flex-1 py-1 rounded-md transition-all text-center ${
+                            imageTab === 'upload' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground'
+                          }`}
+                        >
+                          Upload File
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setImageTab('url')}
+                          className={`flex-1 py-1 rounded-md transition-all text-center ${
+                            imageTab === 'url' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground'
+                          }`}
+                        >
+                          Paste URL / ID
+                        </button>
+                      </div>
+
+                      {imageTab === 'upload' ? (
+                        <label className="border border-dashed border-border/80 hover:border-primary/50 hover:bg-primary/5 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) handleFileUpload(f, 'image');
+                            }}
+                          />
+                          <Upload className="w-5 h-5 text-muted-foreground" />
+                          <span className="text-xs text-foreground font-medium">
+                            {uploadingImage ? 'Uploading Image...' : 'Click to Upload Image'}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">PNG, JPG, WEBP, GIF</span>
+                        </label>
+                      ) : (
+                        <Input
+                          placeholder="https://... or Telegram file_id"
+                          value={welcomeImageUrl}
+                          onChange={(e) => setWelcomeImageUrl(e.target.value)}
+                          className="text-xs font-mono h-9"
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 2. Welcome Audio & Live Voice Recording */}
+              <div className="p-4 rounded-xl border border-border/70 bg-card/70 space-y-3 flex flex-col justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                      <Mic className="w-4 h-4 text-blue-400" />
+                      2. Audio / Voice (অডিও/ভয়েস)
+                    </span>
+                    {welcomeAudioUrl && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWelcomeAudioUrl("");
+                          stopVoiceRecording();
+                        }}
+                        className="text-[11px] text-red-400 hover:text-red-300 flex items-center gap-1 transition-colors"
+                      >
+                        <Trash2 size={12} /> Remove
+                      </button>
+                    )}
+                  </div>
+
+                  {welcomeAudioUrl ? (
+                    <div className="space-y-2.5">
+                      <div className="p-2.5 rounded-lg bg-black/40 border border-border/70 space-y-2">
+                        <audio 
+                          controls 
+                          src={welcomeAudioUrl} 
+                          className="w-full h-8" 
+                        />
+                        <div className="flex items-center justify-between pt-1 text-[11px]">
+                          <span className="text-muted-foreground">Telegram Format:</span>
+                          <button
+                            type="button"
+                            onClick={() => setWelcomeAudioType(prev => prev === 'voice' ? 'audio' : 'voice')}
+                            className="px-2 py-0.5 rounded bg-secondary text-primary font-medium text-[11px] border border-border/60 hover:bg-primary/20 transition-colors"
+                          >
+                            {welcomeAudioType === 'voice' ? '🎙️ Voice Note (Waveform)' : '🎵 Music Audio (MP3)'}
+                          </button>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWelcomeAudioUrl("");
+                          stopVoiceRecording();
+                        }}
+                        className="w-full py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <Trash2 size={12} /> Remove / Re-record
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1 text-[11px] bg-secondary/60 p-0.5 rounded-lg border border-border/40">
+                        <button
+                          type="button"
+                          onClick={() => setAudioTab('record')}
+                          className={`flex-1 py-1 rounded-md transition-all text-center ${
+                            audioTab === 'record' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground'
+                          }`}
+                        >
+                          🎙️ Live Record
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAudioTab('upload')}
+                          className={`flex-1 py-1 rounded-md transition-all text-center ${
+                            audioTab === 'upload' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground'
+                          }`}
+                        >
+                          📁 Upload Audio
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAudioTab('url')}
+                          className={`flex-1 py-1 rounded-md transition-all text-center ${
+                            audioTab === 'url' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground'
+                          }`}
+                        >
+                          🔗 URL / ID
+                        </button>
+                      </div>
+
+                      {audioTab === 'record' && (
+                        <div className="p-3 border border-border/80 rounded-xl bg-secondary/30 flex flex-col items-center justify-center gap-2">
+                          {isRecording ? (
+                            <div className="flex flex-col items-center gap-2">
+                              <div className="flex items-center gap-2 text-red-400 animate-pulse text-xs font-semibold">
+                                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+                                Recording: {Math.floor(recordingSeconds / 60).toString().padStart(2, '0')}:{(recordingSeconds % 60).toString().padStart(2, '0')}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={stopVoiceRecording}
+                                className="px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow"
+                              >
+                                <Square size={13} /> Stop & Save Voice
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={startVoiceRecording}
+                              disabled={uploadingAudio}
+                              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium flex items-center gap-2 transition-all shadow-md active:scale-95"
+                            >
+                              <Mic size={14} className="text-white" />
+                              {uploadingAudio ? 'Saving Voice...' : 'Click to Record Voice (কথা বলুন)'}
+                            </button>
+                          )}
+                          <p className="text-[10px] text-muted-foreground text-center">
+                            টেলিগ্রামে আসল ভয়েস নোট বাবলের মতো যাবে
+                          </p>
+                        </div>
+                      )}
+
+                      {audioTab === 'upload' && (
+                        <label className="border border-dashed border-border/80 hover:border-primary/50 hover:bg-primary/5 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all">
+                          <input
+                            type="file"
+                            accept="audio/*,.mp3,.wav,.ogg,.m4a"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) handleFileUpload(f, 'audio');
+                            }}
+                          />
+                          <Music className="w-5 h-5 text-muted-foreground" />
+                          <span className="text-xs text-foreground font-medium">
+                            {uploadingAudio ? 'Uploading Audio...' : 'Choose Downloaded Audio'}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">MP3, WAV, OGG, M4A</span>
+                        </label>
+                      )}
+
+                      {audioTab === 'url' && (
+                        <Input
+                          placeholder="https://... or Telegram file_id"
+                          value={welcomeAudioUrl}
+                          onChange={(e) => setWelcomeAudioUrl(e.target.value)}
+                          className="text-xs font-mono h-9"
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 3. Welcome Video */}
+              <div className="p-4 rounded-xl border border-border/70 bg-card/70 space-y-3 flex flex-col justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                      <Video className="w-4 h-4 text-purple-400" />
+                      3. Welcome Video (ভিডিও)
+                    </span>
+                    {welcomeVideoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setWelcomeVideoUrl("")}
+                        className="text-[11px] text-red-400 hover:text-red-300 flex items-center gap-1 transition-colors"
+                      >
+                        <Trash2 size={12} /> Remove
+                      </button>
+                    )}
+                  </div>
+
+                  {welcomeVideoUrl ? (
+                    <div className="space-y-2">
+                      <div className="rounded-lg overflow-hidden border border-border/80 bg-black/40 aspect-video flex items-center justify-center">
+                        <video 
+                          controls 
+                          src={welcomeVideoUrl} 
+                          className="w-full h-full object-cover" 
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setWelcomeVideoUrl("")}
+                        className="w-full py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <Trash2 size={12} /> Remove Video
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1 text-[11px] bg-secondary/60 p-0.5 rounded-lg border border-border/40">
+                        <button
+                          type="button"
+                          onClick={() => setVideoTab('upload')}
+                          className={`flex-1 py-1 rounded-md transition-all text-center ${
+                            videoTab === 'upload' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground'
+                          }`}
+                        >
+                          Upload Video
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setVideoTab('url')}
+                          className={`flex-1 py-1 rounded-md transition-all text-center ${
+                            videoTab === 'url' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground'
+                          }`}
+                        >
+                          Paste URL / ID
+                        </button>
+                      </div>
+
+                      {videoTab === 'upload' ? (
+                        <label className="border border-dashed border-border/80 hover:border-primary/50 hover:bg-primary/5 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all">
+                          <input
+                            type="file"
+                            accept="video/*,.mp4,.webm,.mov"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) handleFileUpload(f, 'video');
+                            }}
+                          />
+                          <Upload className="w-5 h-5 text-muted-foreground" />
+                          <span className="text-xs text-foreground font-medium">
+                            {uploadingVideo ? 'Uploading Video...' : 'Click to Upload Video'}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">MP4, WEBM, MOV</span>
+                        </label>
+                      ) : (
+                        <Input
+                          placeholder="https://... or Telegram file_id"
+                          value={welcomeVideoUrl}
+                          onChange={(e) => setWelcomeVideoUrl(e.target.value)}
+                          className="text-xs font-mono h-9"
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Auto-Activate Switch */}

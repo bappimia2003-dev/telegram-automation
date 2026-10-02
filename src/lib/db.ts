@@ -15,8 +15,18 @@ function rowToBot(r: any): Bot {
   let enableVision = true;
   let enableFiles = true;
   let enableWebSearch = false;
+  let enableWelcomeMedia = false;
+  let welcomeImageUrl = '';
+  let welcomeAudioUrl = '';
+  let welcomeAudioType: 'voice' | 'audio' = 'voice';
+  let welcomeVideoUrl = '';
+  let welcomeMessage = '';
+  let workInfo = '';
+  let productFileUrl = '';
+  let productFileName = '';
+  let productFileContent = '';
 
-  if (typeof aiDetails === 'string' && aiDetails.trim().startsWith('{') && aiDetails.includes('"enableVoice"')) {
+  if (typeof aiDetails === 'string' && aiDetails.trim().startsWith('{')) {
     try {
       const parsed = JSON.parse(aiDetails);
       aiDetails = parsed.details !== undefined ? parsed.details : '';
@@ -24,6 +34,16 @@ function rowToBot(r: any): Bot {
       if (parsed.enableVision !== undefined) enableVision = Boolean(parsed.enableVision);
       if (parsed.enableFiles !== undefined) enableFiles = Boolean(parsed.enableFiles);
       if (parsed.enableWebSearch !== undefined) enableWebSearch = Boolean(parsed.enableWebSearch);
+      if (parsed.enableWelcomeMedia !== undefined) enableWelcomeMedia = Boolean(parsed.enableWelcomeMedia);
+      if (parsed.welcomeImageUrl !== undefined) welcomeImageUrl = parsed.welcomeImageUrl;
+      if (parsed.welcomeAudioUrl !== undefined) welcomeAudioUrl = parsed.welcomeAudioUrl;
+      if (parsed.welcomeAudioType !== undefined) welcomeAudioType = parsed.welcomeAudioType;
+      if (parsed.welcomeVideoUrl !== undefined) welcomeVideoUrl = parsed.welcomeVideoUrl;
+      if (parsed.welcomeMessage !== undefined) welcomeMessage = parsed.welcomeMessage;
+      if (parsed.workInfo !== undefined) workInfo = parsed.workInfo;
+      if (parsed.productFileUrl !== undefined) productFileUrl = parsed.productFileUrl;
+      if (parsed.productFileName !== undefined) productFileName = parsed.productFileName;
+      if (parsed.productFileContent !== undefined) productFileContent = parsed.productFileContent;
     } catch {
       // Keep plain text
     }
@@ -33,6 +53,16 @@ function rowToBot(r: any): Bot {
   if (r.enable_vision !== undefined) enableVision = Boolean(r.enable_vision);
   if (r.enable_files !== undefined) enableFiles = Boolean(r.enable_files);
   if (r.enable_web_search !== undefined) enableWebSearch = Boolean(r.enable_web_search);
+  if (r.enable_welcome_media !== undefined) enableWelcomeMedia = Boolean(r.enable_welcome_media);
+  if (r.welcome_image_url !== undefined) welcomeImageUrl = r.welcome_image_url;
+  if (r.welcome_audio_url !== undefined) welcomeAudioUrl = r.welcome_audio_url;
+  if (r.welcome_audio_type !== undefined) welcomeAudioType = r.welcome_audio_type;
+  if (r.welcome_video_url !== undefined) welcomeVideoUrl = r.welcome_video_url;
+  if (r.welcome_message !== undefined) welcomeMessage = r.welcome_message;
+  if (r.work_info !== undefined) workInfo = r.work_info;
+  if (r.product_file_url !== undefined) productFileUrl = r.product_file_url;
+  if (r.product_file_name !== undefined) productFileName = r.product_file_name;
+  if (r.product_file_content !== undefined) productFileContent = r.product_file_content;
 
   return {
     id: r.id,
@@ -52,6 +82,16 @@ function rowToBot(r: any): Bot {
     enableVision,
     enableFiles,
     enableWebSearch,
+    enableWelcomeMedia,
+    welcomeImageUrl,
+    welcomeAudioUrl,
+    welcomeAudioType,
+    welcomeVideoUrl,
+    welcomeMessage,
+    workInfo,
+    productFileUrl,
+    productFileName,
+    productFileContent,
     createdAt: r.created_at || new Date().toISOString(),
     updatedAt: r.updated_at || new Date().toISOString(),
   };
@@ -65,16 +105,24 @@ function botToRow(b: Partial<Bot>): any {
   if (b.chatId !== undefined) row.chat_id = b.chatId;
   if (b.aiPersonality !== undefined) row.ai_personality = b.aiPersonality;
   
-  if (b.aiDetails !== undefined || b.enableVoice !== undefined || b.enableVision !== undefined || b.enableFiles !== undefined || b.enableWebSearch !== undefined) {
-    const details = b.aiDetails !== undefined ? b.aiDetails : '';
-    row.ai_details = JSON.stringify({
-      details,
-      enableVoice: b.enableVoice !== undefined ? Boolean(b.enableVoice) : true,
-      enableVision: b.enableVision !== undefined ? Boolean(b.enableVision) : true,
-      enableFiles: b.enableFiles !== undefined ? Boolean(b.enableFiles) : true,
-      enableWebSearch: b.enableWebSearch !== undefined ? Boolean(b.enableWebSearch) : false,
-    });
-  }
+  const details = b.aiDetails !== undefined ? b.aiDetails : '';
+  row.ai_details = JSON.stringify({
+    details,
+    enableVoice: b.enableVoice !== undefined ? Boolean(b.enableVoice) : true,
+    enableVision: b.enableVision !== undefined ? Boolean(b.enableVision) : true,
+    enableFiles: b.enableFiles !== undefined ? Boolean(b.enableFiles) : true,
+    enableWebSearch: b.enableWebSearch !== undefined ? Boolean(b.enableWebSearch) : false,
+    enableWelcomeMedia: b.enableWelcomeMedia !== undefined ? Boolean(b.enableWelcomeMedia) : false,
+    welcomeImageUrl: b.welcomeImageUrl || '',
+    welcomeAudioUrl: b.welcomeAudioUrl || '',
+    welcomeAudioType: b.welcomeAudioType || 'voice',
+    welcomeVideoUrl: b.welcomeVideoUrl || '',
+    welcomeMessage: b.welcomeMessage || '',
+    workInfo: b.workInfo || '',
+    productFileUrl: b.productFileUrl || '',
+    productFileName: b.productFileName || '',
+    productFileContent: b.productFileContent || '',
+  });
 
   if (b.responseStyle !== undefined) row.response_style = b.responseStyle;
   if (b.maxTokens !== undefined) row.max_tokens = b.maxTokens;

@@ -6,7 +6,8 @@ import Link from 'next/link';
 import { 
   ChevronRight, Power, Settings, MessageSquare, Trash2, 
   Bot, Clock, Calendar, ArrowRight,
-  Mic, Image as ImageIcon, FileText, Globe, Sparkles
+  Mic, Image as ImageIcon, FileText, Globe, Sparkles,
+  Film, Store, Video, Music, FileSpreadsheet, CheckCircle2
 } from 'lucide-react';
 
 
@@ -267,6 +268,88 @@ export default function BotDetailPage() {
                 </span>
                 <span className={`px-2 py-0.5 rounded-full font-medium ${bot.enableWebSearch ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-secondary text-muted-foreground'}`}>
                   {bot.enableWebSearch ? 'Active' : 'Off'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Welcome Media Automation Card */}
+          <div className="bg-card border border-indigo-500/20 rounded-xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-border/40">
+              <div className="flex items-center gap-2">
+                <Film className="w-4 h-4 text-indigo-400" />
+                <h3 className="font-semibold text-white text-sm">Welcome Media (/start)</h3>
+              </div>
+              <Link href={`/bots/${botId}/settings`} className="text-xs text-primary hover:underline">
+                Configure
+              </Link>
+            </div>
+
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Status</span>
+                <span className={`px-2 py-0.5 rounded-full font-medium ${bot.enableWelcomeMedia ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-secondary text-muted-foreground'}`}>
+                  {bot.enableWelcomeMedia ? 'Active (ON)' : 'Disabled (OFF)'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <ImageIcon className="w-3.5 h-3.5 text-emerald-400" /> Welcome Image
+                </span>
+                <span className="text-muted-foreground font-mono text-[11px]">
+                  {bot.welcomeImageUrl ? 'Configured ✅' : 'None'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <Mic className="w-3.5 h-3.5 text-blue-400" /> Audio / Voice Note
+                </span>
+                <span className="text-muted-foreground font-mono text-[11px]">
+                  {bot.welcomeAudioUrl ? (bot.welcomeAudioType === 'audio' ? 'MP3 Audio ✅' : 'Voice Note ✅') : 'None'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <Video className="w-3.5 h-3.5 text-purple-400" /> Welcome Video
+                </span>
+                <span className="text-muted-foreground font-mono text-[11px]">
+                  {bot.welcomeVideoUrl ? 'Configured ✅' : 'None'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Shop Knowledge & Product Training Card */}
+          <div className="bg-card border border-emerald-500/20 rounded-xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-border/40">
+              <div className="flex items-center gap-2">
+                <Store className="w-4 h-4 text-emerald-400" />
+                <h3 className="font-semibold text-white text-sm">Shop & Product Brain</h3>
+              </div>
+              <Link href={`/bots/${botId}/settings`} className="text-xs text-primary hover:underline">
+                Edit Products
+              </Link>
+            </div>
+
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <FileText className="w-3.5 h-3.5 text-emerald-400" /> Work Info
+                </span>
+                <span className={`px-2 py-0.5 rounded-full font-medium ${bot.workInfo ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-secondary text-muted-foreground'}`}>
+                  {bot.workInfo ? 'Loaded ✅' : 'Not Set'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-teal-400" /> Product Sheet
+                </span>
+                <span className={`px-2 py-0.5 rounded-full font-medium ${bot.productFileUrl ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-secondary text-muted-foreground'}`}>
+                  {bot.productFileName || (bot.productFileUrl ? 'Uploaded ✅' : 'None')}
                 </span>
               </div>
             </div>

@@ -55,6 +55,16 @@ export async function generateResponse(
     ...activeKeys.filter(k => k.id !== assignedApiKey.id),
   ];
 
+  // Auto-parse product sheet if content isn't cached yet
+  if (!bot.productFileContent && bot.productFileUrl) {
+    try {
+      const { parseDocumentFile } = await import('./documentParser');
+      bot.productFileContent = await parseDocumentFile(bot.productFileUrl);
+    } catch (e) {
+      console.error('Failed to parse document in generateResponse:', e);
+    }
+  }
+
   const systemPrompt = buildSystemPrompt(bot);
   let lastErrorMsg = '';
 
@@ -206,10 +216,38 @@ export async function generateResponse(
 }
 
 function buildSystemPrompt(bot: Bot): string {
-  let prompt = bot.aiPersonality || 'You are a helpful and polite AI assistant.';
+  let prompt = bot.aiPersonality || 'You are a warm, polite, and expert sales and support assistant.';
 
   if (bot.aiDetails) {
-    prompt += `\n\nAdditional Knowledge and Context:\n${bot.aiDetails}`;
+    prompt += `\n\n[General Context & Rules]:\n${bot.aiDetails}`;
+  }
+
+  // Inject Shop & Work Info
+  if (bot.workInfo && bot.workInfo.trim()) {
+    prompt += `\n\n======================================================
+[OFFICIAL SHOP & WORK KNOWLEDGE BASE (দোকানের তথ্য ও পণ্যের বিবরণ)]
+${bot.workInfo.trim()}
+======================================================`;
+  }
+
+  // Inject Uploaded Product Sheet / Inventory Document
+  if (bot.productFileContent && bot.productFileContent.trim()) {
+    prompt += `\n\n======================================================
+[PRODUCT INVENTORY & PRICE CATALOG (FROM FILE: ${bot.productFileName || 'Sheet'})]
+${bot.productFileContent.trim()}
+======================================================`;
+  }
+
+  // Professional E-commerce & Sales Assistant Guardrails
+  if (bot.workInfo || bot.productFileContent) {
+    prompt += `\n\n[CRITICAL STORE SALES GUIDELINES]:
+1. Strict Price & Product Accuracy: Always verify product availability and pricing directly against the Shop Knowledge Base and Product Catalog above. NEVER invent or guess a price or product that is not listed.
+2. If Not in Stock: If a customer requests a product that is not in the knowledge base, respond politely in Bangla that the item is currently out of stock or unavailable.
+3. Order Collection: When a customer wants to buy, confirm the item name and price, and politely ask for their:
+   - Full Name (নাম)
+   - Mobile Number (মোবাইল নম্বর)
+   - Complete Delivery Address (ডেলিভারি ঠিকানা)
+4. Delivery & Politeness: Clearly state delivery charges and times as mentioned in the shop info. Always maintain a warm, respectful, and helpful Bangladeshi merchant tone.`;
   }
 
   switch (bot.responseStyle) {
@@ -217,7 +255,7 @@ function buildSystemPrompt(bot: Bot): string {
       prompt += '\n\nPlease maintain a formal, polite, and professional tone.';
       break;
     case 'casual':
-      prompt += '\n\nPlease speak in a relaxed, friendly, and casual tone.';
+      prompt += '\n\nPlease speak in a relaxed, friendly, and conversational tone.';
       break;
     case 'friendly':
       prompt += '\n\nPlease speak in a warm, welcoming, and helpful tone.';
@@ -226,7 +264,7 @@ function buildSystemPrompt(bot: Bot): string {
       break;
   }
 
-  prompt += '\n\nAlways answer helpfully in the user’s language (Bangla by default unless user requests otherwise). Keep your reply natural, smooth, and conversational.';
+  prompt += '\n\nAlways answer helpfully in natural, fluent Bengali (Bangla) unless the customer explicitly speaks in another language. Keep your replies concise, friendly, and easy to read.';
 
   return prompt;
 }

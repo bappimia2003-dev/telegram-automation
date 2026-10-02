@@ -1,6 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getBotById, getApiKeyById, getActiveApiKeys, addMessage, incrementBotMessageCount } from '@/lib/db';
-import { sendMessage, sendChatAction, getFile, downloadTelegramFileAsBase64, TelegramUpdate } from '@/lib/telegram';
+import { 
+  sendMessage, 
+  sendPhoto, 
+  sendAudio, 
+  sendVoice, 
+  sendVideo, 
+  sendChatAction, 
+  getFile, 
+  downloadTelegramFileAsBase64, 
+  TelegramUpdate 
+} from '@/lib/telegram';
 import { generateResponse, MediaInput } from '@/lib/gemini';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -29,8 +39,38 @@ export async function POST(
 
     // Handle /start command
     if (message.text && message.text.startsWith('/start')) {
-      const welcomeText = `আরে ভাই! আমি ${bot.name}। বলো, আজ তোমাকে কীভাবে সাহায্য করতে পারি? নির্দ্বিধায় যেকোনো প্রশ্ন করো! 👑`;
-      await sendMessage(bot.telegramToken, chatId, welcomeText);
+      const welcomeText = (bot.welcomeMessage && bot.welcomeMessage.trim())
+        ? bot.welcomeMessage.trim()
+        : `আরে ভাই! আমি ${bot.name}। বলো, আজ তোমাকে কীভাবে সাহায্য করতে পারি? নির্দ্বিধায় যেকোনো প্রশ্ন করো! 👑`;
+
+      if (bot.enableWelcomeMedia) {
+        // 1. Send Welcome Image if configured
+        if (bot.welcomeImageUrl) {
+          sendChatAction(bot.telegramToken, chatId, 'upload_photo').catch(() => {});
+          await sendPhoto(bot.telegramToken, chatId, bot.welcomeImageUrl, welcomeText);
+        } else {
+          await sendMessage(bot.telegramToken, chatId, welcomeText);
+        }
+
+        // 2. Send Welcome Audio / Voice Note if configured
+        if (bot.welcomeAudioUrl) {
+          if (bot.welcomeAudioType === 'audio') {
+            sendChatAction(bot.telegramToken, chatId, 'upload_document').catch(() => {});
+            await sendAudio(bot.telegramToken, chatId, bot.welcomeAudioUrl);
+          } else {
+            sendChatAction(bot.telegramToken, chatId, 'record_voice').catch(() => {});
+            await sendVoice(bot.telegramToken, chatId, bot.welcomeAudioUrl);
+          }
+        }
+
+        // 3. Send Welcome Video if configured
+        if (bot.welcomeVideoUrl) {
+          sendChatAction(bot.telegramToken, chatId, 'upload_video').catch(() => {});
+          await sendVideo(bot.telegramToken, chatId, bot.welcomeVideoUrl);
+        }
+      } else {
+        await sendMessage(bot.telegramToken, chatId, welcomeText);
+      }
       
       await addMessage({
         id: uuidv4(),

@@ -33,11 +33,21 @@ export function BotCard({ bot, onDelete }: BotCardProps) {
         <div className="flex items-start justify-between">
           <div>
             <h3 className="text-lg font-bold text-foreground">{bot.name}</h3>
-            <div className="mt-2 flex gap-2">
+            <div className="mt-2 flex flex-wrap gap-1.5 items-center">
               <Badge variant={isActive ? "success" : "destructive"}>
                 {isActive ? "Active" : "Inactive"}
               </Badge>
               <Badge variant="outline">{model}</Badge>
+              {bot.enableWelcomeMedia && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                  Media /start
+                </span>
+              )}
+              {(bot.workInfo || bot.productFileUrl) && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  Shop Brain
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -56,6 +66,11 @@ export function BotCard({ bot, onDelete }: BotCardProps) {
       </CardContent>
       
       <CardFooter className="flex justify-end gap-2 border-t border-border/50 pt-4">
+        <Button variant="outline" size="sm" asChild>
+          <Link href={`/bots/${bot.id}/settings`}>
+            Settings
+          </Link>
+        </Button>
         <Button variant="outline" size="sm" asChild>
           <Link href={`/bots/${bot.id}`}>
             <Edit2 className="h-4 w-4 mr-2" />
