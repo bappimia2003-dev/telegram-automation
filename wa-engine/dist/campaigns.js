@@ -9,7 +9,7 @@ const utils_js_1 = require("./utils.js");
 function cleanForMatching(str) {
     return (str || '')
         .toLowerCase()
-        .replace(/[?!.,;:_~#*+\-\[\]\(\)\/\\"]/g, ' ')
+        .replace(/[?!.,;:_~#*+\-\[\]\(\)\/\\"'`|—–]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 }
@@ -27,7 +27,7 @@ async function matchCampaign(messageText, accountId) {
     const cleanedText = cleanForMatching(rawText);
     if (!cleanedText)
         return null;
-    // 1. Smart Keyword Matching (punctuation-resilient, whitespace-normalized)
+    // 1. Strict Exact Keyword Matching (only triggers when message matches the specified keyword)
     for (const campaign of activeCampaigns) {
         if (!campaign.keywords || !campaign.keywords.trim())
             continue;
@@ -36,14 +36,14 @@ async function matchCampaign(messageText, accountId) {
             .map((k) => cleanForMatching(k))
             .filter(Boolean);
         for (const kw of keywords) {
-            if (cleanedText.includes(kw) || kw.includes(cleanedText)) {
-                (0, utils_js_1.log)('CAMPAIGN', `[Acc: ${accountId || 'all'}] Matched keyword "${kw}" for campaign: "${campaign.name}" (incoming: "${messageText}")`);
+            if (cleanedText === kw) {
+                (0, utils_js_1.log)('CAMPAIGN', `[Acc: ${accountId || 'all'}] Matched exact keyword "${kw}" for campaign: "${campaign.name}" (incoming: "${messageText}")`);
                 return campaign;
             }
         }
     }
     // 2. Fallback to default campaign if set
-    const defaultCamp = activeCampaigns.find((c) => c.isDefault);
+    const defaultCamp = activeCampaigns.find((c) => c.isDefault && (!c.keywords || !c.keywords.trim()));
     if (defaultCamp) {
         (0, utils_js_1.log)('CAMPAIGN', `[Acc: ${accountId || 'all'}] Using default fallback campaign: "${defaultCamp.name}"`);
         return defaultCamp;

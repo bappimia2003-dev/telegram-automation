@@ -109,14 +109,14 @@ async function markAsContacted(entry) {
     if (!supabase)
         return;
     try {
-        const { error } = await supabase.from('wa_contacted_users').insert({
+        const { error } = await supabase.from('wa_contacted_users').upsert({
             id: entry.id,
             campaign_id: entry.campaignId,
             phone_number: entry.phoneNumber,
             contact_name: entry.contactName,
             sent_at: entry.sentAt,
             status: entry.status,
-        });
+        }, { onConflict: 'campaign_id,phone_number' });
         if (error) {
             (0, utils_js_1.errLog)('DB', 'Error saving contacted user:', error.message);
         }
