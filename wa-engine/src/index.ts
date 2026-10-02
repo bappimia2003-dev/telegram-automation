@@ -8,7 +8,9 @@ import {
   getAllAccountsInfo,
   removeWhatsAppAccount,
   initAllAccounts,
+  isSessionActive,
 } from './whatsapp.js';
+import { getAllDbAccounts } from './db.js';
 import { log, errLog } from './utils.js';
 
 dotenv.config();
@@ -128,4 +130,21 @@ app.listen(PORT, '0.0.0.0', () => {
   initAllAccounts().catch((err) => {
     errLog('SERVER', 'Error initializing accounts on boot:', err.message);
   });
+
+  // Watcher: Poll DB every 4s for any account marked 'connecting' without an active socket
+  setInterval(async () => {
+    try {
+      const dbAccounts = await getAllDbAccounts();
+      for (const acc of dbAccounts) {
+        if (acc.status === 'connecting' && !isSessionActive(acc.id)) {
+          log('WATCHER', `Account ${acc.name} (${acc.id}) has 'connecting' state in DB. Starting socket...`);
+          startWhatsApp(acc.id, acc.name).catch((err) => {
+            errLog('WATCHER', `Failed starting account ${acc.id}:`, err.message);
+          });
+        }
+      }
+    } catch (err: any) {
+      // transient network error
+    }
+  }, 4000);
 });

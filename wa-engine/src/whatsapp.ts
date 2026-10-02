@@ -13,6 +13,7 @@ interface AccountSession {
   status: 'disconnected' | 'connecting' | 'qr_pending' | 'connected';
   qrCode: string;
   phoneNumber: string;
+  reconnectTimer?: NodeJS.Timeout | null;
 }
 
 const sessions = new Map<string, AccountSession>();
@@ -32,6 +33,11 @@ function getOrCreateSession(id: string, name?: string): AccountSession {
   const s = sessions.get(id)!;
   if (name) s.name = name;
   return s;
+}
+
+export function isSessionActive(accountId: string): boolean {
+  const s = sessions.get(accountId);
+  return Boolean(s && s.sock && (s.status === 'connected' || s.status === 'connecting' || s.status === 'qr_pending'));
 }
 
 export function getConnectionInfo(accountId = 'main') {
@@ -62,11 +68,28 @@ export function getAllAccountsInfo() {
 export async function startWhatsApp(accountId = 'main', accountName?: string): Promise<any> {
   const session = getOrCreateSession(accountId, accountName);
 
-  if (session.sock && session.status === 'connected') {
+  // If already connected or already has an active socket in qr_pending or connecting, reuse it
+  if (session.sock && (session.status === 'connected' || session.status === 'qr_pending' || session.status === 'connecting')) {
+    log('WA', `[${session.name}] Existing active socket in state '${session.status}'. Reusing...`);
     return getConnectionInfo(accountId);
   }
 
-  const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } =
+  // Clear any pending reconnect timer
+  if (session.reconnectTimer) {
+    clearTimeout(session.reconnectTimer);
+    session.reconnectTimer = null;
+  }
+
+  // Cleanly close previous socket if any exists
+  if (session.sock) {
+    try {
+      session.sock.ev.removeAllListeners();
+      session.sock.end(undefined);
+    } catch {}
+    session.sock = null;
+  }
+
+  const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } =
     await import('@whiskeysockets/baileys');
 
   const authDir = path.join(AUTH_BASE_DIR, accountId);
@@ -87,7 +110,7 @@ export async function startWhatsApp(accountId = 'main', accountName?: string): P
       auth: state,
       logger,
       printQRInTerminal: true,
-      browser: [`Auto Ad Sender (${session.name})`, 'Chrome', '1.0.0'],
+      browser: Browsers.ubuntu('Chrome'),
       generateHighQualityLinkPreview: false,
     });
     session.sock = sock;
@@ -132,23 +155,25 @@ export async function startWhatsApp(accountId = 'main', accountName?: string): P
         const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
+        session.sock = null;
         session.status = 'disconnected';
         session.qrCode = '';
-        session.phoneNumber = '';
 
         await updateWaConnectionState(accountId, {
           status: 'disconnected',
           qrCode: '',
-          phoneNumber: '',
           name: session.name,
         });
 
         if (shouldReconnect) {
-          log('WA', `[${session.name}] Connection closed. Reconnecting in 5s...`);
-          setTimeout(() => startWhatsApp(accountId, session.name).catch(() => {}), 5000);
+          log('WA', `[${session.name}] Connection closed (${statusCode || 'unknown'}). Reconnecting in 5s...`);
+          if (session.reconnectTimer) clearTimeout(session.reconnectTimer);
+          session.reconnectTimer = setTimeout(() => {
+            session.reconnectTimer = null;
+            startWhatsApp(accountId, session.name).catch(() => {});
+          }, 5000);
         } else {
           log('WA', `[${session.name}] Logged out. Clearing auth files...`);
-          session.sock = null;
           try {
             if (fs.existsSync(authDir)) {
               fs.rmSync(authDir, { recursive: true, force: true });
