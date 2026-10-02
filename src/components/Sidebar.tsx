@@ -3,14 +3,19 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { LayoutDashboard, Bot, Key, LogOut, Menu, X } from "lucide-react"
+import { LayoutDashboard, Bot, Key, LogOut, Menu, X, MessageCircle, PlusCircle, Settings } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "./ui/button"
 
-const navItems = [
+const telegramNavItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/bots/new", icon: Bot, label: "New Bot" },
   { href: "/api-keys", icon: Key, label: "API Keys" },
+]
+
+const waNavItems = [
+  { href: "/whatsapp", icon: MessageCircle, label: "WhatsApp" },
+  { href: "/whatsapp/campaigns/new", icon: PlusCircle, label: "New Campaign" },
 ]
 
 export function Sidebar() {
@@ -70,28 +75,63 @@ export function Sidebar() {
           </div>
           
           {/* Nav Items */}
-          <nav className="space-y-1.5 p-4">
-            {navItems.map((item) => {
-              const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
-              const Icon = item.icon
-              
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "flex items-center space-x-3 rounded-lg px-3.5 py-2.5 text-sm font-medium transition-all",
-                    isActive 
-                      ? "bg-primary text-primary-foreground shadow-sm" 
-                      : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
-                  )}
-                  onClick={() => setIsOpen(false)}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span>{item.label}</span>
-                </Link>
-              )
-            })}
+          <nav className="space-y-4 p-4">
+            <div>
+              <div className="px-3 mb-2 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+                Telegram
+              </div>
+              <div className="space-y-1">
+                {telegramNavItems.map((item) => {
+                  const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "flex items-center space-x-3 rounded-lg px-3.5 py-2 text-sm font-medium transition-all",
+                        isActive 
+                          ? "bg-primary text-primary-foreground shadow-sm" 
+                          : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
+                      )}
+                      onClick={() => setIsOpen(false)}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-border/40">
+              <div className="px-3 mb-2 flex items-center justify-between text-[10px] font-semibold tracking-wider text-emerald-400 uppercase">
+                <span>WhatsApp Ads</span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">NEW</span>
+              </div>
+              <div className="space-y-1">
+                {waNavItems.map((item) => {
+                  const isActive = pathname === item.href || (item.href !== '/whatsapp' && pathname.startsWith(item.href));
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "flex items-center space-x-3 rounded-lg px-3.5 py-2 text-sm font-medium transition-all",
+                        isActive 
+                          ? "bg-emerald-600 text-white shadow-sm shadow-emerald-900/30" 
+                          : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
+                      )}
+                      onClick={() => setIsOpen(false)}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
           </nav>
         </div>
 

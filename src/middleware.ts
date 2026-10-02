@@ -11,7 +11,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Protect dashboard routes and sub-pages
-  const protectedPaths = ['/dashboard', '/bots', '/api-keys'];
+  const protectedPaths = ['/dashboard', '/bots', '/api-keys', '/whatsapp'];
   const isProtected = protectedPaths.some(path => pathname.startsWith(path));
 
   if (!isProtected) {
@@ -35,5 +35,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/bots/:path*', '/api-keys/:path*'],
+  matcher: ['/dashboard/:path*', '/bots/:path*', '/api-keys/:path*', '/whatsapp/:path*'],
 };

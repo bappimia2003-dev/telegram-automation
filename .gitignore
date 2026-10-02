@@ -36,3 +36,10 @@ yarn-error.log*
 # uploads
 /public/uploads/*
 !/public/uploads/.gitkeep
+
+# whatsapp auth & engine
+whatsapp-auth/
+wa-engine/whatsapp-auth/
+wa-engine/node_modules/
+wa-engine/.env
+wa-engine/dist/
