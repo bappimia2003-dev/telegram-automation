@@ -33,6 +33,7 @@ import {
   Store,
   FileSpreadsheet
 } from "lucide-react"
+import { uploadFile } from "@/lib/uploadHelper"
 
 
 export interface ApiKey {
@@ -139,20 +140,18 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
       mediaRecorder.onstop = async () => {
         const mimeType = mediaRecorder.mimeType || 'audio/ogg'
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType })
-        const formData = new FormData()
-        formData.append('file', audioBlob, `voice-note-${Date.now()}.ogg`)
-        formData.append('type', 'voice')
+        const file = new File([audioBlob], `voice-note-${Date.now()}.ogg`, { type: mimeType })
 
         setUploadingAudio(true)
         try {
-          const res = await fetch('/api/upload', { method: 'POST', body: formData })
-          const data = await res.json()
-          if (data.url) {
-            setWelcomeAudioUrl(data.url)
+          const result = await uploadFile(file, 'audio')
+          if (result.url) {
+            setWelcomeAudioUrl(result.url)
             setWelcomeAudioType('voice')
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error('Failed to upload recorded voice:', err)
+          alert(err.message || 'ভয়েস আপলোড করতে সমস্যা হয়েছে')
         } finally {
           setUploadingAudio(false)
         }
@@ -182,27 +181,23 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
   }
 
   const handleFileUpload = async (file: File, type: 'image' | 'audio' | 'video') => {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('type', type)
-
     if (type === 'image') setUploadingImage(true)
     if (type === 'audio') setUploadingAudio(true)
     if (type === 'video') setUploadingVideo(true)
 
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: formData })
-      const data = await res.json()
-      if (data.url) {
-        if (type === 'image') setWelcomeImageUrl(data.url)
+      const result = await uploadFile(file, type)
+      if (result.url) {
+        if (type === 'image') setWelcomeImageUrl(result.url)
         if (type === 'audio') {
-          setWelcomeAudioUrl(data.url)
+          setWelcomeAudioUrl(result.url)
           setWelcomeAudioType('audio')
         }
-        if (type === 'video') setWelcomeVideoUrl(data.url)
+        if (type === 'video') setWelcomeVideoUrl(result.url)
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(`Failed to upload ${type}:`, err)
+      alert(err.message || `${type} আপলোড করতে সমস্যা হয়েছে। দয়া করে আবার চেষ্টা করুন।`)
     } finally {
       if (type === 'image') setUploadingImage(false)
       if (type === 'audio') setUploadingAudio(false)
@@ -218,24 +213,19 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
   const [uploadingDoc, setUploadingDoc] = React.useState(false)
 
   const handleDocumentUpload = async (file: File) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('type', 'document')
-
     setUploadingDoc(true)
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: formData })
-      const data = await res.json()
-      if (data.url) {
-        setProductFileUrl(data.url)
-        setProductFileName(data.originalName || file.name)
-        if (data.parsedContent) {
-          setProductFileContent(data.parsedContent)
+      const result = await uploadFile(file, 'document')
+      if (result.url) {
+        setProductFileUrl(result.url)
+        setProductFileName(result.filename || file.name)
+        if (result.parsedContent) {
+          setProductFileContent(result.parsedContent)
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to upload document:', err)
-      alert('ফাইল আপলোড করতে সমস্যা হয়েছে')
+      alert(err.message || 'ফাইল আপলোড করতে সমস্যা হয়েছে')
     } finally {
       setUploadingDoc(false)
     }
@@ -582,19 +572,25 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
               </div>
             </div>
           ) : (
-            <label className="border border-dashed border-border/80 hover:border-emerald-500/50 hover:bg-emerald-500/5 rounded-xl p-4 sm:p-5 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all">
+            <label className={`border border-dashed border-border/80 hover:border-emerald-500/50 hover:bg-emerald-500/5 rounded-xl p-4 sm:p-5 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${uploadingDoc ? 'opacity-70 pointer-events-none' : ''}`}>
               <input
                 type="file"
                 accept=".xlsx,.xls,.csv,.docx,.doc,.txt,.json"
                 className="hidden"
+                disabled={uploadingDoc}
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) handleDocumentUpload(f);
+                  e.target.value = '';
                 }}
               />
-              <Upload className="w-5 h-5 text-muted-foreground" />
+              {uploadingDoc ? (
+                <RefreshCw className="w-5 h-5 text-emerald-400 animate-spin" />
+              ) : (
+                <Upload className="w-5 h-5 text-muted-foreground" />
+              )}
               <span className="text-xs sm:text-sm text-foreground font-medium text-center">
-                {uploadingDoc ? 'Uploading & Parsing Product Document...' : 'Click to Upload Excel (.xlsx, .csv) or Word (.docx)'}
+                {uploadingDoc ? 'ডকুমেন্ট আপলোড ও প্রসেসিং হচ্ছে... অপেক্ষা করুন' : 'Click to Upload Excel (.xlsx, .csv) or Word (.docx)'}
               </span>
               <span className="text-[11px] text-muted-foreground text-center">
                 এক্সেল বা ওয়ার্ড ফাইল আপলোড করলে বট স্বয়ংক্রিয়ভাবে সব পণ্য ও দাম পড়ে মুখস্থ করে নেবে
@@ -822,19 +818,25 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                       </div>
 
                       {imageTab === 'upload' ? (
-                        <label className="border border-dashed border-border/80 hover:border-primary/50 hover:bg-primary/5 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all">
+                        <label className={`border border-dashed border-border/80 hover:border-emerald-500/50 hover:bg-emerald-500/5 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${uploadingImage ? 'opacity-70 pointer-events-none' : ''}`}>
                           <input
                             type="file"
                             accept="image/*"
                             className="hidden"
+                            disabled={uploadingImage}
                             onChange={(e) => {
                               const f = e.target.files?.[0];
                               if (f) handleFileUpload(f, 'image');
+                              e.target.value = '';
                             }}
                           />
-                          <Upload className="w-5 h-5 text-muted-foreground" />
+                          {uploadingImage ? (
+                            <RefreshCw className="w-5 h-5 text-emerald-400 animate-spin" />
+                          ) : (
+                            <Upload className="w-5 h-5 text-muted-foreground" />
+                          )}
                           <span className="text-xs text-foreground font-medium">
-                            {uploadingImage ? 'Uploading Image...' : 'Click to Upload Image'}
+                            {uploadingImage ? 'ছবি আপলোড হচ্ছে...' : 'Click to Upload Image'}
                           </span>
                           <span className="text-[10px] text-muted-foreground">PNG, JPG, WEBP, GIF</span>
                         </label>
@@ -970,19 +972,25 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                       )}
 
                       {audioTab === 'upload' && (
-                        <label className="border border-dashed border-border/80 hover:border-primary/50 hover:bg-primary/5 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all">
+                        <label className={`border border-dashed border-border/80 hover:border-blue-500/50 hover:bg-blue-500/5 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${uploadingAudio ? 'opacity-70 pointer-events-none' : ''}`}>
                           <input
                             type="file"
                             accept="audio/*,.mp3,.wav,.ogg,.m4a"
                             className="hidden"
+                            disabled={uploadingAudio}
                             onChange={(e) => {
                               const f = e.target.files?.[0];
                               if (f) handleFileUpload(f, 'audio');
+                              e.target.value = '';
                             }}
                           />
-                          <Music className="w-5 h-5 text-muted-foreground" />
+                          {uploadingAudio ? (
+                            <RefreshCw className="w-5 h-5 text-blue-400 animate-spin" />
+                          ) : (
+                            <Music className="w-5 h-5 text-muted-foreground" />
+                          )}
                           <span className="text-xs text-foreground font-medium">
-                            {uploadingAudio ? 'Uploading Audio...' : 'Choose Downloaded Audio'}
+                            {uploadingAudio ? 'অডিও আপলোড হচ্ছে...' : 'Choose Downloaded Audio'}
                           </span>
                           <span className="text-[10px] text-muted-foreground">MP3, WAV, OGG, M4A</span>
                         </label>
@@ -1061,21 +1069,29 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                       </div>
 
                       {videoTab === 'upload' ? (
-                        <label className="border border-dashed border-border/80 hover:border-primary/50 hover:bg-primary/5 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all">
+                        <label className={`border border-dashed border-border/80 hover:border-purple-500/50 hover:bg-purple-500/5 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${uploadingVideo ? 'opacity-70 pointer-events-none' : ''}`}>
                           <input
                             type="file"
-                            accept="video/*,.mp4,.webm,.mov"
+                            accept="video/*,.mp4,.webm,.mov,.mkv"
                             className="hidden"
+                            disabled={uploadingVideo}
                             onChange={(e) => {
                               const f = e.target.files?.[0];
                               if (f) handleFileUpload(f, 'video');
+                              e.target.value = '';
                             }}
                           />
-                          <Upload className="w-5 h-5 text-muted-foreground" />
-                          <span className="text-xs text-foreground font-medium">
-                            {uploadingVideo ? 'Uploading Video...' : 'Click to Upload Video'}
+                          {uploadingVideo ? (
+                            <RefreshCw className="w-5 h-5 text-purple-400 animate-spin" />
+                          ) : (
+                            <Upload className="w-5 h-5 text-muted-foreground" />
+                          )}
+                          <span className="text-xs text-foreground font-medium text-center">
+                            {uploadingVideo ? 'ভিডিও আপলোড হচ্ছে... (দয়া করে অপেক্ষা করুন)' : 'Click to Upload Video (ভিডিও আপলোড করুন)'}
                           </span>
-                          <span className="text-[10px] text-muted-foreground">MP4, WEBM, MOV</span>
+                          <span className="text-[10px] text-muted-foreground text-center">
+                            MP4, WEBM, MOV (সর্বোচ্চ ৫০ MB পর্যন্ত)
+                          </span>
                         </label>
                       ) : (
                         <Input
