@@ -16,6 +16,14 @@ import {
 import { WaCampaign } from './types.js';
 import { log, errLog, sleep } from './utils.js';
 
+function cleanForMatching(str: string): string {
+  return (str || '')
+    .toLowerCase()
+    .replace(/[?!.,;:_~#*+\-\[\]\(\)\/\\"]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export async function matchCampaign(messageText: string, accountId?: string): Promise<WaCampaign | null> {
   const allActive = await getActiveCampaigns();
   if (allActive.length === 0) return null;
@@ -26,31 +34,31 @@ export async function matchCampaign(messageText: string, accountId?: string): Pr
   );
   if (activeCampaigns.length === 0) return null;
 
-  const rawText = (messageText || '').toLowerCase().trim();
+  const rawText = (messageText || '').trim();
   if (!rawText) return null;
 
-  // Normalize multiple spaces and linebreaks to single space
-  const normalizedText = rawText.replace(/\s+/g, ' ');
+  const cleanedText = cleanForMatching(rawText);
+  if (!cleanedText) return null;
 
-  // 1. Strict Keyword Matching
+  // 1. Smart Keyword Matching (punctuation-resilient, whitespace-normalized)
   for (const campaign of activeCampaigns) {
     if (!campaign.keywords || !campaign.keywords.trim()) continue;
 
     const keywords = campaign.keywords
       .split(',')
-      .map((k) => k.trim().toLowerCase().replace(/\s+/g, ' '))
+      .map((k) => cleanForMatching(k))
       .filter(Boolean);
 
     for (const kw of keywords) {
-      if (normalizedText.includes(kw)) {
-        log('CAMPAIGN', `[Acc: ${accountId || 'all'}] Matched keyword "${kw}" for campaign: "${campaign.name}"`);
+      if (cleanedText.includes(kw) || kw.includes(cleanedText)) {
+        log('CAMPAIGN', `[Acc: ${accountId || 'all'}] Matched keyword "${kw}" for campaign: "${campaign.name}" (incoming: "${messageText}")`);
         return campaign;
       }
     }
   }
 
-  // 2. Only fallback to a default campaign if it explicitly has NO keywords defined
-  const defaultCamp = activeCampaigns.find((c) => c.isDefault && (!c.keywords || !c.keywords.trim()));
+  // 2. Fallback to default campaign if set
+  const defaultCamp = activeCampaigns.find((c) => c.isDefault);
   if (defaultCamp) {
     log('CAMPAIGN', `[Acc: ${accountId || 'all'}] Using default fallback campaign: "${defaultCamp.name}"`);
     return defaultCamp;
@@ -103,13 +111,14 @@ export async function processIncomingMessage(
           sent = true;
         } else if (item === 'image' && campaign.imageUrl && campaign.imageUrl.trim()) {
           await sendImageMessage(sock, sender, campaign.imageUrl.trim());
+          const cleanLogUrl = campaign.imageUrl.startsWith('data:') ? 'photo.jpg' : campaign.imageUrl.trim();
           await addMessageLog({
             id: uuidv4(),
             campaignId: campaign.id,
             phoneNumber: sender,
             contactName: pushName,
             messageType: 'image',
-            fileUrl: campaign.imageUrl.trim(),
+            fileUrl: cleanLogUrl,
             status: 'sent',
             errorMessage: '',
             sentAt: new Date().toISOString(),
@@ -117,13 +126,14 @@ export async function processIncomingMessage(
           sent = true;
         } else if (item === 'video' && campaign.videoUrl && campaign.videoUrl.trim()) {
           await sendVideoMessage(sock, sender, campaign.videoUrl.trim());
+          const cleanLogUrl = campaign.videoUrl.startsWith('data:') ? 'video.mp4' : campaign.videoUrl.trim();
           await addMessageLog({
             id: uuidv4(),
             campaignId: campaign.id,
             phoneNumber: sender,
             contactName: pushName,
             messageType: 'video',
-            fileUrl: campaign.videoUrl.trim(),
+            fileUrl: cleanLogUrl,
             status: 'sent',
             errorMessage: '',
             sentAt: new Date().toISOString(),
@@ -131,27 +141,30 @@ export async function processIncomingMessage(
           sent = true;
         } else if (item === 'audio' && campaign.audioUrl && campaign.audioUrl.trim()) {
           await sendAudioMessage(sock, sender, campaign.audioUrl.trim());
+          const cleanLogUrl = campaign.audioUrl.startsWith('data:') ? 'voice_note.mp3' : campaign.audioUrl.trim();
           await addMessageLog({
             id: uuidv4(),
             campaignId: campaign.id,
             phoneNumber: sender,
             contactName: pushName,
             messageType: 'audio',
-            fileUrl: campaign.audioUrl.trim(),
+            fileUrl: cleanLogUrl,
             status: 'sent',
             errorMessage: '',
             sentAt: new Date().toISOString(),
           });
           sent = true;
         } else if (item === 'document' && campaign.documentUrl && campaign.documentUrl.trim()) {
-          await sendDocumentMessage(sock, sender, campaign.documentUrl.trim(), campaign.documentName || 'Document');
+          const docName = campaign.documentName || 'Document';
+          await sendDocumentMessage(sock, sender, campaign.documentUrl.trim(), docName);
+          const cleanLogUrl = campaign.documentUrl.startsWith('data:') ? docName : campaign.documentUrl.trim();
           await addMessageLog({
             id: uuidv4(),
             campaignId: campaign.id,
             phoneNumber: sender,
             contactName: pushName,
             messageType: 'document',
-            fileUrl: campaign.documentUrl.trim(),
+            fileUrl: cleanLogUrl,
             status: 'sent',
             errorMessage: '',
             sentAt: new Date().toISOString(),

@@ -45,7 +45,7 @@ export function WhatsAppMessageLog({ campaignId }: WhatsAppMessageLogProps) {
 
   useEffect(() => {
     fetchLogs();
-    const interval = setInterval(fetchLogs, 10000);
+    const interval = setInterval(fetchLogs, 30000);
     return () => clearInterval(interval);
   }, [campaignId]);
 

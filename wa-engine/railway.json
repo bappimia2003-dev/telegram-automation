@@ -2,17 +2,26 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "if [ -d \"wa-engine\" ]; then cd wa-engine; fi && npm install && npm run build",
     "nixpacksPlan": {
       "phases": {
         "setup": {
           "nixPkgs": ["nodejs_22"]
+        },
+        "install": {
+          "cmds": [
+            "npm install"
+          ]
+        },
+        "build": {
+          "cmds": [
+            "npm run build"
+          ]
         }
       }
     }
   },
   "deploy": {
-    "startCommand": "if [ -d \"wa-engine\" ]; then cd wa-engine; fi && npm start",
+    "startCommand": "npm start",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",

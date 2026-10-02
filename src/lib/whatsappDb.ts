@@ -97,13 +97,19 @@ function rowToContactedUser(r: any): WaContactedUser {
 }
 
 function rowToMessageLog(r: any): WaMessageLog {
+  let fileUrl = r.file_url || '';
+  if (fileUrl.startsWith('data:audio')) fileUrl = 'voice_note.mp3';
+  else if (fileUrl.startsWith('data:image')) fileUrl = 'photo.jpg';
+  else if (fileUrl.startsWith('data:video')) fileUrl = 'video.mp4';
+  else if (fileUrl.startsWith('data:')) fileUrl = 'document.bin';
+
   return {
     id: r.id,
     campaignId: r.campaign_id,
     phoneNumber: r.phone_number,
     contactName: r.contact_name || '',
     messageType: r.message_type as any,
-    fileUrl: r.file_url || '',
+    fileUrl,
     status: (r.status as any) || 'sent',
     errorMessage: r.error_message || '',
     sentAt: r.sent_at || new Date().toISOString(),
@@ -291,13 +297,14 @@ export async function getUniqueContactedCount(): Promise<number> {
     const uniquePhones = new Set(waMemory.contactedUsers.map(u => u.phoneNumber));
     return uniquePhones.size;
   }
-  const { data, error } = await supabase.from('wa_contacted_users').select('phone_number');
+  const { count, error } = await supabase
+    .from('wa_contacted_users')
+    .select('*', { count: 'exact', head: true });
   if (error) {
     console.error('Error counting unique users:', error.message);
     return 0;
   }
-  const uniquePhones = new Set((data || []).map((r: any) => r.phone_number));
-  return uniquePhones.size;
+  return count || 0;
 }
 
 // =============================================
@@ -308,13 +315,19 @@ export async function addMessageLog(log: WaMessageLog): Promise<void> {
   waMemory.messageLogs.push(log);
 
   if (supabase) {
+    let cleanUrl = log.fileUrl || '';
+    if (cleanUrl.startsWith('data:audio')) cleanUrl = 'voice_note.mp3';
+    else if (cleanUrl.startsWith('data:image')) cleanUrl = 'photo.jpg';
+    else if (cleanUrl.startsWith('data:video')) cleanUrl = 'video.mp4';
+    else if (cleanUrl.startsWith('data:')) cleanUrl = 'media.bin';
+
     const { error } = await supabase.from('wa_message_logs').insert({
       id: log.id,
       campaign_id: log.campaignId,
       phone_number: log.phoneNumber,
       contact_name: log.contactName,
       message_type: log.messageType,
-      file_url: log.fileUrl,
+      file_url: cleanUrl,
       status: log.status,
       error_message: log.errorMessage,
       sent_at: log.sentAt,
@@ -359,10 +372,13 @@ export async function getAllWaConnections(): Promise<WaConnection[]> {
   if (!data || data.length === 0) {
     return [];
   }
-  return data.map(rowToConnection);
+  return data
+    .filter((r: any) => !r.id.startsWith('auth_') && !r.id.startsWith('test_'))
+    .map(rowToConnection);
 }
 
 export async function getWaConnection(id = 'main'): Promise<WaConnection | null> {
+  if (id.startsWith('auth_')) return null;
   const supabase = getSupabase();
   if (!supabase) return waMemory.connection;
 

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "wa:engine": "npm --prefix wa-engine run dev"
+    "wa:engine": "npm --prefix wa-engine run dev",
+    "build:engine": "node scripts/build-engine.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",

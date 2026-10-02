@@ -65,9 +65,12 @@ export function WhatsAppNumbers({ campaigns = [], onDataChange }: WhatsAppNumber
 
   useEffect(() => {
     fetchAccounts();
-    const interval = setInterval(fetchAccounts, 3500);
+    // Only poll aggressively (3s) when QR code modal is open and awaiting scanning.
+    // Otherwise poll gently (25s) to keep UI fresh without lag or high network traffic.
+    const pollInterval = qrModalAccount && qrModalAccount.status !== 'connected' ? 3000 : 25000;
+    const interval = setInterval(fetchAccounts, pollInterval);
     return () => clearInterval(interval);
-  }, [qrModalAccount?.id]);
+  }, [qrModalAccount?.id, qrModalAccount?.status]);
 
   // Add Account
   const handleAddAccount = async (e: React.FormEvent) => {

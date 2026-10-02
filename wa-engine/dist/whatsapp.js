@@ -88,6 +88,13 @@ async function startWhatsApp(accountId = 'main', accountName) {
     if (!fs_1.default.existsSync(authDir)) {
         fs_1.default.mkdirSync(authDir, { recursive: true });
     }
+    // Restore auth files from Supabase if not on disk (e.g. fresh container on Railway)
+    try {
+        await (0, db_js_1.restoreAuthSession)(accountId, authDir);
+    }
+    catch (e) {
+        (0, utils_js_1.errLog)('WA', `Error restoring auth for ${accountId}:`, e.message);
+    }
     session.status = 'connecting';
     await (0, db_js_1.updateWaConnectionState)(accountId, { status: 'connecting', qrCode: '', name: session.name });
     try {
@@ -103,7 +110,15 @@ async function startWhatsApp(accountId = 'main', accountName) {
             generateHighQualityLinkPreview: false,
         });
         session.sock = sock;
-        sock.ev.on('creds.update', saveCreds);
+        let backupTimer = null;
+        sock.ev.on('creds.update', async () => {
+            await saveCreds();
+            if (backupTimer)
+                clearTimeout(backupTimer);
+            backupTimer = setTimeout(() => {
+                (0, db_js_1.backupAuthSession)(accountId, authDir).catch(() => { });
+            }, 2000);
+        });
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
             if (qr) {
@@ -134,6 +149,10 @@ async function startWhatsApp(accountId = 'main', accountName) {
                     name: session.name,
                 });
                 (0, utils_js_1.log)('WA', `🎉 [${session.name}] WhatsApp connected successfully! Number: ${session.phoneNumber}`);
+                // Sync fresh credentials to Supabase
+                (0, db_js_1.backupAuthSession)(accountId, authDir).catch((e) => {
+                    (0, utils_js_1.errLog)('WA', `Failed backing up auth session for ${accountId}:`, e.message);
+                });
             }
             if (connection === 'close') {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;

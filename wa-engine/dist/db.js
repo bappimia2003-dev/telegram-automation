@@ -11,8 +11,13 @@ exports.addMessageLog = addMessageLog;
 exports.updateWaConnectionState = updateWaConnectionState;
 exports.getAllDbAccounts = getAllDbAccounts;
 exports.deleteDbAccount = deleteDbAccount;
+exports.backupAuthSession = backupAuthSession;
+exports.restoreAuthSession = restoreAuthSession;
 const supabase_js_1 = require("@supabase/supabase-js");
 const dotenv_1 = __importDefault(require("dotenv"));
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const zlib_1 = __importDefault(require("zlib"));
 const utils_js_1 = require("./utils.js");
 dotenv_1.default.config();
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
@@ -136,13 +141,22 @@ async function addMessageLog(logEntry) {
     if (!supabase)
         return;
     try {
+        let cleanUrl = logEntry.fileUrl || '';
+        if (cleanUrl.startsWith('data:audio'))
+            cleanUrl = 'voice_note.mp3';
+        else if (cleanUrl.startsWith('data:image'))
+            cleanUrl = 'photo.jpg';
+        else if (cleanUrl.startsWith('data:video'))
+            cleanUrl = 'video.mp4';
+        else if (cleanUrl.startsWith('data:'))
+            cleanUrl = 'media.bin';
         const { error } = await supabase.from('wa_message_logs').insert({
             id: logEntry.id,
             campaign_id: logEntry.campaignId,
             phone_number: logEntry.phoneNumber,
             contact_name: logEntry.contactName,
             message_type: logEntry.messageType,
-            file_url: logEntry.fileUrl,
+            file_url: cleanUrl,
             status: logEntry.status,
             error_message: logEntry.errorMessage,
             sent_at: logEntry.sentAt,
@@ -189,7 +203,9 @@ async function getAllDbAccounts() {
         return [];
     try {
         const { data } = await supabase.from('wa_connection').select('*').order('created_at', { ascending: true });
-        return (data || []).map((r) => {
+        return (data || [])
+            .filter((r) => !r.id.startsWith('auth_') && !r.id.startsWith('test_'))
+            .map((r) => {
             let name = r.id === 'main' ? 'Primary WhatsApp' : `SIM ${r.id.slice(-4)}`;
             let phoneNumber = r.phone_number || '';
             if (phoneNumber.includes('|')) {
@@ -217,8 +233,81 @@ async function deleteDbAccount(accountId) {
         return;
     try {
         await supabase.from('wa_connection').delete().eq('id', accountId);
+        await supabase.from('wa_connection').delete().eq('id', `auth_${accountId}`);
     }
     catch (e) {
         (0, utils_js_1.errLog)('DB', 'Exception deleting account from db:', e.message);
+    }
+}
+async function backupAuthSession(accountId, authDir) {
+    if (!supabase || !fs_1.default.existsSync(authDir))
+        return false;
+    try {
+        const files = fs_1.default.readdirSync(authDir);
+        const bundle = {};
+        for (const file of files) {
+            if (!file.startsWith('tctoken-')) {
+                const fullPath = path_1.default.join(authDir, file);
+                try {
+                    if (fs_1.default.statSync(fullPath).isFile()) {
+                        bundle[file] = fs_1.default.readFileSync(fullPath, 'utf-8');
+                    }
+                }
+                catch { }
+            }
+        }
+        if (Object.keys(bundle).length === 0 || !bundle['creds.json'])
+            return false;
+        const json = JSON.stringify(bundle);
+        const gzipped = zlib_1.default.gzipSync(Buffer.from(json, 'utf-8')).toString('base64');
+        const { error } = await supabase.from('wa_connection').upsert({
+            id: `auth_${accountId}`,
+            status: 'synced',
+            qr_code: gzipped,
+            last_connected: new Date().toISOString(),
+        });
+        if (error) {
+            (0, utils_js_1.errLog)('AUTH_SYNC', `Failed backing up auth session ${accountId}:`, error.message);
+            return false;
+        }
+        (0, utils_js_1.log)('AUTH_SYNC', `✅ Backed up auth session for ${accountId} (${(gzipped.length / 1024).toFixed(1)} KB) to Cloud DB.`);
+        return true;
+    }
+    catch (err) {
+        (0, utils_js_1.errLog)('AUTH_SYNC', `Exception backing up session ${accountId}:`, err.message);
+        return false;
+    }
+}
+async function restoreAuthSession(accountId, authDir) {
+    if (!supabase)
+        return false;
+    try {
+        // If creds.json already exists and is non-empty, do not overwrite
+        const credsPath = path_1.default.join(authDir, 'creds.json');
+        if (fs_1.default.existsSync(credsPath) && fs_1.default.statSync(credsPath).size > 100) {
+            return true;
+        }
+        const { data, error } = await supabase
+            .from('wa_connection')
+            .select('qr_code')
+            .eq('id', `auth_${accountId}`)
+            .maybeSingle();
+        if (error || !data || !data.qr_code)
+            return false;
+        const buffer = Buffer.from(data.qr_code, 'base64');
+        const decompressed = zlib_1.default.gunzipSync(buffer).toString('utf-8');
+        const bundle = JSON.parse(decompressed);
+        if (!fs_1.default.existsSync(authDir)) {
+            fs_1.default.mkdirSync(authDir, { recursive: true });
+        }
+        for (const [file, content] of Object.entries(bundle)) {
+            fs_1.default.writeFileSync(path_1.default.join(authDir, file), content, 'utf-8');
+        }
+        (0, utils_js_1.log)('AUTH_SYNC', `✅ Restored ${Object.keys(bundle).length} auth files for ${accountId} from Cloud DB.`);
+        return true;
+    }
+    catch (err) {
+        (0, utils_js_1.errLog)('AUTH_SYNC', `Exception restoring session ${accountId}:`, err.message);
+        return false;
     }
 }

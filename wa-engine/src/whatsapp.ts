@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import QRCode from 'qrcode';
 import pino from 'pino';
-import { updateWaConnectionState, getAllDbAccounts, deleteDbAccount } from './db.js';
+import { updateWaConnectionState, getAllDbAccounts, deleteDbAccount, backupAuthSession, restoreAuthSession } from './db.js';
 import { processIncomingMessage } from './campaigns.js';
 import { log, errLog } from './utils.js';
 
@@ -97,6 +97,13 @@ export async function startWhatsApp(accountId = 'main', accountName?: string): P
     fs.mkdirSync(authDir, { recursive: true });
   }
 
+  // Restore auth files from Supabase if not on disk (e.g. fresh container on Railway)
+  try {
+    await restoreAuthSession(accountId, authDir);
+  } catch (e: any) {
+    errLog('WA', `Error restoring auth for ${accountId}:`, e.message);
+  }
+
   session.status = 'connecting';
   await updateWaConnectionState(accountId, { status: 'connecting', qrCode: '', name: session.name });
 
@@ -115,7 +122,14 @@ export async function startWhatsApp(accountId = 'main', accountName?: string): P
     });
     session.sock = sock;
 
-    sock.ev.on('creds.update', saveCreds);
+    let backupTimer: NodeJS.Timeout | null = null;
+    sock.ev.on('creds.update', async () => {
+      await saveCreds();
+      if (backupTimer) clearTimeout(backupTimer);
+      backupTimer = setTimeout(() => {
+        backupAuthSession(accountId, authDir).catch(() => {});
+      }, 2000);
+    });
 
     sock.ev.on('connection.update', async (update: any) => {
       const { connection, lastDisconnect, qr } = update;
@@ -149,6 +163,11 @@ export async function startWhatsApp(accountId = 'main', accountName?: string): P
           name: session.name,
         });
         log('WA', `🎉 [${session.name}] WhatsApp connected successfully! Number: ${session.phoneNumber}`);
+
+        // Sync fresh credentials to Supabase
+        backupAuthSession(accountId, authDir).catch((e: any) => {
+          errLog('WA', `Failed backing up auth session for ${accountId}:`, e.message);
+        });
       }
 
       if (connection === 'close') {
