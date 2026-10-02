@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getBotById, getApiKeyById, getActiveApiKeys, addMessage, incrementBotMessageCount } from '@/lib/db';
+import { getBotById, getApiKeyById, getActiveApiKeys, addMessage, incrementBotMessageCount, updateBot } from '@/lib/db';
 import { 
   sendMessage, 
   sendPhoto, 
@@ -43,11 +43,19 @@ export async function POST(
         ? bot.welcomeMessage.trim()
         : `আরে ভাই! আমি ${bot.name}। বলো, আজ তোমাকে কীভাবে সাহায্য করতে পারি? নির্দ্বিধায় যেকোনো প্রশ্ন করো! 👑`;
 
+      const botUpdates: any = {};
+      if (!bot.chatId) {
+        botUpdates.chatId = String(chatId);
+      }
+
       if (bot.enableWelcomeMedia) {
         // 1. Send Welcome Image if configured
         if (bot.welcomeImageUrl) {
           sendChatAction(bot.telegramToken, chatId, 'upload_photo').catch(() => {});
-          await sendPhoto(bot.telegramToken, chatId, bot.welcomeImageUrl, welcomeText);
+          const imgRes = await sendPhoto(bot.telegramToken, chatId, bot.welcomeImageUrl, welcomeText);
+          if (imgRes.ok && imgRes.fileId && imgRes.fileId !== bot.welcomeImageUrl) {
+            botUpdates.welcomeImageUrl = imgRes.fileId;
+          }
         } else {
           await sendMessage(bot.telegramToken, chatId, welcomeText);
         }
@@ -56,20 +64,34 @@ export async function POST(
         if (bot.welcomeAudioUrl) {
           if (bot.welcomeAudioType === 'audio') {
             sendChatAction(bot.telegramToken, chatId, 'upload_document').catch(() => {});
-            await sendAudio(bot.telegramToken, chatId, bot.welcomeAudioUrl);
+            const audRes = await sendAudio(bot.telegramToken, chatId, bot.welcomeAudioUrl);
+            if (audRes.ok && audRes.fileId && audRes.fileId !== bot.welcomeAudioUrl) {
+              botUpdates.welcomeAudioUrl = audRes.fileId;
+            }
           } else {
             sendChatAction(bot.telegramToken, chatId, 'record_voice').catch(() => {});
-            await sendVoice(bot.telegramToken, chatId, bot.welcomeAudioUrl);
+            const vocRes = await sendVoice(bot.telegramToken, chatId, bot.welcomeAudioUrl);
+            if (vocRes.ok && vocRes.fileId && vocRes.fileId !== bot.welcomeAudioUrl) {
+              botUpdates.welcomeAudioUrl = vocRes.fileId;
+            }
           }
         }
 
         // 3. Send Welcome Video if configured
         if (bot.welcomeVideoUrl) {
           sendChatAction(bot.telegramToken, chatId, 'upload_video').catch(() => {});
-          await sendVideo(bot.telegramToken, chatId, bot.welcomeVideoUrl);
+          const vidRes = await sendVideo(bot.telegramToken, chatId, bot.welcomeVideoUrl);
+          if (vidRes.ok && vidRes.fileId && vidRes.fileId !== bot.welcomeVideoUrl) {
+            botUpdates.welcomeVideoUrl = vidRes.fileId;
+          }
         }
       } else {
         await sendMessage(bot.telegramToken, chatId, welcomeText);
+      }
+
+      // Persist any auto-discovered chatId or upgraded Telegram file_ids
+      if (Object.keys(botUpdates).length > 0) {
+        await updateBot(botId, botUpdates).catch(e => console.warn('Bot update error on start:', e));
       }
       
       await addMessage({
@@ -98,6 +120,58 @@ export async function POST(
 
       await incrementBotMessageCount(botId);
       return NextResponse.json({ ok: true });
+    }
+
+    const rawCaption = (message.caption || '').trim();
+    const lowCaption = rawCaption.toLowerCase();
+
+    // 0. ADMIN DIRECT MEDIA SETUP VIA TELEGRAM
+    // If admin sends a video with /setvideo or /video
+    if ((message.video || (message.document && message.document.mime_type?.startsWith('video/'))) && (lowCaption.startsWith('/setvideo') || lowCaption.startsWith('/video'))) {
+      const vidFileId = message.video?.file_id || message.document?.file_id;
+      if (vidFileId) {
+        await updateBot(botId, { welcomeVideoUrl: vidFileId, chatId: String(chatId), enableWelcomeMedia: true });
+        await sendMessage(
+          bot.telegramToken, 
+          chatId, 
+          `✅ আপনার ভিডিওটি সফলভাবে *Telegram Cloud*-এ সংরক্ষিত হয়েছে এবং বটের *Welcome Video* হিসেবে সেট হয়েছে!\n\n☁️ *Telegram File ID:*\n\`${vidFileId}\``
+        );
+        return NextResponse.json({ ok: true });
+      }
+    }
+
+    // If admin sends a photo with /setphoto or /photo
+    if (message.photo && (lowCaption.startsWith('/setphoto') || lowCaption.startsWith('/photo') || lowCaption.startsWith('/setimage'))) {
+      const photoFileId = message.photo[message.photo.length - 1].file_id;
+      if (photoFileId) {
+        await updateBot(botId, { welcomeImageUrl: photoFileId, chatId: String(chatId), enableWelcomeMedia: true });
+        await sendMessage(
+          bot.telegramToken, 
+          chatId, 
+          `✅ আপনার ছবিটি সফলভাবে *Telegram Cloud*-এ সংরক্ষিত হয়েছে এবং বটের *Welcome Image* হিসেবে সেট হয়েছে!\n\n☁️ *Telegram File ID:*\n\`${photoFileId}\``
+        );
+        return NextResponse.json({ ok: true });
+      }
+    }
+
+    // If admin sends audio or voice with /setaudio or /setvoice
+    if ((message.voice || message.audio) && (lowCaption.startsWith('/setaudio') || lowCaption.startsWith('/audio') || lowCaption.startsWith('/setvoice') || lowCaption.startsWith('/voice'))) {
+      const audFileId = (message.voice || message.audio)!.file_id;
+      const isVoice = Boolean(message.voice);
+      if (audFileId) {
+        await updateBot(botId, { 
+          welcomeAudioUrl: audFileId, 
+          welcomeAudioType: isVoice ? 'voice' : 'audio', 
+          chatId: String(chatId),
+          enableWelcomeMedia: true 
+        });
+        await sendMessage(
+          bot.telegramToken, 
+          chatId, 
+          `✅ আপনার অডিওটি সফলভাবে *Telegram Cloud*-এ সংরক্ষিত হয়েছে এবং বটের *Welcome Audio* হিসেবে সেট হয়েছে!\n\n☁️ *Telegram File ID:*\n\`${audFileId}\``
+        );
+        return NextResponse.json({ ok: true });
+      }
     }
 
     // Extract prompt and check for media (voice, audio, photo, document)

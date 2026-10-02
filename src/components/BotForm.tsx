@@ -31,9 +31,10 @@ import {
   Radio,
   FileAudio,
   Store,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Cloud
 } from "lucide-react"
-import { uploadFile } from "@/lib/uploadHelper"
+import { uploadFile, uploadToTelegramCloud } from "@/lib/uploadHelper"
 
 
 export interface ApiKey {
@@ -53,6 +54,7 @@ interface BotFormProps {
 export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
   const [name, setName] = React.useState(bot?.name || "")
   const [token, setToken] = React.useState(bot?.telegramToken || bot?.token || "")
+  const [chatId, setChatId] = React.useState(bot?.chatId || "")
   const [personality, setPersonality] = React.useState(bot?.aiPersonality || bot?.personality || "")
   const [details, setDetails] = React.useState(bot?.aiDetails || bot?.details || "")
   const [style, setStyle] = React.useState(bot?.responseStyle || bot?.style || "friendly")
@@ -144,7 +146,16 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
 
         setUploadingAudio(true)
         try {
-          const result = await uploadFile(file, 'audio')
+          let result;
+          if (token.trim() && chatId.trim()) {
+            result = await uploadToTelegramCloud(file, 'audio', {
+              botToken: token.trim(),
+              chatId: chatId.trim(),
+              botId: bot?.id,
+            });
+          } else {
+            result = await uploadFile(file, 'audio');
+          }
           if (result.url) {
             setWelcomeAudioUrl(result.url)
             setWelcomeAudioType('voice')
@@ -186,7 +197,19 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
     if (type === 'video') setUploadingVideo(true)
 
     try {
-      const result = await uploadFile(file, type)
+      let result;
+      // If Telegram Token and Chat ID are available, upload directly to Telegram Cloud!
+      if (token.trim() && chatId.trim()) {
+        result = await uploadToTelegramCloud(file, type, {
+          botToken: token.trim(),
+          chatId: chatId.trim(),
+          botId: bot?.id,
+        });
+      } else {
+        // Fallback to standard cloud storage
+        result = await uploadFile(file, type);
+      }
+
       if (result.url) {
         if (type === 'image') setWelcomeImageUrl(result.url)
         if (type === 'audio') {
@@ -270,6 +293,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
       name: name.trim(),
       telegramToken: token.trim(),
       token: token.trim(),
+      chatId: chatId.trim(),
       aiPersonality: personality.trim(),
       personality: personality.trim(),
       aiDetails: details.trim(),
@@ -732,6 +756,45 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
 
         {enableWelcomeMedia && (
           <div className="space-y-5 pt-1">
+            {/* Telegram Storage Chat ID connection */}
+            <div className="p-3.5 rounded-xl border border-sky-500/30 bg-sky-950/20 space-y-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-sky-500/20 text-sky-400">
+                    <Cloud className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs sm:text-sm font-semibold text-foreground">
+                      Telegram Cloud Storage Chat ID (টেলিগ্রাম ক্লাউড সংযোগ)
+                    </span>
+                    <p className="text-[11px] text-muted-foreground">
+                      মিডিয়া সরাসরি টেলিগ্রাম ক্লাউডে সেভ হবে (জিরো সার্ভার স্টোরেজ)
+                    </p>
+                  </div>
+                </div>
+                {chatId ? (
+                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono font-medium self-start sm:self-auto">
+                    ✓ Connected: {chatId}
+                  </span>
+                ) : (
+                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 font-medium self-start sm:self-auto">
+                    ⚠️ Not Connected
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="আপনার Telegram User ID বা Channel ID (যেমন: 123456789)"
+                  value={chatId}
+                  onChange={(e) => setChatId(e.target.value)}
+                  className="text-xs font-mono h-9 bg-background/80"
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                💡 <strong>সহজে চ্যাট আইডি পাওয়ার উপায়:</strong> টেলিগ্রামে আপনার বটটিতে ঢুকে <code className="text-sky-300 font-mono">/start</code> মেসেজ পাঠালে এটি স্বয়ংক্রিয়ভাবে কানেক্ট হয়ে যাবে, অথবা টেলিগ্রামে <a href="https://t.me/userinfobot" target="_blank" rel="noreferrer" className="text-sky-400 underline font-medium">@userinfobot</a> থেকে আপনার আইডি এনে এখানে পেস্ট করুন। এছাড়াও টেলিগ্রাম অ্যাপে বটকে সরাসরি ভিডিও/ছবি পাঠিয়ে ক্যাপশনে <code className="text-sky-300 font-mono">/setvideo</code> বা <code className="text-sky-300 font-mono">/setphoto</code> লিখলেও এটি টেলিগ্রাম ক্লাউডে স্বয়ংক্রিয়ভাবে সেভ হয়ে যাবে।
+              </p>
+            </div>
+
             {/* Welcome Caption / Message */}
             <div className="space-y-1.5">
               <label className="text-xs sm:text-sm font-medium text-foreground flex items-center justify-between">
@@ -771,28 +834,49 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
 
                   {welcomeImageUrl ? (
                     <div className="space-y-2">
-                      <div className="relative group rounded-lg overflow-hidden border border-border/80 bg-black/40 aspect-video flex items-center justify-center">
-                        <img 
-                          src={welcomeImageUrl} 
-                          alt="Welcome Preview" 
-                          className="w-full h-full object-cover" 
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = 'none';
-                          }}
-                        />
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setWelcomeImageUrl("")}
-                            className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium flex items-center gap-1 shadow"
-                          >
-                            <Trash2 size={12} /> Delete Image
-                          </button>
+                      {welcomeImageUrl.startsWith('http') || welcomeImageUrl.startsWith('/') ? (
+                        <div className="relative group rounded-lg overflow-hidden border border-border/80 bg-black/40 aspect-video flex items-center justify-center">
+                          <img 
+                            src={welcomeImageUrl} 
+                            alt="Welcome Preview" 
+                            className="w-full h-full object-cover" 
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setWelcomeImageUrl("")}
+                              className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium flex items-center gap-1 shadow"
+                            >
+                              <Trash2 size={12} /> Delete Image
+                            </button>
+                          </div>
                         </div>
+                      ) : (
+                        <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-500/30 flex items-center gap-2.5">
+                          <ImageIcon className="w-5 h-5 text-emerald-400 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
+                              ☁️ Telegram Cloud Image
+                            </span>
+                            <p className="text-[10px] text-muted-foreground font-mono truncate">{welcomeImageUrl}</p>
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-muted-foreground font-mono truncate max-w-[200px]">
+                          {welcomeImageUrl}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setWelcomeImageUrl("")}
+                          className="text-red-400 hover:text-red-300 transition-colors"
+                        >
+                          Remove
+                        </button>
                       </div>
-                      <p className="text-[11px] text-muted-foreground truncate font-mono">
-                        {welcomeImageUrl}
-                      </p>
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -878,11 +962,21 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                   {welcomeAudioUrl ? (
                     <div className="space-y-2.5">
                       <div className="p-2.5 rounded-lg bg-black/40 border border-border/70 space-y-2">
-                        <audio 
-                          controls 
-                          src={welcomeAudioUrl} 
-                          className="w-full h-8" 
-                        />
+                        {welcomeAudioUrl.startsWith('http') || welcomeAudioUrl.startsWith('/') ? (
+                          <audio 
+                            controls 
+                            src={welcomeAudioUrl} 
+                            className="w-full h-8" 
+                          />
+                        ) : (
+                          <div className="p-2 rounded-lg bg-blue-950/30 border border-blue-500/30 flex items-center gap-2">
+                            <Music className="w-4 h-4 text-blue-400 shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <span className="text-[11px] font-semibold text-blue-400">☁️ Telegram Cloud Audio</span>
+                              <p className="text-[10px] text-muted-foreground font-mono truncate">{welcomeAudioUrl}</p>
+                            </div>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between pt-1 text-[11px]">
                           <span className="text-muted-foreground">Telegram Format:</span>
                           <button
@@ -1030,20 +1124,37 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
 
                   {welcomeVideoUrl ? (
                     <div className="space-y-2">
-                      <div className="rounded-lg overflow-hidden border border-border/80 bg-black/40 aspect-video flex items-center justify-center">
-                        <video 
-                          controls 
-                          src={welcomeVideoUrl} 
-                          className="w-full h-full object-cover" 
-                        />
+                      {welcomeVideoUrl.startsWith('http') || welcomeVideoUrl.startsWith('/') ? (
+                        <div className="rounded-lg overflow-hidden border border-border/80 bg-black/40 aspect-video flex items-center justify-center">
+                          <video 
+                            controls 
+                            src={welcomeVideoUrl} 
+                            className="w-full h-full object-cover" 
+                          />
+                        </div>
+                      ) : (
+                        <div className="p-3 rounded-lg bg-purple-950/30 border border-purple-500/30 flex items-center gap-2.5">
+                          <Video className="w-5 h-5 text-purple-400 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[11px] font-semibold text-purple-400 flex items-center gap-1">
+                              ☁️ Telegram Cloud Video
+                            </span>
+                            <p className="text-[10px] text-muted-foreground font-mono truncate">{welcomeVideoUrl}</p>
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-muted-foreground font-mono truncate max-w-[200px]">
+                          {welcomeVideoUrl}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setWelcomeVideoUrl("")}
+                          className="text-red-400 hover:text-red-300 transition-colors"
+                        >
+                          Remove
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setWelcomeVideoUrl("")}
-                        className="w-full py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
-                      >
-                        <Trash2 size={12} /> Remove Video
-                      </button>
                     </div>
                   ) : (
                     <div className="space-y-2">

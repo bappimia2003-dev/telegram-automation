@@ -53,6 +53,7 @@ export async function POST(request: Request) {
     const newBot = {
       id: uuidv4(),
       ...validatedData,
+      chatId: body.chatId || '',
       aiDetails: body.aiDetails || '',
       responseStyle: (validatedData.responseStyle || 'friendly') as 'formal' | 'casual' | 'friendly' | 'custom',
       isActive: false,

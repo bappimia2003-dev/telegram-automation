@@ -128,3 +128,60 @@ export async function uploadFile(
     parsedContent: data.parsedContent,
   };
 }
+
+/**
+ * Uploads media directly to Telegram Cloud.
+ * Uses a temporary cloud upload to bypass browser CORS & Vercel limits,
+ * then transfers it to Telegram Cloud via Telegram Bot API,
+ * purges the temporary server/supabase file,
+ * and returns the permanent Telegram file_id!
+ */
+export async function uploadToTelegramCloud(
+  file: File,
+  type: 'image' | 'audio' | 'video',
+  config: {
+    botToken: string;
+    chatId?: string;
+    botId?: string;
+  }
+): Promise<UploadResult> {
+  if (!config.botToken) {
+    throw new Error('টেলিগ্রাম বটের টোকেন পাওয়া যায়নি। দয়া করে প্রথমে বটের সঠিক টেলিগ্রাম টোকেন দিন।');
+  }
+
+  if (!config.chatId) {
+    throw new Error('টেলিগ্রাম ক্লাউডে সরাসরি হোস্ট করতে Telegram Chat ID প্রয়োজন। দয়া করে নিচে "Telegram Storage Chat ID" বক্সে আপনার টেলিগ্রাম আইডি দিন অথবা আপনার টেলিগ্রাম বটে গিয়ে /start লিখে চ্যাট শুরু করুন।');
+  }
+
+  // 1. Upload temporary file to Supabase (handles up to 50MB directly from browser)
+  const tempResult = await uploadFile(file, type);
+  if (!tempResult.url) {
+    throw new Error('মিডিয়া প্রসেসিং সম্পন্ন হয়নি');
+  }
+
+  // 2. Transfer to Telegram Cloud to obtain permanent file_id
+  const res = await fetch('/api/telegram-cloud/transfer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      botToken: config.botToken,
+      chatId: config.chatId,
+      botId: config.botId,
+      tempUrl: tempResult.url,
+      tempFilename: tempResult.filename,
+      mediaType: type,
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok || !data.ok || !data.fileId) {
+    throw new Error(data.error || 'টেলিগ্রাম ক্লাউডে ট্রান্সফার ব্যর্থ হয়েছে');
+  }
+
+  // The temporary file is now purged and the file is permanently on Telegram Cloud!
+  return {
+    url: data.fileId,
+    filename: file.name,
+  };
+}
+

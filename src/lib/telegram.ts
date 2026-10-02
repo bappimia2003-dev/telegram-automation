@@ -52,6 +52,24 @@ export async function sendMessage(
   return true;
 }
 
+export interface TelegramMediaResult {
+  ok: boolean;
+  fileId?: string;
+  error?: string;
+}
+
+function extractFileId(result: any): string | undefined {
+  if (!result) return undefined;
+  if (result.video?.file_id) return result.video.file_id;
+  if (Array.isArray(result.photo) && result.photo.length > 0) {
+    return result.photo[result.photo.length - 1].file_id;
+  }
+  if (result.voice?.file_id) return result.voice.file_id;
+  if (result.audio?.file_id) return result.audio.file_id;
+  if (result.document?.file_id) return result.document.file_id;
+  return undefined;
+}
+
 // Universal media sender handling local uploads, Base64 data URLs, remote URLs, and Telegram file_ids
 async function sendTelegramMedia(
   botToken: string,
@@ -60,7 +78,7 @@ async function sendTelegramMedia(
   field: 'photo' | 'audio' | 'voice' | 'video',
   mediaSource: string,
   caption?: string
-): Promise<boolean> {
+): Promise<TelegramMediaResult> {
   try {
     const fs = await import('fs');
     const path = await import('path');
@@ -80,7 +98,11 @@ async function sendTelegramMedia(
         body: form,
       });
       const data = await res.json();
-      return data.ok === true;
+      return {
+        ok: data.ok === true,
+        fileId: extractFileId(data.result),
+        error: data.description,
+      };
     }
 
     // 2. Local uploads file (/uploads/... or public/uploads/...)
@@ -119,9 +141,11 @@ async function sendTelegramMedia(
           body: form,
         });
         const data = await res.json();
-        if (data.ok) return true;
+        if (data.ok) {
+          return { ok: true, fileId: extractFileId(data.result) };
+        }
         console.error(`Telegram ${endpoint} error:`, data);
-        return false;
+        return { ok: false, error: data.description };
       }
     }
 
@@ -138,7 +162,9 @@ async function sendTelegramMedia(
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (data.ok) return true;
+    if (data.ok) {
+      return { ok: true, fileId: extractFileId(data.result) };
+    }
 
     // Fallback: If URL failed via JSON, try server-side fetching and multipart stream
     if (mediaSource.startsWith('http://') || mediaSource.startsWith('https://')) {
@@ -155,18 +181,22 @@ async function sendTelegramMedia(
             body: form,
           });
           const retryData = await retry.json();
-          return retryData.ok === true;
+          if (retryData.ok) {
+            return { ok: true, fileId: extractFileId(retryData.result) };
+          }
+          return { ok: false, error: retryData.description };
         }
-      } catch (streamErr) {
+      } catch (streamErr: any) {
         console.error(`Error streaming remote media to Telegram:`, streamErr);
+        return { ok: false, error: streamErr.message };
       }
     }
 
     console.error(`Failed to send ${endpoint}:`, data);
-    return false;
-  } catch (err) {
+    return { ok: false, error: data.description || `Failed to send ${endpoint}` };
+  } catch (err: any) {
     console.error(`Error in ${endpoint}:`, err);
-    return false;
+    return { ok: false, error: err.message };
   }
 }
 
@@ -175,7 +205,7 @@ export async function sendPhoto(
   chatId: number | string,
   photo: string,
   caption?: string
-): Promise<boolean> {
+): Promise<TelegramMediaResult> {
   return sendTelegramMedia(botToken, chatId, 'sendPhoto', 'photo', photo, caption);
 }
 
@@ -184,7 +214,7 @@ export async function sendAudio(
   chatId: number | string,
   audio: string,
   caption?: string
-): Promise<boolean> {
+): Promise<TelegramMediaResult> {
   return sendTelegramMedia(botToken, chatId, 'sendAudio', 'audio', audio, caption);
 }
 
@@ -193,7 +223,7 @@ export async function sendVoice(
   chatId: number | string,
   voice: string,
   caption?: string
-): Promise<boolean> {
+): Promise<TelegramMediaResult> {
   return sendTelegramMedia(botToken, chatId, 'sendVoice', 'voice', voice, caption);
 }
 
@@ -202,7 +232,7 @@ export async function sendVideo(
   chatId: number | string,
   video: string,
   caption?: string
-): Promise<boolean> {
+): Promise<TelegramMediaResult> {
   return sendTelegramMedia(botToken, chatId, 'sendVideo', 'video', video, caption);
 }
 
@@ -309,6 +339,15 @@ export interface TelegramUpdate {
       height: number;
       file_size?: number;
     }>;
+    video?: {
+      file_id: string;
+      file_unique_id: string;
+      width?: number;
+      height?: number;
+      duration?: number;
+      mime_type?: string;
+      file_size?: number;
+    };
     document?: {
       file_id: string;
       file_unique_id: string;
