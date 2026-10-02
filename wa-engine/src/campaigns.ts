@@ -26,34 +26,37 @@ export async function matchCampaign(messageText: string, accountId?: string): Pr
   );
   if (activeCampaigns.length === 0) return null;
 
-  const normalizedText = (messageText || '').toLowerCase().trim();
+  const rawText = (messageText || '').toLowerCase().trim();
+  if (!rawText) return null;
 
-  // 1. Try keyword matching
-  if (normalizedText) {
-    for (const campaign of activeCampaigns) {
-      if (!campaign.keywords || !campaign.keywords.trim()) continue;
+  // Normalize multiple spaces and linebreaks to single space
+  const normalizedText = rawText.replace(/\s+/g, ' ');
 
-      const keywords = campaign.keywords
-        .split(',')
-        .map((k) => k.trim().toLowerCase())
-        .filter(Boolean);
+  // 1. Strict Keyword Matching
+  for (const campaign of activeCampaigns) {
+    if (!campaign.keywords || !campaign.keywords.trim()) continue;
 
-      for (const kw of keywords) {
-        if (normalizedText.includes(kw)) {
-          log('CAMPAIGN', `[Acc: ${accountId || 'all'}] Matched keyword "${kw}" for campaign: "${campaign.name}"`);
-          return campaign;
-        }
+    const keywords = campaign.keywords
+      .split(',')
+      .map((k) => k.trim().toLowerCase().replace(/\s+/g, ' '))
+      .filter(Boolean);
+
+    for (const kw of keywords) {
+      if (normalizedText.includes(kw)) {
+        log('CAMPAIGN', `[Acc: ${accountId || 'all'}] Matched keyword "${kw}" for campaign: "${campaign.name}"`);
+        return campaign;
       }
     }
   }
 
-  // 2. Fallback to default campaign if set
-  const defaultCamp = activeCampaigns.find((c) => c.isDefault);
+  // 2. Only fallback to a default campaign if it explicitly has NO keywords defined
+  const defaultCamp = activeCampaigns.find((c) => c.isDefault && (!c.keywords || !c.keywords.trim()));
   if (defaultCamp) {
     log('CAMPAIGN', `[Acc: ${accountId || 'all'}] Using default fallback campaign: "${defaultCamp.name}"`);
     return defaultCamp;
   }
 
+  log('CAMPAIGN', `[Acc: ${accountId || 'all'}] Message "${messageText}" does not match any keyword. No auto-reply.`);
   return null;
 }
 
