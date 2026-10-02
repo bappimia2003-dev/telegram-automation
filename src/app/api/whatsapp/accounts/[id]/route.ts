@@ -3,6 +3,56 @@ import { getWaConnection, updateWaConnection, deleteWaConnection } from '@/lib/w
 
 const WA_ENGINE_URL = process.env.WA_ENGINE_URL || 'http://localhost:3005';
 
+export async function GET(
+  _request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const accountId = params.id;
+    let liveAccount: any = null;
+    try {
+      const res = await fetch(`${WA_ENGINE_URL}/accounts`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(1500),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        liveAccount = (data.accounts || []).find((a: any) => a.id === accountId);
+      }
+    } catch {}
+
+    const conn = await getWaConnection(accountId);
+    const account = {
+      ...conn,
+      status: liveAccount?.status || conn.status,
+      phoneNumber: liveAccount?.phoneNumber || conn.phoneNumber,
+      qrCode: liveAccount?.qrCode || conn.qrCode,
+    };
+
+    return NextResponse.json({ ok: true, account });
+  } catch (error: any) {
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  }
+}
+
+export async function PUT(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const accountId = params.id;
+    const body = await request.json();
+    const updated = await updateWaConnection({
+      id: accountId,
+      name: body.name,
+      phoneNumber: body.phoneNumber,
+    });
+    return NextResponse.json({ ok: true, account: updated });
+  } catch (error: any) {
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  }
+}
+
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }

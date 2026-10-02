@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { StatsCard } from '@/components/StatsCard';
-import { WhatsAppStatus } from '@/components/WhatsAppStatus';
+import { WhatsAppNumbers } from '@/components/WhatsAppNumbers';
 import { CampaignCard } from '@/components/CampaignCard';
 import { WhatsAppMessageLog } from '@/components/WhatsAppMessageLog';
 import { Button } from '@/components/ui/button';
@@ -14,12 +14,15 @@ import {
   Users, 
   CheckCircle2, 
   Smartphone,
-  Sparkles
+  Sparkles,
+  Phone
 } from 'lucide-react';
-import { WaCampaign, WaDashboardStats } from '@/lib/whatsappTypes';
+import { WaCampaign, WaDashboardStats, WaConnection } from '@/lib/whatsappTypes';
 
 export default function WhatsAppDashboardPage() {
   const [campaigns, setCampaigns] = useState<WaCampaign[]>([]);
+  const [accounts, setAccounts] = useState<WaConnection[]>([]);
+  const [selectedFilter, setSelectedFilter] = useState<string>('all');
   const [stats, setStats] = useState<WaDashboardStats>({
     totalCampaigns: 0,
     activeCampaigns: 0,
@@ -31,16 +34,21 @@ export default function WhatsAppDashboardPage() {
 
   const fetchDashboardData = async () => {
     try {
-      const [campRes, statusRes] = await Promise.all([
+      const [campRes, statusRes, accountsRes] = await Promise.all([
         fetch(`/api/whatsapp/campaigns?t=${Date.now()}`, { cache: 'no-store' }),
         fetch(`/api/whatsapp/status?t=${Date.now()}`, { cache: 'no-store' }),
+        fetch(`/api/whatsapp/accounts?t=${Date.now()}`, { cache: 'no-store' }),
       ]);
 
       const campData = await campRes.json().catch(() => ({}));
       const statusData = await statusRes.json().catch(() => ({}));
+      const accountsData = await accountsRes.json().catch(() => ({}));
 
       const list: WaCampaign[] = Array.isArray(campData.campaigns) ? campData.campaigns : [];
       setCampaigns(list);
+
+      const accs: WaConnection[] = Array.isArray(accountsData.accounts) ? accountsData.accounts : [];
+      setAccounts(accs);
 
       if (statusData.ok && statusData.stats) {
         setStats(statusData.stats);
@@ -76,6 +84,14 @@ export default function WhatsAppDashboardPage() {
     }
   };
 
+  // Filtered campaigns based on tab selection
+  const filteredCampaigns = campaigns.filter(c => {
+    if (selectedFilter === 'all') return true;
+    return c.accountId === selectedFilter || (!c.accountId && selectedFilter === 'main');
+  });
+
+  const connectedAccountsCount = accounts.filter(a => a.status === 'connected').length;
+
   return (
     <div className="space-y-8 pb-16">
       {/* Header */}
@@ -88,7 +104,7 @@ export default function WhatsAppDashboardPage() {
             WhatsApp Automation
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Auto-send audio, video, image & text messages to Facebook Ad leads with 1-time guarantee.
+            Auto-send audio, video, image & text files to Facebook Ad leads for all your WhatsApp SIMs.
           </p>
         </div>
 
@@ -103,12 +119,12 @@ export default function WhatsAppDashboardPage() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <StatsCard
-          title="Total Campaigns"
-          value={stats.totalCampaigns}
-          icon={Layers}
+          title="WhatsApp Numbers"
+          value={`${connectedAccountsCount} / ${accounts.length || 1} Connected`}
+          icon={Smartphone}
         />
         <StatsCard
-          title="Active Campaigns"
+          title="Running Campaigns"
           value={stats.activeCampaigns}
           icon={CheckCircle2}
         />
@@ -124,16 +140,22 @@ export default function WhatsAppDashboardPage() {
         />
       </div>
 
-      {/* Connection & QR Status */}
-      <WhatsAppStatus onStatusChange={fetchDashboardData} />
+      {/* 1. Connected WhatsApp Numbers Section */}
+      <WhatsAppNumbers 
+        campaigns={campaigns} 
+        onDataChange={fetchDashboardData} 
+      />
 
-      {/* Campaigns Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
+      {/* 2. All Running Campaigns Section (Outside window overview) */}
+      <div className="space-y-4 pt-4 border-t border-border/40">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-semibold text-white">Your Ad Campaigns</h2>
-            <p className="text-xs text-muted-foreground">
-              Each campaign matches specific Facebook Ad quick-reply buttons and sends assigned files.
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <Layers className="w-5 h-5 text-emerald-400" />
+              All Running Campaigns (সবগুলো রানিং ক্যাম্পেইন)
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Overview of all active ad campaigns across your connected numbers. Filter by number or manage any campaign.
             </p>
           </div>
 
@@ -145,31 +167,69 @@ export default function WhatsAppDashboardPage() {
           </Link>
         </div>
 
+        {/* Filter Tabs by Number */}
+        {accounts.length > 0 && (
+          <div className="flex flex-wrap gap-2 pt-1 pb-2">
+            <button
+              onClick={() => setSelectedFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                selectedFilter === 'all'
+                  ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                  : 'bg-secondary/40 border-border/40 text-muted-foreground hover:bg-secondary/70 hover:text-white'
+              }`}
+            >
+              🌐 All Numbers ({campaigns.length})
+            </button>
+
+            {accounts.map(acc => {
+              const count = campaigns.filter(c => c.accountId === acc.id || (!c.accountId && acc.id === 'main') || c.accountId === 'all').length;
+              return (
+                <button
+                  key={acc.id}
+                  onClick={() => setSelectedFilter(acc.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                    selectedFilter === acc.id
+                      ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                      : 'bg-secondary/40 border-border/40 text-muted-foreground hover:bg-secondary/70 hover:text-white'
+                  }`}
+                >
+                  <Phone className="w-3 h-3" />
+                  <span>{acc.name}</span>
+                  <span className="opacity-70">({count})</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Campaigns Grid */}
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-64 rounded-xl bg-card/40 border border-border/40" />
             ))}
           </div>
-        ) : campaigns.length === 0 ? (
-          <div className="text-center py-16 px-4 rounded-2xl bg-card/20 border border-dashed border-border/60">
+        ) : filteredCampaigns.length === 0 ? (
+          <div className="text-center py-14 px-4 rounded-2xl bg-card/20 border border-dashed border-border/60">
             <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto mb-3">
               <Sparkles className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-semibold text-white mb-1">No campaigns created yet</h3>
+            <h3 className="text-base font-semibold text-white mb-1">
+              {selectedFilter === 'all' ? 'No campaigns created yet' : 'No campaigns for this number'}
+            </h3>
             <p className="text-xs text-muted-foreground max-w-md mx-auto mb-6">
-              Create your first WhatsApp Ad campaign (e.g. for Gemini Pro or CapCut) to start automatically sending files to leads.
+              Create an ad campaign to automatically send audio, video, image & text when Facebook Ad leads send keywords.
             </p>
-            <Link href="/whatsapp/campaigns/new">
+            <Link href={selectedFilter === 'all' ? '/whatsapp/campaigns/new' : `/whatsapp/campaigns/new?accountId=${selectedFilter}`}>
               <Button className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs px-5">
                 <Plus className="w-4 h-4 mr-1.5" />
-                Create First Campaign
+                Create New Campaign
               </Button>
             </Link>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {campaigns.map((camp) => (
+            {filteredCampaigns.map((camp) => (
               <CampaignCard
                 key={camp.id}
                 campaign={camp}
@@ -181,8 +241,8 @@ export default function WhatsAppDashboardPage() {
         )}
       </div>
 
-      {/* Message Delivery Logs */}
-      <div className="space-y-3 pt-4">
+      {/* 3. Message Delivery Logs */}
+      <div className="space-y-3 pt-4 border-t border-border/40">
         <WhatsAppMessageLog />
       </div>
     </div>

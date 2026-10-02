@@ -43,7 +43,8 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     const name = (body.name || '').trim() || `SIM ${Date.now().toString().slice(-4)}`;
-    const id = `acc_${uuidv4().slice(0, 8)}`;
+    const phoneNumber = (body.phoneNumber || '').trim();
+    const id = body.id || `acc_${uuidv4().slice(0, 8)}`;
 
     // 1. Notify Railway engine to spin up session
     try {
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
       id,
       name,
       status: 'connecting',
-      phoneNumber: '',
+      phoneNumber: phoneNumber,
       qrCode: '',
       lastConnected: new Date().toISOString(),
     });

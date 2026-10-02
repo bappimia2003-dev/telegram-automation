@@ -1,7 +1,15 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { CampaignForm } from '@/components/CampaignForm';
+
+function NewCampaignContent() {
+  const searchParams = useSearchParams();
+  const accountId = searchParams.get('accountId') || 'all';
+
+  return <CampaignForm isEditing={false} initialData={{ accountId }} />;
+}
 
 export default function NewCampaignPage() {
   return (
@@ -15,7 +23,9 @@ export default function NewCampaignPage() {
         </p>
       </div>
 
-      <CampaignForm isEditing={false} />
+      <Suspense fallback={<div className="h-64 rounded-xl bg-card/40 animate-pulse" />}>
+        <NewCampaignContent />
+      </Suspense>
     </div>
   );
 }
