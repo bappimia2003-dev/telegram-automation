@@ -7,7 +7,7 @@ import { log, errLog } from './utils.js';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3005;
+const PORT = Number(process.env.PORT) || 3005;
 
 app.use(cors());
 app.use(express.json());
@@ -59,8 +59,8 @@ app.post('/disconnect', async (_req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  log('SERVER', `🚀 WhatsApp Automation Engine listening on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  log('SERVER', `🚀 WhatsApp Automation Engine listening on 0.0.0.0:${PORT}`);
 
   // Automatically start WhatsApp on boot
   startWhatsApp().catch((err) => {

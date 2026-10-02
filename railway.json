@@ -1,0 +1,14 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "if [ -d \"wa-engine\" ]; then cd wa-engine; fi && npm install && npm run build"
+  },
+  "deploy": {
+    "startCommand": "if [ -d \"wa-engine\" ]; then cd wa-engine; fi && npm start",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 120,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}
