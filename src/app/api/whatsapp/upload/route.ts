@@ -41,19 +41,31 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. Fallback to local public/uploads/whatsapp
-    const localDir = path.resolve(process.cwd(), 'public', 'uploads', 'whatsapp');
-    if (!fs.existsSync(localDir)) {
-      fs.mkdirSync(localDir, { recursive: true });
-    }
-    const localFilePath = path.join(localDir, safeName);
-    fs.writeFileSync(localFilePath, buffer);
+    // 2. Fallback to local public/uploads/whatsapp if writable
+    try {
+      const localDir = path.resolve(process.cwd(), 'public', 'uploads', 'whatsapp');
+      if (!fs.existsSync(localDir)) {
+        fs.mkdirSync(localDir, { recursive: true });
+      }
+      const localFilePath = path.join(localDir, safeName);
+      fs.writeFileSync(localFilePath, buffer);
 
-    return NextResponse.json({
-      ok: true,
-      url: `/uploads/whatsapp/${safeName}`,
-      filename: file.name,
-    });
+      return NextResponse.json({
+        ok: true,
+        url: `/uploads/whatsapp/${safeName}`,
+        filename: file.name,
+      });
+    } catch (fsErr) {
+      // 3. Resilient fallback for Vercel Serverless (read-only filesystem)
+      const mime = file.type || (type === 'audio' ? 'audio/mpeg' : type === 'video' ? 'video/mp4' : 'application/octet-stream');
+      const dataUri = `data:${mime};base64,${buffer.toString('base64')}`;
+
+      return NextResponse.json({
+        ok: true,
+        url: dataUri,
+        filename: file.name,
+      });
+    }
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }

@@ -46,6 +46,11 @@ async function sendVideoMessage(sock, jid, videoSource, caption) {
     const payload = { video: buffer };
     if (caption)
         payload.caption = caption;
+    if (videoSource.startsWith('data:')) {
+        const match = videoSource.match(/^data:([^;]+);/);
+        if (match && match[1])
+            payload.mimetype = match[1];
+    }
     await sock.sendMessage(jid, payload);
     (0, utils_js_1.log)('SENDER', `Sent video to ${jid}`);
 }
@@ -53,7 +58,13 @@ async function sendAudioMessage(sock, jid, audioSource) {
     const buffer = await getMediaBuffer(audioSource);
     const cleanUrl = audioSource.split('?')[0].toLowerCase();
     let mimetype = 'audio/mp4';
-    if (cleanUrl.endsWith('.ogg') || cleanUrl.endsWith('.opus')) {
+    if (audioSource.startsWith('data:')) {
+        const match = audioSource.match(/^data:([^;]+);/);
+        if (match && match[1]) {
+            mimetype = match[1];
+        }
+    }
+    else if (cleanUrl.endsWith('.ogg') || cleanUrl.endsWith('.opus')) {
         mimetype = 'audio/ogg; codecs=opus';
     }
     else if (cleanUrl.endsWith('.mp3')) {

@@ -355,15 +355,17 @@ export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
             {audioUrl ? (
               <div className="space-y-2">
                 <audio controls src={audioUrl} className="w-full h-9" />
-                <p className="text-[10px] text-muted-foreground truncate">{audioUrl}</p>
+                <p className="text-[10px] text-emerald-400 truncate">
+                  {audioUrl.startsWith('data:') ? '✓ Audio file attached & ready to send' : audioUrl}
+                </p>
               </div>
             ) : (
               <label className="flex flex-col items-center justify-center p-4 border border-dashed border-border/80 rounded-xl cursor-pointer hover:bg-secondary/40 transition-colors">
                 <Upload className="w-6 h-6 text-muted-foreground mb-1" />
-                <span className="text-xs text-muted-foreground">Upload Audio / Voice Note</span>
+                <span className="text-xs text-muted-foreground">Upload Audio / Voice Note (MP3, WAV, OGG, M4A)</span>
                 <input
                   type="file"
-                  accept="audio/*"
+                  accept="audio/*,.mp3,.ogg,.wav,.m4a,.aac,.opus"
                   className="hidden"
                   onChange={(e) => handleFileUpload(e, 'audio')}
                   disabled={uploading === 'audio'}
