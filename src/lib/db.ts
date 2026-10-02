@@ -106,13 +106,16 @@ function botToRow(b: Partial<Bot>): any {
   if (b.aiPersonality !== undefined) row.ai_personality = b.aiPersonality;
   
   const details = b.aiDetails !== undefined ? b.aiDetails : '';
+  const hasMedia = Boolean((b.welcomeImageUrl && b.welcomeImageUrl.trim()) || (b.welcomeAudioUrl && b.welcomeAudioUrl.trim()) || (b.welcomeVideoUrl && b.welcomeVideoUrl.trim()));
+  const enableWelcomeMedia = b.enableWelcomeMedia !== undefined ? Boolean(b.enableWelcomeMedia) : hasMedia;
+
   row.ai_details = JSON.stringify({
     details,
     enableVoice: b.enableVoice !== undefined ? Boolean(b.enableVoice) : true,
     enableVision: b.enableVision !== undefined ? Boolean(b.enableVision) : true,
     enableFiles: b.enableFiles !== undefined ? Boolean(b.enableFiles) : true,
     enableWebSearch: b.enableWebSearch !== undefined ? Boolean(b.enableWebSearch) : false,
-    enableWelcomeMedia: b.enableWelcomeMedia !== undefined ? Boolean(b.enableWelcomeMedia) : false,
+    enableWelcomeMedia: enableWelcomeMedia || hasMedia,
     welcomeImageUrl: b.welcomeImageUrl || '',
     welcomeAudioUrl: b.welcomeAudioUrl || '',
     welcomeAudioType: b.welcomeAudioType || 'voice',
@@ -226,12 +229,20 @@ export async function createBot(bot: Bot): Promise<Bot> {
 
 export async function updateBot(id: string, updates: Partial<Bot>): Promise<Bot | null> {
   const supabase = getSupabase();
-  const rowUpdates = botToRow({ ...updates, updatedAt: new Date().toISOString() });
+  const existingBot = await getBotById(id);
+  
+  const mergedBot: Bot = {
+    ...(existingBot || ({} as Bot)),
+    ...updates,
+    updatedAt: new Date().toISOString()
+  };
+
+  const rowUpdates = botToRow(mergedBot);
 
   if (!supabase) {
     const index = memoryStore.bots.findIndex(b => b.id === id);
     if (index === -1) return null;
-    memoryStore.bots[index] = { ...memoryStore.bots[index], ...updates, updatedAt: new Date().toISOString() };
+    memoryStore.bots[index] = mergedBot;
     return memoryStore.bots[index];
   }
 
@@ -240,7 +251,7 @@ export async function updateBot(id: string, updates: Partial<Bot>): Promise<Bot 
     if (error) console.error('Error updating bot in Supabase:', error.message);
     const index = memoryStore.bots.findIndex(b => b.id === id);
     if (index === -1) return null;
-    memoryStore.bots[index] = { ...memoryStore.bots[index], ...updates, updatedAt: new Date().toISOString() };
+    memoryStore.bots[index] = mergedBot;
     return memoryStore.bots[index];
   }
   return rowToBot(data);

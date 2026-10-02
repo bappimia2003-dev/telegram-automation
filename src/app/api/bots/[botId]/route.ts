@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { getBotById, updateBot, deleteBot } from '@/lib/db';
 import { deleteWebhook } from '@/lib/telegram';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(request: Request, { params }: { params: { botId: string } }) {
   try {
     const bot = await getBotById(params.botId);
@@ -22,10 +25,11 @@ export async function PUT(request: Request, { params }: { params: { botId: strin
     }
     const body = await request.json();
     const updatedBot = { ...bot, ...body };
-    await updateBot(params.botId, updatedBot);
-    return NextResponse.json(updatedBot);
+    const result = await updateBot(params.botId, updatedBot);
+    return NextResponse.json(result || updatedBot);
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('PUT /api/bots/[botId] error:', error);
+    return NextResponse.json({ error: 'Internal server error', details: String(error) }, { status: 500 });
   }
 }
 

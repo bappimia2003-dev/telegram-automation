@@ -48,41 +48,88 @@ export async function POST(
         botUpdates.chatId = String(chatId);
       }
 
-      if (bot.enableWelcomeMedia) {
+      const hasWelcomeMedia = Boolean(
+        bot.enableWelcomeMedia || 
+        (bot.welcomeImageUrl && bot.welcomeImageUrl.trim()) || 
+        (bot.welcomeAudioUrl && bot.welcomeAudioUrl.trim()) || 
+        (bot.welcomeVideoUrl && bot.welcomeVideoUrl.trim())
+      );
+
+      if (hasWelcomeMedia) {
+        let textAlreadySentAsCaption = false;
+
         // 1. Send Welcome Image if configured
-        if (bot.welcomeImageUrl) {
-          sendChatAction(bot.telegramToken, chatId, 'upload_photo').catch(() => {});
-          const imgRes = await sendPhoto(bot.telegramToken, chatId, bot.welcomeImageUrl, welcomeText);
-          if (imgRes.ok && imgRes.fileId && imgRes.fileId !== bot.welcomeImageUrl) {
-            botUpdates.welcomeImageUrl = imgRes.fileId;
-          }
-        } else {
-          await sendMessage(bot.telegramToken, chatId, welcomeText);
-        }
-
-        // 2. Send Welcome Audio / Voice Note if configured
-        if (bot.welcomeAudioUrl) {
-          if (bot.welcomeAudioType === 'audio') {
-            sendChatAction(bot.telegramToken, chatId, 'upload_document').catch(() => {});
-            const audRes = await sendAudio(bot.telegramToken, chatId, bot.welcomeAudioUrl);
-            if (audRes.ok && audRes.fileId && audRes.fileId !== bot.welcomeAudioUrl) {
-              botUpdates.welcomeAudioUrl = audRes.fileId;
+        if (bot.welcomeImageUrl && bot.welcomeImageUrl.trim()) {
+          try {
+            sendChatAction(bot.telegramToken, chatId, 'upload_photo').catch(() => {});
+            const imgRes = await sendPhoto(bot.telegramToken, chatId, bot.welcomeImageUrl.trim(), welcomeText);
+            if (imgRes.ok) {
+              textAlreadySentAsCaption = true;
+              if (imgRes.fileId && imgRes.fileId !== bot.welcomeImageUrl) {
+                botUpdates.welcomeImageUrl = imgRes.fileId;
+              }
+            } else {
+              console.error('sendPhoto failed during /start:', imgRes.error);
             }
-          } else {
-            sendChatAction(bot.telegramToken, chatId, 'record_voice').catch(() => {});
-            const vocRes = await sendVoice(bot.telegramToken, chatId, bot.welcomeAudioUrl);
-            if (vocRes.ok && vocRes.fileId && vocRes.fileId !== bot.welcomeAudioUrl) {
-              botUpdates.welcomeAudioUrl = vocRes.fileId;
-            }
+          } catch (imgErr) {
+            console.error('Error sending welcome image:', imgErr);
           }
         }
 
-        // 3. Send Welcome Video if configured
-        if (bot.welcomeVideoUrl) {
-          sendChatAction(bot.telegramToken, chatId, 'upload_video').catch(() => {});
-          const vidRes = await sendVideo(bot.telegramToken, chatId, bot.welcomeVideoUrl);
-          if (vidRes.ok && vidRes.fileId && vidRes.fileId !== bot.welcomeVideoUrl) {
-            botUpdates.welcomeVideoUrl = vidRes.fileId;
+        // 2. Send Welcome Video if configured
+        if (bot.welcomeVideoUrl && bot.welcomeVideoUrl.trim()) {
+          try {
+            sendChatAction(bot.telegramToken, chatId, 'upload_video').catch(() => {});
+            const vidCaption = !textAlreadySentAsCaption ? welcomeText : undefined;
+            const vidRes = await sendVideo(bot.telegramToken, chatId, bot.welcomeVideoUrl.trim(), vidCaption);
+            if (vidRes.ok) {
+              if (vidCaption) textAlreadySentAsCaption = true;
+              if (vidRes.fileId && vidRes.fileId !== bot.welcomeVideoUrl) {
+                botUpdates.welcomeVideoUrl = vidRes.fileId;
+              }
+            } else {
+              console.error('sendVideo failed during /start:', vidRes.error);
+            }
+          } catch (vidErr) {
+            console.error('Error sending welcome video:', vidErr);
+          }
+        }
+
+        // 3. Send Welcome Audio / Voice Note if configured
+        if (bot.welcomeAudioUrl && bot.welcomeAudioUrl.trim()) {
+          try {
+            if (bot.welcomeAudioType === 'audio') {
+              sendChatAction(bot.telegramToken, chatId, 'upload_document').catch(() => {});
+              const audRes = await sendAudio(bot.telegramToken, chatId, bot.welcomeAudioUrl.trim());
+              if (audRes.ok) {
+                if (audRes.fileId && audRes.fileId !== bot.welcomeAudioUrl) {
+                  botUpdates.welcomeAudioUrl = audRes.fileId;
+                }
+              } else {
+                console.error('sendAudio failed during /start:', audRes.error);
+              }
+            } else {
+              sendChatAction(bot.telegramToken, chatId, 'record_voice').catch(() => {});
+              const vocRes = await sendVoice(bot.telegramToken, chatId, bot.welcomeAudioUrl.trim());
+              if (vocRes.ok) {
+                if (vocRes.fileId && vocRes.fileId !== bot.welcomeAudioUrl) {
+                  botUpdates.welcomeAudioUrl = vocRes.fileId;
+                }
+              } else {
+                console.error('sendVoice failed during /start:', vocRes.error);
+              }
+            }
+          } catch (audErr) {
+            console.error('Error sending welcome audio:', audErr);
+          }
+        }
+
+        // 4. If welcomeText was not sent with image or video caption, send as text message
+        if (!textAlreadySentAsCaption) {
+          try {
+            await sendMessage(bot.telegramToken, chatId, welcomeText);
+          } catch (textErr) {
+            console.error('Error sending welcome text:', textErr);
           }
         }
       } else {

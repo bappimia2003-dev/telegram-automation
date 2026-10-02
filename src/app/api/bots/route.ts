@@ -3,6 +3,9 @@ import { getAllBots, createBot, createApiKey } from '@/lib/db';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const botSchema = z.object({
   name: z.string().min(1, 'Bot name is required'),
   telegramToken: z.string().min(1, 'Telegram token is required'),
@@ -63,7 +66,9 @@ export async function POST(request: Request) {
       enableVision: body.enableVision !== undefined ? Boolean(body.enableVision) : true,
       enableFiles: body.enableFiles !== undefined ? Boolean(body.enableFiles) : true,
       enableWebSearch: body.enableWebSearch !== undefined ? Boolean(body.enableWebSearch) : false,
-      enableWelcomeMedia: body.enableWelcomeMedia !== undefined ? Boolean(body.enableWelcomeMedia) : false,
+      enableWelcomeMedia: body.enableWelcomeMedia !== undefined 
+        ? Boolean(body.enableWelcomeMedia) 
+        : Boolean(body.welcomeImageUrl || body.welcomeAudioUrl || body.welcomeVideoUrl),
       welcomeImageUrl: body.welcomeImageUrl || '',
       welcomeAudioUrl: body.welcomeAudioUrl || '',
       welcomeAudioType: (body.welcomeAudioType || 'voice') as 'voice' | 'audio',

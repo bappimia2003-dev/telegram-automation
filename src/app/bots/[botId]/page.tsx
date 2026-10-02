@@ -25,8 +25,8 @@ export default function BotDetailPage() {
   const fetchBot = async () => {
     try {
       const [botRes, msgRes] = await Promise.all([
-        fetch(`/api/bots/${botId}`),
-        fetch(`/api/bots/${botId}/messages?limit=5`)
+        fetch(`/api/bots/${botId}?t=${Date.now()}`, { cache: 'no-store' }),
+        fetch(`/api/bots/${botId}/messages?limit=5&t=${Date.now()}`, { cache: 'no-store' })
       ]);
       if (!botRes.ok) throw new Error('Failed to fetch bot');
       const data = await botRes.json();

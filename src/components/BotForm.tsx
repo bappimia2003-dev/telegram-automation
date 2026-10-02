@@ -126,6 +126,44 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
     }
   }, [])
 
+  // Sync state if bot prop changes or loads asynchronously
+  React.useEffect(() => {
+    if (!bot) return
+    if (bot.name !== undefined) setName(bot.name || "")
+    if (bot.telegramToken || bot.token) setToken(bot.telegramToken || bot.token || "")
+    if (bot.chatId !== undefined) setChatId(bot.chatId || "5353767367")
+    if (bot.aiPersonality || bot.personality) setPersonality(bot.aiPersonality || bot.personality || "")
+    if (bot.aiDetails !== undefined || bot.details !== undefined) setDetails(bot.aiDetails ?? bot.details ?? "")
+    if (bot.responseStyle || bot.style) setStyle(bot.responseStyle || bot.style || "friendly")
+    if (bot.maxTokens || bot.maxLength) setMaxLength(bot.maxTokens || bot.maxLength || 500)
+    if (bot.apiKeyId) {
+      setSelectedKeyId(bot.apiKeyId)
+      setKeyMode('existing')
+    }
+    if (bot.isActive !== undefined) setAutoActivate(Boolean(bot.isActive))
+    if (bot.enableVoice !== undefined) setEnableVoice(Boolean(bot.enableVoice))
+    if (bot.enableVision !== undefined) setEnableVision(Boolean(bot.enableVision))
+    if (bot.enableFiles !== undefined) setEnableFiles(Boolean(bot.enableFiles))
+    if (bot.enableWebSearch !== undefined) setEnableWebSearch(Boolean(bot.enableWebSearch))
+    
+    const hasMedia = Boolean((bot.welcomeImageUrl && bot.welcomeImageUrl.trim()) || (bot.welcomeAudioUrl && bot.welcomeAudioUrl.trim()) || (bot.welcomeVideoUrl && bot.welcomeVideoUrl.trim()))
+    if (bot.enableWelcomeMedia !== undefined) {
+      setEnableWelcomeMedia(Boolean(bot.enableWelcomeMedia) || hasMedia)
+    } else if (hasMedia) {
+      setEnableWelcomeMedia(true)
+    }
+
+    if (bot.welcomeImageUrl !== undefined) setWelcomeImageUrl(bot.welcomeImageUrl || "")
+    if (bot.welcomeAudioUrl !== undefined) setWelcomeAudioUrl(bot.welcomeAudioUrl || "")
+    if (bot.welcomeAudioType) setWelcomeAudioType(bot.welcomeAudioType)
+    if (bot.welcomeVideoUrl !== undefined) setWelcomeVideoUrl(bot.welcomeVideoUrl || "")
+    if (bot.welcomeMessage !== undefined) setWelcomeMessage(bot.welcomeMessage || "")
+    if (bot.workInfo !== undefined) setWorkInfo(bot.workInfo || "")
+    if (bot.productFileUrl !== undefined) setProductFileUrl(bot.productFileUrl || "")
+    if (bot.productFileName !== undefined) setProductFileName(bot.productFileName || "")
+    if (bot.productFileContent !== undefined) setProductFileContent(bot.productFileContent || "")
+  }, [bot])
+
   const startVoiceRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -159,6 +197,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
           if (result.url) {
             setWelcomeAudioUrl(result.url)
             setWelcomeAudioType('voice')
+            setEnableWelcomeMedia(true)
           }
         } catch (err: any) {
           console.error('Failed to upload recorded voice:', err)
@@ -217,6 +256,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
           setWelcomeAudioType('audio')
         }
         if (type === 'video') setWelcomeVideoUrl(result.url)
+        setEnableWelcomeMedia(true)
       }
     } catch (err: any) {
       console.error(`Failed to upload ${type}:`, err)
@@ -289,6 +329,9 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
+    const hasMedia = Boolean(welcomeImageUrl.trim() || welcomeAudioUrl.trim() || welcomeVideoUrl.trim());
+    const finalEnableWelcomeMedia = Boolean(enableWelcomeMedia || hasMedia);
+
     const payload: any = {
       name: name.trim(),
       telegramToken: token.trim(),
@@ -308,7 +351,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
       enableVision,
       enableFiles,
       enableWebSearch,
-      enableWelcomeMedia,
+      enableWelcomeMedia: finalEnableWelcomeMedia,
       welcomeImageUrl: welcomeImageUrl.trim(),
       welcomeAudioUrl: welcomeAudioUrl.trim(),
       welcomeAudioType,

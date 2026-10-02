@@ -16,13 +16,14 @@ export default function BotSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [botRes, keysRes] = await Promise.all([
-          fetch(`/api/bots/${botId}`),
-          fetch('/api/api-keys')
+          fetch(`/api/bots/${botId}?t=${Date.now()}`, { cache: 'no-store' }),
+          fetch(`/api/api-keys?t=${Date.now()}`, { cache: 'no-store' })
         ]);
         const botData = await botRes.json();
         const keysData = await keysRes.json();
@@ -40,6 +41,7 @@ export default function BotSettingsPage() {
   const handleSubmit = async (formData: any) => {
     setSubmitting(true);
     setErrorMsg('');
+    setSuccessMsg('');
     try {
       const res = await fetch(`/api/bots/${botId}`, {
         method: 'PUT',
@@ -51,6 +53,9 @@ export default function BotSettingsPage() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Failed to update bot');
       }
+
+      const updatedBot = await res.json();
+      setBot(updatedBot);
 
       // If auto-activate status changed, handle webhook accordingly
       const shouldBeActive = Boolean(formData.autoActivate || formData.isActive);
@@ -65,8 +70,11 @@ export default function BotSettingsPage() {
         }
       }
 
-      router.push(`/bots/${botId}`);
-      router.refresh();
+      setSuccessMsg('✅ বটের সেটিংস সফলভাবে সংরক্ষিত হয়েছে! (Settings saved successfully)');
+      setTimeout(() => {
+        router.push(`/bots/${botId}`);
+        router.refresh();
+      }, 700);
     } catch (error: any) {
       console.error(error);
       setErrorMsg(error?.message || 'Failed to update bot');
@@ -103,6 +111,12 @@ export default function BotSettingsPage() {
       {errorMsg && (
         <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
           {errorMsg}
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-sm font-medium animate-in fade-in">
+          {successMsg}
         </div>
       )}
 

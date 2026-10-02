@@ -20,8 +20,8 @@ export default function DashboardPage() {
   const fetchDashboardData = async () => {
     try {
       const [botsRes, statsRes] = await Promise.all([
-        fetch('/api/bots'),
-        fetch('/api/stats')
+        fetch(`/api/bots?t=${Date.now()}`, { cache: 'no-store' }),
+        fetch(`/api/stats?t=${Date.now()}`, { cache: 'no-store' })
       ]);
       const botsData = await botsRes.json().catch(() => []);
       const statsData = await statsRes.json().catch(() => ({}));
