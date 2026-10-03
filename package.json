@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node wa-engine/dist/index.js || next start",
+    "start:web": "next start",
     "lint": "next lint",
     "wa:engine": "npm --prefix wa-engine run dev",
     "build:engine": "node scripts/build-engine.js"
@@ -16,7 +17,9 @@
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cors": "^2.8.6",
     "dotenv": "^18.0.5",
+    "express": "^4.22.3",
     "framer-motion": "^11.11.0",
     "jose": "^5.9.0",
     "lucide-react": "^0.460.0",

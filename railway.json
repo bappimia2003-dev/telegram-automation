@@ -21,7 +21,7 @@
     }
   },
   "deploy": {
-    "startCommand": "if [ -d \"wa-engine\" ]; then cd wa-engine; fi && npm start",
+    "startCommand": "node wa-engine/dist/index.js || node dist/index.js || npm start",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",
