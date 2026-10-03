@@ -147,8 +147,8 @@ async function processIncomingMessage(sock, sender, pushName, messageText, accou
             (0, utils_js_1.log)('CAMPAIGN', `Selected variation "${selectedVariant.name}" has no media or text content to send.`);
             return;
         }
-        // 3. First Message Delay: 2 to 3 seconds in random milliseconds (after read)
-        const firstDelay = getRandomDelay(2000, 3000, lastFirstDelayMs);
+        // 3. First Message Delay: 3 to 4 seconds in random milliseconds (after read)
+        const firstDelay = getRandomDelay(3000, 4000, lastFirstDelayMs);
         lastFirstDelayMs = firstDelay;
         (0, utils_js_1.log)('CAMPAIGN', `⏳ Waiting ${(firstDelay / 1000).toFixed(3)}s (${firstDelay}ms) before sending 1st item to ${sender}...`);
         await (0, utils_js_1.sleep)(firstDelay);

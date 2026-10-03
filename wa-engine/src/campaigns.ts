@@ -180,8 +180,8 @@ export async function processIncomingMessage(
       return;
     }
 
-    // 3. First Message Delay: 2 to 3 seconds in random milliseconds (after read)
-    const firstDelay = getRandomDelay(2000, 3000, lastFirstDelayMs);
+    // 3. First Message Delay: 3 to 4 seconds in random milliseconds (after read)
+    const firstDelay = getRandomDelay(3000, 4000, lastFirstDelayMs);
     lastFirstDelayMs = firstDelay;
     log('CAMPAIGN', `⏳ Waiting ${(firstDelay / 1000).toFixed(3)}s (${firstDelay}ms) before sending 1st item to ${sender}...`);
     await sleep(firstDelay);

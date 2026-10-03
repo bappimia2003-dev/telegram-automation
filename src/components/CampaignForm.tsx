@@ -739,7 +739,7 @@ export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
                 className="bg-background/50 border-border/60"
               />
               <p className="text-[11px] text-emerald-400/90">
-                ⚡ 1st message: 2-3s random ms after read | 2nd & subsequent items: 1-2s non-identical random ms.
+                ⚡ 1st message: 3-4s random ms after read | 2nd & subsequent items: 1-2s non-identical random ms.
               </p>
             </div>
           </div>
