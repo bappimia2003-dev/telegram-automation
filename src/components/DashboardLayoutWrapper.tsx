@@ -15,7 +15,7 @@ export function DashboardLayoutWrapper({ children }: { children: React.ReactNode
 
   return (
     <ToastProvider>
-      <div className="flex min-h-screen bg-background text-foreground overflow-x-hidden">
+      <div className="flex min-h-screen bg-background text-foreground relative">
         <Sidebar />
         
         <div className="flex-1 md:ml-64 flex flex-col min-h-screen w-full min-w-0">
@@ -35,7 +35,7 @@ export function DashboardLayoutWrapper({ children }: { children: React.ReactNode
             </div>
           </header>
 
-          <main className="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto w-full">
+          <main className="flex-1 p-4 sm:p-6 md:p-8 w-full">
             <div className="max-w-6xl mx-auto w-full">
               {children}
             </div>

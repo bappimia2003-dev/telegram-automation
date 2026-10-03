@@ -223,8 +223,8 @@ export async function startWhatsApp(accountId = 'main', accountName?: string): P
 
         log('WA', `📩 [${session.name}] Incoming from ${sender} (${pushName}): "${messageText}"`);
 
-        // Process message in background with accountId
-        processIncomingMessage(sock, sender, pushName, messageText, accountId).catch((err) => {
+        // Process message in background with accountId and message key for read receipts
+        processIncomingMessage(sock, sender, pushName, messageText, accountId, msg.key).catch((err) => {
           errLog('WA', `Error handling incoming message on ${session.name}:`, err.message);
         });
       }

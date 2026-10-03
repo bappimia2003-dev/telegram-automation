@@ -2,6 +2,18 @@
 // WhatsApp Automation System - Type Definitions
 // =============================================
 
+export interface WaCampaignVariant {
+  id: string;
+  name: string;
+  isActive: boolean;
+  welcomeMessage: string;
+  imageUrl: string;
+  audioUrl: string;
+  videoUrl: string;
+  documentUrl: string;
+  documentName: string;
+}
+
 export interface WaCampaign {
   id: string;
   name: string;
@@ -11,13 +23,16 @@ export interface WaCampaign {
   keywords: string; // comma-separated: "gemini pro,gemini,pro"
   isDefault: boolean; // keyword match না হলে এটার files যাবে
 
-  // Auto-send media files
+  // Auto-send media files (Default / Variant 1)
   welcomeMessage: string;
   imageUrl: string;
   audioUrl: string;
   videoUrl: string;
   documentUrl: string;
   documentName: string;
+
+  // Multiple variations / A/B rotation
+  variants?: WaCampaignVariant[];
 
   // Send order & delay
   sendOrder: string; // comma-separated: 'message,image,video,audio,document'

@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getWaConnection, getWaDashboardStats } from '@/lib/whatsappDb';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const WA_ENGINE_URL = process.env.WA_ENGINE_URL || 'http://localhost:3005';
 
 export async function GET() {

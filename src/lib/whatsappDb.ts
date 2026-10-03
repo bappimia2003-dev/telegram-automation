@@ -1,5 +1,5 @@
 import { getSupabase } from './supabase';
-import { WaCampaign, WaContactedUser, WaMessageLog, WaConnection, WaDashboardStats } from './whatsappTypes';
+import { WaCampaign, WaCampaignVariant, WaContactedUser, WaMessageLog, WaConnection, WaDashboardStats } from './whatsappTypes';
 
 // =============================================
 // In-memory fallback (same pattern as db.ts)
@@ -21,16 +21,65 @@ const waMemory = {
 // =============================================
 // Row Mappers (snake_case <-> camelCase)
 // =============================================
-function rowToCampaign(r: any): WaCampaign {
-  let description = r.description || '';
+function parseDescriptionTags(rawDesc: string): { accountId: string; variants: WaCampaignVariant[]; description: string } {
+  let description = rawDesc || '';
   let accountId = 'all';
+  let variants: WaCampaignVariant[] = [];
 
-  if (description.startsWith('[acc:')) {
-    const endIdx = description.indexOf(']');
-    if (endIdx !== -1) {
-      accountId = description.substring(5, endIdx);
-      description = description.substring(endIdx + 1).trim();
+  // Extract [acc:...]
+  if (description.includes('[acc:')) {
+    const start = description.indexOf('[acc:');
+    const end = description.indexOf(']', start);
+    if (end !== -1) {
+      accountId = description.substring(start + 5, end);
+      description = (description.substring(0, start) + description.substring(end + 1)).trim();
     }
+  }
+
+  // Extract [vars:...]
+  if (description.includes('[vars:')) {
+    const start = description.indexOf('[vars:');
+    const end = description.indexOf(']', start);
+    if (end !== -1) {
+      const varsRaw = description.substring(start + 6, end);
+      try {
+        let decoded = varsRaw;
+        if (!varsRaw.startsWith('[')) {
+          decoded = Buffer.from(varsRaw, 'base64').toString('utf-8');
+        }
+        const parsed = JSON.parse(decoded);
+        if (Array.isArray(parsed)) {
+          variants = parsed;
+        }
+      } catch (e) {
+        // ignore parse error
+      }
+      description = (description.substring(0, start) + description.substring(end + 1)).trim();
+    }
+  }
+
+  return { accountId, variants, description };
+}
+
+function rowToCampaign(r: any): WaCampaign {
+  const { accountId, variants: parsedVariants, description } = parseDescriptionTags(r.description || '');
+
+  // If no variants array in description, construct default variant 1 from row data
+  let variants = parsedVariants;
+  if (!variants || variants.length === 0) {
+    variants = [
+      {
+        id: 'var_1',
+        name: 'Variation 1',
+        isActive: true,
+        welcomeMessage: r.welcome_message || '',
+        imageUrl: r.image_url || '',
+        audioUrl: r.audio_url || '',
+        videoUrl: r.video_url || '',
+        documentUrl: r.document_url || '',
+        documentName: r.document_name || '',
+      },
+    ];
   }
 
   return {
@@ -46,6 +95,7 @@ function rowToCampaign(r: any): WaCampaign {
     videoUrl: r.video_url || '',
     documentUrl: r.document_url || '',
     documentName: r.document_name || '',
+    variants,
     sendOrder: r.send_order || 'message,image,video,audio,document',
     delayBetweenSends: r.delay_between_sends ?? 3,
     isActive: Boolean(r.is_active),
@@ -60,8 +110,12 @@ function campaignToRow(c: Partial<WaCampaign>): any {
   const row: any = {};
   if (c.id !== undefined) row.id = c.id;
   if (c.name !== undefined) row.name = c.name;
-  if (c.description !== undefined || c.accountId !== undefined) {
+  if (c.description !== undefined || c.accountId !== undefined || c.variants !== undefined) {
     let desc = c.description || '';
+    if (c.variants && c.variants.length > 0) {
+      const base64Vars = Buffer.from(JSON.stringify(c.variants)).toString('base64');
+      desc = `[vars:${base64Vars}] ${desc}`;
+    }
     if (c.accountId && c.accountId !== 'all') {
       desc = `[acc:${c.accountId}] ${desc}`;
     }
@@ -69,12 +123,34 @@ function campaignToRow(c: Partial<WaCampaign>): any {
   }
   if (c.keywords !== undefined) row.keywords = c.keywords;
   if (c.isDefault !== undefined) row.is_default = c.isDefault;
-  if (c.welcomeMessage !== undefined) row.welcome_message = c.welcomeMessage;
-  if (c.imageUrl !== undefined) row.image_url = c.imageUrl;
-  if (c.audioUrl !== undefined) row.audio_url = c.audioUrl;
-  if (c.videoUrl !== undefined) row.video_url = c.videoUrl;
-  if (c.documentUrl !== undefined) row.document_url = c.documentUrl;
-  if (c.documentName !== undefined) row.document_name = c.documentName;
+
+  // Set top-level media fields, defaulting to first active variant if variants exist
+  let welcomeMsg = c.welcomeMessage;
+  let imgUrl = c.imageUrl;
+  let audUrl = c.audioUrl;
+  let vidUrl = c.videoUrl;
+  let docUrl = c.documentUrl;
+  let docName = c.documentName;
+
+  if (c.variants && c.variants.length > 0) {
+    const primary = c.variants.find((v) => v.isActive) || c.variants[0];
+    if (primary) {
+      if (welcomeMsg === undefined) welcomeMsg = primary.welcomeMessage;
+      if (imgUrl === undefined) imgUrl = primary.imageUrl;
+      if (audUrl === undefined) audUrl = primary.audioUrl;
+      if (vidUrl === undefined) vidUrl = primary.videoUrl;
+      if (docUrl === undefined) docUrl = primary.documentUrl;
+      if (docName === undefined) docName = primary.documentName;
+    }
+  }
+
+  if (welcomeMsg !== undefined) row.welcome_message = welcomeMsg;
+  if (imgUrl !== undefined) row.image_url = imgUrl;
+  if (audUrl !== undefined) row.audio_url = audUrl;
+  if (vidUrl !== undefined) row.video_url = vidUrl;
+  if (docUrl !== undefined) row.document_url = docUrl;
+  if (docName !== undefined) row.document_name = docName;
+
   if (c.sendOrder !== undefined) row.send_order = c.sendOrder;
   if (c.delayBetweenSends !== undefined) row.delay_between_sends = c.delayBetweenSends;
   if (c.isActive !== undefined) row.is_active = c.isActive;

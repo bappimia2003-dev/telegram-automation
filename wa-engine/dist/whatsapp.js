@@ -204,8 +204,8 @@ async function startWhatsApp(accountId = 'main', accountName) {
                     msg.message?.videoMessage?.caption ||
                     '';
                 (0, utils_js_1.log)('WA', `📩 [${session.name}] Incoming from ${sender} (${pushName}): "${messageText}"`);
-                // Process message in background with accountId
-                (0, campaigns_js_1.processIncomingMessage)(sock, sender, pushName, messageText, accountId).catch((err) => {
+                // Process message in background with accountId and message key for read receipts
+                (0, campaigns_js_1.processIncomingMessage)(sock, sender, pushName, messageText, accountId, msg.key).catch((err) => {
                     (0, utils_js_1.errLog)('WA', `Error handling incoming message on ${session.name}:`, err.message);
                 });
             }

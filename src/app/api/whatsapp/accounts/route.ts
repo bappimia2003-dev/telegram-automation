@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { getAllWaConnections, updateWaConnection } from '@/lib/whatsappDb';
 import { v4 as uuidv4 } from 'uuid';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const WA_ENGINE_URL = process.env.WA_ENGINE_URL || 'http://localhost:3005';
 
 export async function GET() {

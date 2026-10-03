@@ -32,15 +32,60 @@ if (SUPABASE_URL && SUPABASE_KEY) {
 else {
     (0, utils_js_1.errLog)('DB', 'SUPABASE_URL or SUPABASE_KEY missing in environment!');
 }
-function rowToCampaign(r) {
-    let description = r.description || '';
+function parseDescriptionTags(rawDesc) {
+    let description = rawDesc || '';
     let accountId = 'all';
-    if (description.startsWith('[acc:')) {
-        const endIdx = description.indexOf(']');
-        if (endIdx !== -1) {
-            accountId = description.substring(5, endIdx);
-            description = description.substring(endIdx + 1).trim();
+    let variants = [];
+    // Extract [acc:...]
+    if (description.includes('[acc:')) {
+        const start = description.indexOf('[acc:');
+        const end = description.indexOf(']', start);
+        if (end !== -1) {
+            accountId = description.substring(start + 5, end);
+            description = (description.substring(0, start) + description.substring(end + 1)).trim();
         }
+    }
+    // Extract [vars:...]
+    if (description.includes('[vars:')) {
+        const start = description.indexOf('[vars:');
+        const end = description.indexOf(']', start);
+        if (end !== -1) {
+            const varsRaw = description.substring(start + 6, end);
+            try {
+                let decoded = varsRaw;
+                if (!varsRaw.startsWith('[')) {
+                    decoded = Buffer.from(varsRaw, 'base64').toString('utf-8');
+                }
+                const parsed = JSON.parse(decoded);
+                if (Array.isArray(parsed)) {
+                    variants = parsed;
+                }
+            }
+            catch (e) {
+                // ignore parse error
+            }
+            description = (description.substring(0, start) + description.substring(end + 1)).trim();
+        }
+    }
+    return { accountId, variants, description };
+}
+function rowToCampaign(r) {
+    const { accountId, variants: parsedVariants, description } = parseDescriptionTags(r.description || '');
+    let variants = parsedVariants;
+    if (!variants || variants.length === 0) {
+        variants = [
+            {
+                id: 'var_1',
+                name: 'Variation 1',
+                isActive: true,
+                welcomeMessage: r.welcome_message || '',
+                imageUrl: r.image_url || '',
+                audioUrl: r.audio_url || '',
+                videoUrl: r.video_url || '',
+                documentUrl: r.document_url || '',
+                documentName: r.document_name || '',
+            },
+        ];
     }
     return {
         id: r.id,
@@ -55,6 +100,7 @@ function rowToCampaign(r) {
         videoUrl: r.video_url || '',
         documentUrl: r.document_url || '',
         documentName: r.document_name || '',
+        variants,
         sendOrder: r.send_order || 'message,image,video,audio,document',
         delayBetweenSends: r.delay_between_sends ?? 3,
         isActive: Boolean(r.is_active),

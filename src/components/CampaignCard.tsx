@@ -18,7 +18,8 @@ import {
   Trash2, 
   Clock,
   Sparkles,
-  Phone
+  Phone,
+  Layers
 } from 'lucide-react';
 import { WaCampaign } from '@/lib/whatsappTypes';
 
@@ -59,12 +60,16 @@ export function CampaignCard({ campaign, onToggleActive, onDelete }: CampaignCar
     .map(k => k.trim())
     .filter(Boolean);
 
+  const activeVariants = (campaign.variants && campaign.variants.length > 0)
+    ? campaign.variants.filter(v => v.isActive)
+    : [];
+
   const hasMedia = {
-    text: Boolean(campaign.welcomeMessage?.trim()),
-    image: Boolean(campaign.imageUrl?.trim()),
-    video: Boolean(campaign.videoUrl?.trim()),
-    audio: Boolean(campaign.audioUrl?.trim()),
-    document: Boolean(campaign.documentUrl?.trim()),
+    text: Boolean(campaign.welcomeMessage?.trim()) || activeVariants.some(v => Boolean(v.welcomeMessage?.trim())),
+    image: Boolean(campaign.imageUrl?.trim()) || activeVariants.some(v => Boolean(v.imageUrl?.trim())),
+    video: Boolean(campaign.videoUrl?.trim()) || activeVariants.some(v => Boolean(v.videoUrl?.trim())),
+    audio: Boolean(campaign.audioUrl?.trim()) || activeVariants.some(v => Boolean(v.audioUrl?.trim())),
+    document: Boolean(campaign.documentUrl?.trim()) || activeVariants.some(v => Boolean(v.documentUrl?.trim())),
   };
 
   return (
@@ -81,6 +86,12 @@ export function CampaignCard({ campaign, onToggleActive, onDelete }: CampaignCar
                   <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-300 border-amber-500/30 flex items-center gap-1">
                     <Sparkles className="w-2.5 h-2.5" />
                     Default
+                  </Badge>
+                )}
+                {campaign.variants && campaign.variants.length > 1 && (
+                  <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-300 border-purple-500/30 flex items-center gap-1">
+                    <Layers className="w-2.5 h-2.5" />
+                    {campaign.variants.filter(v => v.isActive).length} Variations
                   </Badge>
                 )}
                 <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-300 border-emerald-500/30 flex items-center gap-1">

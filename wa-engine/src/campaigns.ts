@@ -68,12 +68,30 @@ export async function matchCampaign(messageText: string, accountId?: string): Pr
   return null;
 }
 
+// Track last used variant index per campaign for round-robin switching
+const lastVariantIndexMap = new Map<string, number>();
+
+// Track previous delays to ensure each random millisecond differs from the last
+let lastFirstDelayMs = 0;
+let lastSubsequentDelayMs = 0;
+
+function getRandomDelay(minMs: number, maxMs: number, previousDelay: number): number {
+  let delay: number;
+  let attempts = 0;
+  do {
+    delay = Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
+    attempts++;
+  } while (delay === previousDelay && attempts < 10);
+  return delay;
+}
+
 export async function processIncomingMessage(
   sock: any,
   sender: string,
   pushName: string,
   messageText: string,
-  accountId?: string
+  accountId?: string,
+  messageKey?: any
 ): Promise<void> {
   try {
     const campaign = await matchCampaign(messageText, accountId);
@@ -82,21 +100,105 @@ export async function processIncomingMessage(
       return;
     }
 
-    log('CAMPAIGN', `🚀 [Acc: ${accountId || 'all'}] Triggered by keyword! Starting delivery for ${sender} (${pushName}) -> Campaign: "${campaign.name}"`);
+    log('CAMPAIGN', `🚀 [Acc: ${accountId || 'all'}] Triggered by keyword! Preparing delivery for ${sender} (${pushName}) -> Campaign: "${campaign.name}"`);
+
+    // 1. Mark incoming message as read (blue ticks in WhatsApp)
+    if (messageKey) {
+      try {
+        await sock.readMessages([messageKey]);
+        log('CAMPAIGN', `Marked incoming message from ${sender} as READ.`);
+      } catch (readErr: any) {
+        // Continue even if read receipt fails
+      }
+    }
+
+    // Set human-like typing presence
+    try {
+      await sock.sendPresenceUpdate('composing', sender);
+    } catch (presErr: any) {
+      // Ignore presence error
+    }
+
+    // 2. Select Active Variant (Variation Switching System)
+    let activeVariants = (campaign.variants || []).filter((v) => v.isActive);
+
+    // If no variants defined or all disabled, fallback to campaign's top-level info
+    if (activeVariants.length === 0) {
+      activeVariants = [
+        {
+          id: 'var_default',
+          name: 'Main Variation',
+          isActive: true,
+          welcomeMessage: campaign.welcomeMessage || '',
+          imageUrl: campaign.imageUrl || '',
+          audioUrl: campaign.audioUrl || '',
+          videoUrl: campaign.videoUrl || '',
+          documentUrl: campaign.documentUrl || '',
+          documentName: campaign.documentName || '',
+        },
+      ];
+    }
+
+    // Rotate or randomly switch between active variations
+    let selectedVariant = activeVariants[0];
+    if (activeVariants.length > 1) {
+      const lastIndex = lastVariantIndexMap.get(campaign.id) ?? -1;
+      const nextIndex = (lastIndex + 1) % activeVariants.length;
+      lastVariantIndexMap.set(campaign.id, nextIndex);
+      selectedVariant = activeVariants[nextIndex];
+      log(
+        'CAMPAIGN',
+        `🔀 [Variation Switching] Selected "${selectedVariant.name}" (${nextIndex + 1} of ${activeVariants.length} active variations) for ${sender}`
+      );
+    } else {
+      log('CAMPAIGN', `ℹ️ [Variation] Using "${selectedVariant.name}" for ${sender}`);
+    }
 
     const orderList = campaign.sendOrder
       .split(',')
       .map((item) => item.trim().toLowerCase())
       .filter(Boolean);
 
+    // Filter which items in the send order actually have content in this variant
+    const itemsToSend: string[] = [];
+    for (const item of orderList) {
+      if (item === 'message' && selectedVariant.welcomeMessage && selectedVariant.welcomeMessage.trim()) {
+        itemsToSend.push('message');
+      } else if (item === 'image' && selectedVariant.imageUrl && selectedVariant.imageUrl.trim()) {
+        itemsToSend.push('image');
+      } else if (item === 'video' && selectedVariant.videoUrl && selectedVariant.videoUrl.trim()) {
+        itemsToSend.push('video');
+      } else if (item === 'audio' && selectedVariant.audioUrl && selectedVariant.audioUrl.trim()) {
+        itemsToSend.push('audio');
+      } else if (item === 'document' && selectedVariant.documentUrl && selectedVariant.documentUrl.trim()) {
+        itemsToSend.push('document');
+      }
+    }
+
+    if (itemsToSend.length === 0) {
+      log('CAMPAIGN', `Selected variation "${selectedVariant.name}" has no media or text content to send.`);
+      return;
+    }
+
+    // 3. First Message Delay: 2 to 3 seconds in random milliseconds (after read)
+    const firstDelay = getRandomDelay(2000, 3000, lastFirstDelayMs);
+    lastFirstDelayMs = firstDelay;
+    log('CAMPAIGN', `⏳ Waiting ${(firstDelay / 1000).toFixed(3)}s (${firstDelay}ms) before sending 1st item to ${sender}...`);
+    await sleep(firstDelay);
+
     let allSuccessful = true;
 
-    for (const item of orderList) {
-      try {
-        let sent = false;
+    for (let i = 0; i < itemsToSend.length; i++) {
+      const item = itemsToSend[i];
 
-        if (item === 'message' && campaign.welcomeMessage && campaign.welcomeMessage.trim()) {
-          await sendTextMessage(sock, sender, campaign.welcomeMessage.trim());
+      // Keep typing presence alive
+      try {
+        await sock.sendPresenceUpdate('composing', sender);
+      } catch (e) {}
+
+      try {
+        if (item === 'message') {
+          await sendTextMessage(sock, sender, selectedVariant.welcomeMessage.trim());
           await addMessageLog({
             id: uuidv4(),
             campaignId: campaign.id,
@@ -108,10 +210,9 @@ export async function processIncomingMessage(
             errorMessage: '',
             sentAt: new Date().toISOString(),
           });
-          sent = true;
-        } else if (item === 'image' && campaign.imageUrl && campaign.imageUrl.trim()) {
-          await sendImageMessage(sock, sender, campaign.imageUrl.trim());
-          const cleanLogUrl = campaign.imageUrl.startsWith('data:') ? 'photo.jpg' : campaign.imageUrl.trim();
+        } else if (item === 'image') {
+          await sendImageMessage(sock, sender, selectedVariant.imageUrl.trim());
+          const cleanLogUrl = selectedVariant.imageUrl.startsWith('data:') ? 'photo.jpg' : selectedVariant.imageUrl.trim();
           await addMessageLog({
             id: uuidv4(),
             campaignId: campaign.id,
@@ -123,10 +224,9 @@ export async function processIncomingMessage(
             errorMessage: '',
             sentAt: new Date().toISOString(),
           });
-          sent = true;
-        } else if (item === 'video' && campaign.videoUrl && campaign.videoUrl.trim()) {
-          await sendVideoMessage(sock, sender, campaign.videoUrl.trim());
-          const cleanLogUrl = campaign.videoUrl.startsWith('data:') ? 'video.mp4' : campaign.videoUrl.trim();
+        } else if (item === 'video') {
+          await sendVideoMessage(sock, sender, selectedVariant.videoUrl.trim());
+          const cleanLogUrl = selectedVariant.videoUrl.startsWith('data:') ? 'video.mp4' : selectedVariant.videoUrl.trim();
           await addMessageLog({
             id: uuidv4(),
             campaignId: campaign.id,
@@ -138,10 +238,9 @@ export async function processIncomingMessage(
             errorMessage: '',
             sentAt: new Date().toISOString(),
           });
-          sent = true;
-        } else if (item === 'audio' && campaign.audioUrl && campaign.audioUrl.trim()) {
-          await sendAudioMessage(sock, sender, campaign.audioUrl.trim());
-          const cleanLogUrl = campaign.audioUrl.startsWith('data:') ? 'voice_note.mp3' : campaign.audioUrl.trim();
+        } else if (item === 'audio') {
+          await sendAudioMessage(sock, sender, selectedVariant.audioUrl.trim());
+          const cleanLogUrl = selectedVariant.audioUrl.startsWith('data:') ? 'voice_note.mp3' : selectedVariant.audioUrl.trim();
           await addMessageLog({
             id: uuidv4(),
             campaignId: campaign.id,
@@ -153,11 +252,10 @@ export async function processIncomingMessage(
             errorMessage: '',
             sentAt: new Date().toISOString(),
           });
-          sent = true;
-        } else if (item === 'document' && campaign.documentUrl && campaign.documentUrl.trim()) {
-          const docName = campaign.documentName || 'Document';
-          await sendDocumentMessage(sock, sender, campaign.documentUrl.trim(), docName);
-          const cleanLogUrl = campaign.documentUrl.startsWith('data:') ? docName : campaign.documentUrl.trim();
+        } else if (item === 'document') {
+          const docName = selectedVariant.documentName || 'Document';
+          await sendDocumentMessage(sock, sender, selectedVariant.documentUrl.trim(), docName);
+          const cleanLogUrl = selectedVariant.documentUrl.startsWith('data:') ? docName : selectedVariant.documentUrl.trim();
           await addMessageLog({
             id: uuidv4(),
             campaignId: campaign.id,
@@ -169,12 +267,14 @@ export async function processIncomingMessage(
             errorMessage: '',
             sentAt: new Date().toISOString(),
           });
-          sent = true;
         }
 
-        if (sent && campaign.delayBetweenSends > 0) {
-          log('CAMPAIGN', `Waiting ${campaign.delayBetweenSends}s before next item...`);
-          await sleep(campaign.delayBetweenSends * 1000);
+        // 4. Delay Before Next Item: 1 to 2 seconds in random milliseconds (non-matching)
+        if (i < itemsToSend.length - 1) {
+          const nextDelay = getRandomDelay(1000, 2000, lastSubsequentDelayMs);
+          lastSubsequentDelayMs = nextDelay;
+          log('CAMPAIGN', `⏳ Waiting ${(nextDelay / 1000).toFixed(3)}s (${nextDelay}ms) before item ${i + 2}...`);
+          await sleep(nextDelay);
         }
       } catch (itemErr: any) {
         errLog('CAMPAIGN', `Error sending item "${item}":`, itemErr.message);
@@ -193,7 +293,7 @@ export async function processIncomingMessage(
       }
     }
 
-    // Mark user as contacted (One-time guarantee!)
+    // Mark user as contacted
     await markAsContacted({
       id: uuidv4(),
       campaignId: campaign.id,

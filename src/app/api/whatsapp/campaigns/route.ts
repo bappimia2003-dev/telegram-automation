@@ -3,6 +3,9 @@ import { getAllCampaigns, createCampaign } from '@/lib/whatsappDb';
 import { WaCampaign } from '@/lib/whatsappTypes';
 import { v4 as uuidv4 } from 'uuid';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET() {
   try {
     const campaigns = await getAllCampaigns();
@@ -32,6 +35,7 @@ export async function POST(request: Request) {
       videoUrl: body.videoUrl || '',
       documentUrl: body.documentUrl || '',
       documentName: body.documentName || '',
+      variants: Array.isArray(body.variants) ? body.variants : [],
       sendOrder: body.sendOrder || 'message,image,video,audio,document',
       delayBetweenSends: Number(body.delayBetweenSends) || 3,
       isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,

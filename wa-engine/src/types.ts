@@ -1,3 +1,15 @@
+export interface WaCampaignVariant {
+  id: string;
+  name: string;
+  isActive: boolean;
+  welcomeMessage: string;
+  imageUrl: string;
+  audioUrl: string;
+  videoUrl: string;
+  documentUrl: string;
+  documentName: string;
+}
+
 export interface WaCampaign {
   id: string;
   name: string;
@@ -10,6 +22,7 @@ export interface WaCampaign {
   videoUrl: string;
   documentUrl: string;
   documentName: string;
+  variants?: WaCampaignVariant[];
   sendOrder: string;
   delayBetweenSends: number;
   accountId?: string;

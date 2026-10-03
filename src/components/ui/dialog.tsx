@@ -54,12 +54,12 @@ export function DialogContent({ className, children }: { className?: string, chi
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
       <div 
         className="fixed inset-0 bg-background/80 backdrop-blur-sm"
         onClick={() => onOpenChange(false)}
       />
-      <div className={cn("z-50 w-full max-w-lg rounded-lg border border-border bg-card p-6 shadow-lg", className)}>
+      <div className={cn("relative z-50 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-2xl my-auto", className)}>
         {children}
       </div>
     </div>

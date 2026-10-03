@@ -384,8 +384,8 @@ export function WhatsAppNumbers({ campaigns = [], onDataChange }: WhatsAppNumber
 
       {/* 1. Modal: Add New WhatsApp Number */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-card border border-border/80 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in overflow-y-auto">
+          <div className="bg-card border border-border/80 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-5 my-auto">
             <div className="flex items-center justify-between pb-3 border-b border-border/40">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
@@ -461,8 +461,8 @@ export function WhatsAppNumbers({ campaigns = [], onDataChange }: WhatsAppNumber
 
       {/* 2. Modal: Edit WhatsApp Number */}
       {editModalAccount && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-card border border-border/80 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in overflow-y-auto">
+          <div className="bg-card border border-border/80 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-5 my-auto">
             <div className="flex items-center justify-between pb-3 border-b border-border/40">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
@@ -530,8 +530,8 @@ export function WhatsAppNumbers({ campaigns = [], onDataChange }: WhatsAppNumber
 
       {/* 3. Modal: Live QR Code Scanner */}
       {qrModalAccount && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-card border border-border/80 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in overflow-y-auto">
+          <div className="bg-card border border-border/80 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-5 my-auto">
             <div className="flex items-center justify-between pb-3 border-b border-border/40">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
