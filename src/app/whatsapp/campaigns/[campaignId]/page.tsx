@@ -78,9 +78,9 @@ export default function CampaignDetailPage() {
             <strong className="text-white font-mono text-base">{campaign.totalSent || 0}</strong>
           </div>
           <div className="flex items-center gap-1.5">
-            <Clock className="w-4 h-4" />
+            <Clock className="w-4 h-4 text-emerald-400" />
             <span>Delay:</span>
-            <strong className="text-white">{campaign.delayBetweenSends || 3}s</strong>
+            <strong className="text-white">Auto (Randomized)</strong>
           </div>
         </div>
       </div>

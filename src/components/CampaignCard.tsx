@@ -187,8 +187,8 @@ export function CampaignCard({ campaign, onToggleActive, onDelete }: CampaignCar
             </div>
 
             <div className="flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              <span>{campaign.delayBetweenSends || 3}s delay</span>
+              <Clock className="w-3 h-3 text-emerald-400" />
+              <span>Auto delay</span>
             </div>
           </div>
         </CardContent>

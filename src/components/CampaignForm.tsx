@@ -714,34 +714,17 @@ export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-foreground">Send Order (Comma-separated)</label>
-              <Input
-                value={sendOrder}
-                onChange={(e) => setSendOrder(e.target.value)}
-                placeholder="message,image,audio,video,document"
-                className="bg-background/50 border-border/60"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Options: <code>message</code>, <code>image</code>, <code>audio</code>, <code>video</code>, <code>document</code>
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-foreground">Delay Between Files (Seconds)</label>
-              <Input
-                type="number"
-                min={0}
-                max={60}
-                value={delayBetweenSends}
-                onChange={(e) => setDelayBetweenSends(Number(e.target.value))}
-                className="bg-background/50 border-border/60"
-              />
-              <p className="text-[11px] text-emerald-400/90">
-                ⚡ 1st message: 3-4s random ms after read | 2nd & subsequent items: 1-2s non-identical random ms.
-              </p>
-            </div>
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-foreground">Send Order (Comma-separated)</label>
+            <Input
+              value={sendOrder}
+              onChange={(e) => setSendOrder(e.target.value)}
+              placeholder="message,image,audio,video,document"
+              className="bg-background/50 border-border/60"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Options: <code>message</code>, <code>image</code>, <code>audio</code>, <code>video</code>, <code>document</code>
+            </p>
           </div>
 
           <div className="pt-2 border-t border-border/40 grid grid-cols-1 md:grid-cols-2 gap-4">
