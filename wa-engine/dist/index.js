@@ -14,9 +14,24 @@ const app = (0, express_1.default)();
 const PORT = Number(process.env.PORT) || 3005;
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
-// 1. Health check
+// 1. Health check & version
 app.get('/health', (_req, res) => {
-    res.json({ ok: true, timestamp: new Date().toISOString() });
+    res.json({
+        ok: true,
+        version: '2.3.0',
+        buildDate: '2026-10-03T10:30:00Z',
+        features: ['random-ms-delay-3-4s', 'variation-rotation-ab'],
+        uptime: Math.floor(process.uptime()),
+        timestamp: new Date().toISOString(),
+    });
+});
+app.get('/version', (_req, res) => {
+    res.json({
+        version: '2.3.0',
+        buildDate: '2026-10-03T10:30:00Z',
+        features: ['random-ms-delay-3-4s', 'variation-rotation-ab'],
+        uptime: Math.floor(process.uptime()),
+    });
 });
 // 2. Multi-Account: Get all accounts info
 app.get('/accounts', (_req, res) => {
