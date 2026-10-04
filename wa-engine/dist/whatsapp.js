@@ -210,11 +210,21 @@ async function startWhatsApp(accountId = 'main', accountName) {
                     continue;
                 const sender = remoteJid;
                 const pushName = msg.pushName || 'Customer';
-                const messageText = msg.message?.conversation ||
+                const rawText = msg.message?.conversation ||
                     msg.message?.extendedTextMessage?.text ||
                     msg.message?.imageMessage?.caption ||
                     msg.message?.videoMessage?.caption ||
                     '';
+                const hasAudio = !!msg.message?.audioMessage;
+                const hasMedia = !!(msg.message?.imageMessage || msg.message?.videoMessage || msg.message?.documentMessage);
+                let messageText = rawText.trim();
+                if (!messageText && hasAudio)
+                    messageText = '[Voice Message]';
+                else if (!messageText && hasMedia)
+                    messageText = '[Media File]';
+                // Ignore empty protocol messages, receipts, reactions, and typing updates
+                if (!messageText)
+                    continue;
                 (0, utils_js_1.log)('WA', `📩 [${session.name}] Incoming from ${sender} (${pushName}): "${messageText}"`);
                 // Check if message is a KEYWORD TRIGGER (e.g. customer sent "price")
                 (0, campaigns_js_1.matchCampaign)(messageText, accountId).then(async (matched) => {

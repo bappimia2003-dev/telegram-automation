@@ -234,12 +234,22 @@ export async function startWhatsApp(accountId = 'main', accountName?: string): P
 
         const sender = remoteJid;
         const pushName = msg.pushName || 'Customer';
-        const messageText =
+        const rawText =
           msg.message?.conversation ||
           msg.message?.extendedTextMessage?.text ||
           msg.message?.imageMessage?.caption ||
           msg.message?.videoMessage?.caption ||
           '';
+
+        const hasAudio = !!msg.message?.audioMessage;
+        const hasMedia = !!(msg.message?.imageMessage || msg.message?.videoMessage || msg.message?.documentMessage);
+
+        let messageText = rawText.trim();
+        if (!messageText && hasAudio) messageText = '[Voice Message]';
+        else if (!messageText && hasMedia) messageText = '[Media File]';
+
+        // Ignore empty protocol messages, receipts, reactions, and typing updates
+        if (!messageText) continue;
 
         log('WA', `📩 [${session.name}] Incoming from ${sender} (${pushName}): "${messageText}"`);
 
