@@ -119,7 +119,7 @@ export async function getActiveCampaigns(): Promise<WaCampaign[]> {
       errLog('DB', 'Error getting active campaigns:', error.message);
       return [];
     }
-    return (data || []).map(rowToCampaign);
+    return (data || []).filter((r: any) => !r.id?.startsWith('system_')).map(rowToCampaign);
   } catch (e: any) {
     errLog('DB', 'Exception getting active campaigns:', e.message);
     return [];

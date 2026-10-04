@@ -123,7 +123,7 @@ async function getActiveCampaigns() {
             (0, utils_js_1.errLog)('DB', 'Error getting active campaigns:', error.message);
             return [];
         }
-        return (data || []).map(rowToCampaign);
+        return (data || []).filter((r) => !r.id?.startsWith('system_')).map(rowToCampaign);
     }
     catch (e) {
         (0, utils_js_1.errLog)('DB', 'Exception getting active campaigns:', e.message);

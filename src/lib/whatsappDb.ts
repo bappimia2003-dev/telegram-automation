@@ -263,7 +263,7 @@ export async function getAllCampaigns(): Promise<WaCampaign[]> {
     console.error('Error fetching wa_campaigns:', error.message);
     return waMemory.campaigns;
   }
-  return (data || []).map(rowToCampaign);
+  return (data || []).filter((r: any) => !r.id?.startsWith('system_')).map(rowToCampaign);
 }
 
 export async function getActiveCampaigns(): Promise<WaCampaign[]> {

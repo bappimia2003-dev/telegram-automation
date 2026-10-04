@@ -30,11 +30,31 @@ interface CampaignCardProps {
 }
 
 export function CampaignCard({ campaign, onToggleActive, onDelete }: CampaignCardProps) {
-  const [isActive, setIsActive] = useState(campaign.isActive);
+  const [isActive, setIsActive] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(`wa_camp_active_${campaign.id}`);
+      if (cached !== null) return cached === 'true';
+    }
+    return Boolean(campaign.isActive);
+  });
   const [isToggling, setIsToggling] = useState(false);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(`wa_camp_active_${campaign.id}`);
+      if (cached !== null) {
+        setIsActive(cached === 'true');
+        return;
+      }
+    }
+    setIsActive(Boolean(campaign.isActive));
+  }, [campaign.id, campaign.isActive]);
 
   const handleToggle = async (checked: boolean) => {
     setIsActive(checked);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`wa_camp_active_${campaign.id}`, String(checked));
+    }
     setIsToggling(true);
     try {
       const res = await fetch(`/api/whatsapp/campaigns/${campaign.id}/toggle`, {
@@ -45,11 +65,17 @@ export function CampaignCard({ campaign, onToggleActive, onDelete }: CampaignCar
       const data = await res.json();
       if (!data.ok) {
         setIsActive(!checked); // Revert
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`wa_camp_active_${campaign.id}`, String(!checked));
+        }
       } else if (onToggleActive) {
         onToggleActive(campaign.id, checked);
       }
     } catch {
       setIsActive(!checked);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`wa_camp_active_${campaign.id}`, String(!checked));
+      }
     } finally {
       setIsToggling(false);
     }

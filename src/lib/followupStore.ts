@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { getAllApiKeys } from './db';
 import { WaCampaignVariant } from './whatsappTypes';
+import { getSupabase } from './supabase';
 
 export interface FollowupSettings {
   auto_followup: boolean;
@@ -160,13 +161,82 @@ function pruneRolling30DayStore(store: FollowupStoreData): boolean {
   return store.leads.length !== initialLeads;
 }
 
+const SYSTEM_STORE_CAMPAIGN_ID = 'system_followup_store';
+
+async function syncToSupabase(store: FollowupStoreData) {
+  try {
+    const supabase = getSupabase();
+    if (!supabase) return;
+
+    await supabase.from('wa_campaigns').upsert({
+      id: SYSTEM_STORE_CAMPAIGN_ID,
+      name: 'System Follow-up Configuration',
+      is_active: Boolean(store.settings.auto_followup),
+      description: JSON.stringify({
+        settings: store.settings,
+        variants: store.variants,
+        leads: store.leads,
+        campaign: store.campaign,
+      }),
+      updated_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('Error syncing followup store to Supabase:', err);
+  }
+}
+
+async function loadFromSupabase(store: FollowupStoreData): Promise<FollowupStoreData> {
+  try {
+    const supabase = getSupabase();
+    if (!supabase) return store;
+
+    const { data, error } = await supabase
+      .from('wa_campaigns')
+      .select('*')
+      .eq('id', SYSTEM_STORE_CAMPAIGN_ID)
+      .maybeSingle();
+
+    if (error || !data) return store;
+
+    if (data.description) {
+      try {
+        const parsed = JSON.parse(data.description);
+        if (parsed.settings && typeof parsed.settings === 'object') {
+          store.settings = { ...store.settings, ...parsed.settings };
+        }
+        if (data.is_active !== undefined && data.is_active !== null) {
+          store.settings.auto_followup = Boolean(data.is_active);
+        }
+        if (Array.isArray(parsed.variants)) {
+          store.variants = parsed.variants;
+        }
+        if (Array.isArray(parsed.leads) && parsed.leads.length > 0) {
+          store.leads = parsed.leads;
+        }
+        if (parsed.campaign !== undefined) {
+          store.campaign = parsed.campaign;
+        }
+      } catch (e) {
+        // ignore parse error
+      }
+    } else if (data.is_active !== undefined && data.is_active !== null) {
+      store.settings.auto_followup = Boolean(data.is_active);
+    }
+  } catch (err) {
+    console.error('Error loading followup store from Supabase:', err);
+  }
+  return store;
+}
+
 function readStore(): FollowupStoreData {
   try {
     if (!fs.existsSync(STORE_PATH)) {
-      const dir = path.dirname(STORE_PATH);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(STORE_PATH, JSON.stringify(defaultStore, null, 2), 'utf-8');
-      return defaultStore;
+      try {
+        const dir = path.dirname(STORE_PATH);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(STORE_PATH, JSON.stringify(defaultStore, null, 2), 'utf-8');
+      } catch {}
+      return { ...defaultStore };
     }
     const raw = fs.readFileSync(STORE_PATH, 'utf-8');
     const parsed = JSON.parse(raw);
@@ -182,7 +252,7 @@ function readStore(): FollowupStoreData {
     return storeObj;
   } catch (err) {
     console.error('Error reading followup store:', err);
-    return defaultStore;
+    return { ...defaultStore };
   }
 }
 
@@ -192,7 +262,7 @@ function writeStore(data: FollowupStoreData) {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
-    console.error('Error writing followup store:', err);
+    // Read-only filesystem on Vercel is expected
   }
 }
 
@@ -240,7 +310,8 @@ export async function getFollowupData() {
     ];
   }
 
-  const store = readStore();
+  let store = readStore();
+  store = await loadFromSupabase(store);
 
   // Ensure default assigned account if missing
   if (!store.settings.assigned_account_id) {
@@ -280,14 +351,17 @@ export async function getFollowupData() {
 }
 
 export async function updateFollowupVariants(variants: WaCampaignVariant[]) {
-  const store = readStore();
+  let store = readStore();
+  store = await loadFromSupabase(store);
   store.variants = variants;
   writeStore(store);
+  await syncToSupabase(store);
   return store.variants;
 }
 
 export async function updateFollowupSetting(key: string, value: any) {
-  const store = readStore();
+  let store = readStore();
+  store = await loadFromSupabase(store);
   (store.settings as any)[key] = value;
 
   if (key === 'auto_followup' && value === true) {
@@ -304,18 +378,34 @@ export async function updateFollowupSetting(key: string, value: any) {
   }
 
   writeStore(store);
+  await syncToSupabase(store);
+
+  // Sync to background WhatsApp Engine if reachable
+  try {
+    const engineUrl = process.env.WA_ENGINE_URL || 'http://localhost:3006';
+    fetch(`${engineUrl}/api/settings/toggle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, value }),
+      signal: AbortSignal.timeout(1500),
+    }).catch(() => {});
+  } catch {}
+
   return store.settings;
 }
 
 export async function updateAllFollowupSettings(newSettings: Partial<FollowupSettings>) {
-  const store = readStore();
+  let store = readStore();
+  store = await loadFromSupabase(store);
   store.settings = { ...store.settings, ...newSettings };
   writeStore(store);
+  await syncToSupabase(store);
   return store.settings;
 }
 
 export async function addMediaItem(item: { filename: string; filepath: string; media_type: 'audio' | 'image' | 'text'; category?: string }) {
-  const store = readStore();
+  let store = readStore();
+  store = await loadFromSupabase(store);
   const newItem: FollowupMedia = {
     id: `m_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     filename: item.filename,
@@ -328,29 +418,35 @@ export async function addMediaItem(item: { filename: string; filepath: string; m
 
   store.media.unshift(newItem);
   writeStore(store);
+  await syncToSupabase(store);
   return newItem;
 }
 
 export async function deleteMediaItem(id: string) {
-  const store = readStore();
+  let store = readStore();
+  store = await loadFromSupabase(store);
   store.media = store.media.filter((m) => m.id !== id);
   writeStore(store);
+  await syncToSupabase(store);
   return store.media;
 }
 
 export async function updateLeadStatus(phone: string, status: string, notes = '') {
-  const store = readStore();
+  let store = readStore();
+  store = await loadFromSupabase(store);
   const lead = store.leads.find((l) => l.phone === phone);
   if (lead) {
     lead.status = status as any;
     if (notes) lead.notes = notes;
     writeStore(store);
+    await syncToSupabase(store);
   }
   return store.leads;
 }
 
 export async function startCampaign(config: any) {
-  const store = readStore();
+  let store = readStore();
+  store = await loadFromSupabase(store);
   store.campaign = {
     id: `camp_${Date.now()}`,
     name: config.name || 'Special Offer',
@@ -365,14 +461,17 @@ export async function startCampaign(config: any) {
     startedAt: new Date().toISOString(),
   };
   writeStore(store);
+  await syncToSupabase(store);
   return { ok: true, campaign: store.campaign };
 }
 
 export async function stopCampaign() {
-  const store = readStore();
+  let store = readStore();
+  store = await loadFromSupabase(store);
   if (store.campaign) {
     store.campaign.status = 'stopped';
     writeStore(store);
+    await syncToSupabase(store);
   }
   return { ok: true };
 }

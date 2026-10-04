@@ -44,6 +44,15 @@ export default function NewFollowupPage() {
   const [data, setData] = useState<any>(null);
   const [selectedFilter, setSelectedFilter] = useState('all');
 
+  // Fast-hydrating ON/OFF state with instant localStorage recall
+  const [autoFollowupEnabled, setAutoFollowupEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('wa_followup_auto_followup');
+      if (saved !== null) return saved === 'true';
+    }
+    return false;
+  });
+
   // Variations State
   const [variants, setVariants] = useState<WaCampaignVariant[]>([]);
   const [openVariantIds, setOpenVariantIds] = useState<Record<string, boolean>>({});
@@ -67,8 +76,33 @@ export default function NewFollowupPage() {
       const res = await fetch(`/api/whatsapp/followup?t=${Date.now()}`);
       const json = await res.json();
       if (json.ok) {
-        setData(json);
         if (json.settings) {
+          const serverVal = Boolean(json.settings.auto_followup);
+          let activeState = serverVal;
+
+          if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('wa_followup_auto_followup');
+            if (saved !== null) {
+              activeState = saved === 'true';
+              // If server differs from user's explicit local state, sync server
+              if (serverVal !== activeState) {
+                fetch('/api/whatsapp/followup', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    action: 'toggle_setting',
+                    key: 'auto_followup',
+                    value: activeState,
+                  }),
+                }).catch(() => {});
+              }
+            } else {
+              localStorage.setItem('wa_followup_auto_followup', String(serverVal));
+            }
+          }
+          setAutoFollowupEnabled(activeState);
+          json.settings.auto_followup = activeState;
+
           setFormSettings({
             min_delay_minutes: json.settings.min_delay_minutes ?? 45,
             max_delay_minutes: json.settings.max_delay_minutes ?? 90,
@@ -82,6 +116,8 @@ export default function NewFollowupPage() {
             max_daily_messages: json.settings.max_daily_messages ?? 50,
           });
         }
+        setData(json);
+
         if (Array.isArray(json.variants)) {
           setVariants(json.variants);
           const openState: Record<string, boolean> = {};
@@ -102,15 +138,27 @@ export default function NewFollowupPage() {
   };
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('wa_followup_auto_followup');
+      if (saved !== null) {
+        setAutoFollowupEnabled(saved === 'true');
+      }
+    }
     fetchData();
   }, []);
 
   const handleToggle = async (key: string, currentValue: boolean) => {
     try {
       const newValue = !currentValue;
+      if (key === 'auto_followup') {
+        setAutoFollowupEnabled(newValue);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('wa_followup_auto_followup', String(newValue));
+        }
+      }
       setData((prev: any) => ({
         ...prev,
-        settings: { ...prev.settings, [key]: newValue },
+        settings: { ...prev?.settings, [key]: newValue },
       }));
 
       await fetch('/api/whatsapp/followup', {
@@ -151,10 +199,21 @@ export default function NewFollowupPage() {
     setOpenVariantIds((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const toggleVariantActive = (id: string, active: boolean) => {
-    setVariants((prev) =>
-      prev.map((v) => (v.id === id ? { ...v, isActive: active } : v))
-    );
+  const toggleVariantActive = async (id: string, active: boolean) => {
+    const updated = variants.map((v) => (v.id === id ? { ...v, isActive: active } : v));
+    setVariants(updated);
+    try {
+      await fetch('/api/whatsapp/followup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_variants',
+          variants: updated,
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to sync variant active state:', err);
+    }
   };
 
   const updateVariantField = (id: string, field: keyof WaCampaignVariant, value: any) => {
@@ -326,17 +385,17 @@ export default function NewFollowupPage() {
             <div className="sm:hidden flex items-center gap-2 bg-card/90 border border-border/80 px-3 py-1.5 rounded-xl shadow-sm">
               <span className={cn(
                 "w-2 h-2 rounded-full",
-                settings.auto_followup ? "bg-emerald-400 animate-pulse" : "bg-zinc-600"
+                autoFollowupEnabled ? "bg-emerald-400 animate-pulse" : "bg-zinc-600"
               )} />
               <span className={cn(
                 "text-xs font-bold",
-                settings.auto_followup ? "text-emerald-400" : "text-zinc-400"
+                autoFollowupEnabled ? "text-emerald-400" : "text-zinc-400"
               )}>
-                {settings.auto_followup ? 'ON' : 'OFF'}
+                {autoFollowupEnabled ? 'ON' : 'OFF'}
               </span>
               <Switch
-                checked={Boolean(settings.auto_followup)}
-                onCheckedChange={(checked) => handleToggle('auto_followup', Boolean(settings.auto_followup))}
+                checked={autoFollowupEnabled}
+                onCheckedChange={() => handleToggle('auto_followup', autoFollowupEnabled)}
                 className="data-[state=checked]:bg-emerald-600 scale-90"
               />
             </div>
@@ -358,18 +417,18 @@ export default function NewFollowupPage() {
           <div className="flex items-center gap-2">
             <span className={cn(
               "w-2.5 h-2.5 rounded-full",
-              settings.auto_followup ? "bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/50" : "bg-zinc-600"
+              autoFollowupEnabled ? "bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/50" : "bg-zinc-600"
             )} />
             <span className={cn(
               "text-xs font-bold tracking-wider",
-              settings.auto_followup ? "text-emerald-400" : "text-zinc-400"
+              autoFollowupEnabled ? "text-emerald-400" : "text-zinc-400"
             )}>
-              {settings.auto_followup ? 'ON' : 'OFF'}
+              {autoFollowupEnabled ? 'ON' : 'OFF'}
             </span>
           </div>
           <Switch
-            checked={Boolean(settings.auto_followup)}
-            onCheckedChange={(checked) => handleToggle('auto_followup', Boolean(settings.auto_followup))}
+            checked={autoFollowupEnabled}
+            onCheckedChange={() => handleToggle('auto_followup', autoFollowupEnabled)}
             className="data-[state=checked]:bg-emerald-600"
           />
         </div>
