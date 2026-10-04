@@ -49,9 +49,15 @@ export async function matchCampaign(messageText: string, accountId?: string): Pr
       .map((k) => cleanForMatching(k))
       .filter(Boolean);
 
+    const words = cleanedText.split(' ');
     for (const kw of keywords) {
-      if (cleanedText === kw) {
-        log('CAMPAIGN', `[Acc: ${accountId || 'all'}] Matched exact keyword "${kw}" for campaign: "${campaign.name}" (incoming: "${messageText}")`);
+      const isMatch =
+        cleanedText === kw ||
+        words.includes(kw) ||
+        (kw.length >= 3 && cleanedText.includes(kw));
+
+      if (isMatch) {
+        log('CAMPAIGN', `[Acc: ${accountId || 'all'}] Matched keyword "${kw}" for campaign: "${campaign.name}" (incoming: "${messageText}")`);
         return campaign;
       }
     }
