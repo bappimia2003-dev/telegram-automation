@@ -214,6 +214,13 @@ async function startWhatsApp(accountId = 'main', accountName) {
                     msg.message?.extendedTextMessage?.text ||
                     msg.message?.imageMessage?.caption ||
                     msg.message?.videoMessage?.caption ||
+                    msg.message?.buttonsResponseMessage?.selectedDisplayText ||
+                    msg.message?.buttonsResponseMessage?.selectedButtonId ||
+                    msg.message?.templateButtonReplyMessage?.selectedDisplayText ||
+                    msg.message?.templateButtonReplyMessage?.selectedId ||
+                    msg.message?.listResponseMessage?.title ||
+                    msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
+                    msg.message?.interactiveResponseMessage?.body?.text ||
                     '';
                 const hasAudio = !!msg.message?.audioMessage;
                 const hasMedia = !!(msg.message?.imageMessage || msg.message?.videoMessage || msg.message?.documentMessage);

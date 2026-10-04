@@ -98,7 +98,10 @@ export function WhatsAppNumbers({ campaigns = [], accounts: propAccounts, initia
     // Only poll aggressively (3s) when QR code modal is open and awaiting scanning.
     // Otherwise poll gently (25s) to keep UI fresh without lag or high network traffic.
     const pollInterval = qrModalAccount && qrModalAccount.status !== 'connected' ? 3000 : 25000;
-    const interval = setInterval(fetchAccounts, pollInterval);
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      fetchAccounts();
+    }, pollInterval);
     return () => clearInterval(interval);
   }, [qrModalAccount?.id, qrModalAccount?.status]);
 

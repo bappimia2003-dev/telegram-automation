@@ -7,13 +7,22 @@ export const revalidate = 0;
 
 const WA_ENGINE_URL = process.env.WA_ENGINE_URL || 'http://localhost:3005';
 
+let cachedAccountsResult: any = null;
+let lastCacheTime = 0;
+const CACHE_TTL_MS = 2500;
+
 export async function GET() {
   try {
+    const now = Date.now();
+    if (cachedAccountsResult && now - lastCacheTime < CACHE_TTL_MS) {
+      return NextResponse.json(cachedAccountsResult);
+    }
+
     let engineAccounts: any[] = [];
     try {
       const res = await fetch(`${WA_ENGINE_URL}/accounts`, {
         cache: 'no-store',
-        signal: AbortSignal.timeout(4000),
+        signal: AbortSignal.timeout(3500),
       });
       if (res.ok) {
         const data = await res.json();
@@ -51,7 +60,10 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ ok: true, accounts });
+    cachedAccountsResult = { ok: true, accounts };
+    lastCacheTime = now;
+
+    return NextResponse.json(cachedAccountsResult);
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
@@ -59,6 +71,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    lastCacheTime = 0; // invalidate cache
     const body = await request.json().catch(() => ({}));
     const name = (body.name || '').trim() || `SIM ${Date.now().toString().slice(-4)}`;
     const phoneNumber = (body.phoneNumber || '').trim();

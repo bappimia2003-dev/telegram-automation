@@ -52,10 +52,15 @@ export async function matchCampaign(messageText: string, accountId?: string): Pr
 
     const words = cleanedText.split(' ');
     for (const kw of keywords) {
+      const kwWords = kw.split(' ').filter((w) => w.length >= 2);
+      const allKwWordsInMessage = kwWords.length > 1 && kwWords.every((w) => cleanedText.includes(w));
+
       const isMatch =
         cleanedText === kw ||
         words.includes(kw) ||
-        (kw.length >= 3 && cleanedText.includes(kw));
+        (kw.length >= 3 && cleanedText.includes(kw)) ||
+        (cleanedText.length >= 4 && kw.startsWith(cleanedText)) ||
+        allKwWordsInMessage;
 
       if (isMatch) {
         log('CAMPAIGN', `[Acc: ${accountId || 'all'}] Matched keyword "${kw}" for campaign: "${campaign.name}" (incoming: "${messageText}")`);

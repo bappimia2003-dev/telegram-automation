@@ -239,6 +239,13 @@ export async function startWhatsApp(accountId = 'main', accountName?: string): P
           msg.message?.extendedTextMessage?.text ||
           msg.message?.imageMessage?.caption ||
           msg.message?.videoMessage?.caption ||
+          msg.message?.buttonsResponseMessage?.selectedDisplayText ||
+          msg.message?.buttonsResponseMessage?.selectedButtonId ||
+          msg.message?.templateButtonReplyMessage?.selectedDisplayText ||
+          msg.message?.templateButtonReplyMessage?.selectedId ||
+          msg.message?.listResponseMessage?.title ||
+          msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
+          (msg.message as any)?.interactiveResponseMessage?.body?.text ||
           '';
 
         const hasAudio = !!msg.message?.audioMessage;

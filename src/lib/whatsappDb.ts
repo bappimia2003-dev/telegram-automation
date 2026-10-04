@@ -499,7 +499,16 @@ export async function getMessageLogs(campaignId?: string, limit = 100): Promise<
 // =============================================
 // CONNECTION STATE
 // =============================================
+let connectionsCache: WaConnection[] | null = null;
+let connectionsCacheTime = 0;
+const CONNECTIONS_CACHE_TTL = 3000;
+
 export async function getAllWaConnections(): Promise<WaConnection[]> {
+  const now = Date.now();
+  if (connectionsCache && now - connectionsCacheTime < CONNECTIONS_CACHE_TTL) {
+    return connectionsCache;
+  }
+
   const supabase = getSupabase();
   if (!supabase) return waMemory.connection ? [waMemory.connection] : [];
 
@@ -521,17 +530,23 @@ export async function getAllWaConnections(): Promise<WaConnection[]> {
         .not('id', 'like', 'auth_%')
         .not('id', 'like', 'file_%');
       if (!fallback.error && fallback.data) {
-        return fallback.data.map(rowToConnection);
+        const res = fallback.data.map(rowToConnection);
+        connectionsCache = res;
+        connectionsCacheTime = now;
+        return res;
       }
     } catch {}
-    return [];
+    return connectionsCache || [];
   }
   if (!data || data.length === 0) {
     return [];
   }
-  return data
+  const result = data
     .filter((r: any) => !r.id.startsWith('auth_') && !r.id.startsWith('test_') && !r.id.startsWith('file_'))
     .map(rowToConnection);
+  connectionsCache = result;
+  connectionsCacheTime = now;
+  return result;
 }
 
 export async function getWaConnection(id = 'main'): Promise<WaConnection | null> {
@@ -553,6 +568,7 @@ export async function getWaConnection(id = 'main'): Promise<WaConnection | null>
 }
 
 export async function updateWaConnection(updates: Partial<WaConnection> & { id?: string }): Promise<WaConnection> {
+  connectionsCache = null;
   const targetId = updates.id || 'main';
   const supabase = getSupabase();
 
@@ -591,6 +607,7 @@ export async function updateWaConnection(updates: Partial<WaConnection> & { id?:
 }
 
 export async function deleteWaConnection(id: string): Promise<boolean> {
+  connectionsCache = null;
   const supabase = getSupabase();
   if (id === 'main') {
     (waMemory as any).connection = null;

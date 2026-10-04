@@ -195,13 +195,13 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // Start the follow-up scheduler (checks every 60s for pending follow-ups)
     (0, followupScheduler_js_1.startFollowupScheduler)();
-    // Watcher: Poll DB every 4s for any account marked 'connecting' without an active socket
+    // Watcher: Poll DB every 5s for any account marked 'connecting' or 'connected' without an active socket
     setInterval(async () => {
         try {
             const dbAccounts = await (0, db_js_1.getAllDbAccounts)();
             for (const acc of dbAccounts) {
-                if (acc.status === 'connecting' && !(0, whatsapp_js_1.isSessionActive)(acc.id)) {
-                    (0, utils_js_1.log)('WATCHER', `Account ${acc.name} (${acc.id}) has 'connecting' state in DB. Starting socket...`);
+                if ((acc.status === 'connecting' || acc.status === 'connected') && !(0, whatsapp_js_1.isSessionActive)(acc.id)) {
+                    (0, utils_js_1.log)('WATCHER', `Account ${acc.name} (${acc.id}) has '${acc.status}' state in DB but no active socket. Starting socket...`);
                     (0, whatsapp_js_1.startWhatsApp)(acc.id, acc.name).catch((err) => {
                         (0, utils_js_1.errLog)('WATCHER', `Failed starting account ${acc.id}:`, err.message);
                     });
@@ -211,5 +211,5 @@ app.listen(PORT, '0.0.0.0', () => {
         catch (err) {
             // transient network error
         }
-    }, 4000);
+    }, 5000);
 });

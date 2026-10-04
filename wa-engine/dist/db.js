@@ -280,10 +280,18 @@ async function getAllDbAccounts() {
     if (!supabase)
         return [];
     try {
-        const { data } = await supabase.from('wa_connection').select('*').order('created_at', { ascending: true });
-        return (data || [])
-            .filter((r) => !r.id.startsWith('auth_') && !r.id.startsWith('test_') && !r.id.startsWith('file_'))
-            .map((r) => {
+        const { data, error } = await supabase
+            .from('wa_connection')
+            .select('id, phone_number, status, last_connected, created_at')
+            .not('id', 'like', 'file_%')
+            .not('id', 'like', 'auth_%')
+            .not('id', 'like', 'test_%')
+            .order('created_at', { ascending: true });
+        if (error) {
+            (0, utils_js_1.errLog)('DB', 'Error getting db accounts:', error.message);
+            return [];
+        }
+        return (data || []).map((r) => {
             let name = r.id === 'main' ? 'Primary WhatsApp' : `SIM ${r.id.slice(-4)}`;
             let phoneNumber = r.phone_number || '';
             if (phoneNumber.includes('|')) {
@@ -296,13 +304,14 @@ async function getAllDbAccounts() {
                 name,
                 phoneNumber,
                 status: r.status,
-                qrCode: r.qr_code || '',
+                qrCode: '',
                 lastConnected: r.last_connected,
                 createdAt: r.created_at,
             };
         });
     }
     catch (e) {
+        (0, utils_js_1.errLog)('DB', 'Exception getting db accounts:', e.message);
         return [];
     }
 }

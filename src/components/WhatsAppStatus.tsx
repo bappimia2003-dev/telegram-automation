@@ -45,12 +45,6 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
     }
   };
 
-  useEffect(() => {
-    fetchAccounts();
-    const interval = setInterval(fetchAccounts, 4000);
-    return () => clearInterval(interval);
-  }, [selectedAccountId]);
-
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId) || accounts[0] || {
     id: 'main',
     name: 'Primary WhatsApp',
@@ -60,6 +54,17 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
     lastConnected: new Date().toISOString(),
     createdAt: new Date().toISOString(),
   };
+
+  useEffect(() => {
+    fetchAccounts();
+    const isPending = selectedAccount?.status === 'qr_pending' || selectedAccount?.status === 'connecting';
+    const pollInterval = isPending ? 5000 : 20000;
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      fetchAccounts();
+    }, pollInterval);
+    return () => clearInterval(interval);
+  }, [selectedAccountId, selectedAccount?.status]);
 
   const handleAddAccount = async (e: React.FormEvent) => {
     e.preventDefault();
