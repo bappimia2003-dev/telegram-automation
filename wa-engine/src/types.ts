@@ -36,6 +36,9 @@ export interface WaFollowupConfig {
   antiBanJitter?: boolean;
   minDelayMinutes?: number;
   maxDelayMinutes?: number;
+  minBatchPeople?: number;
+  maxBatchPeople?: number;
+  followupVariants?: WaCampaignVariant[];
   steps?: WaFollowupStep[];
   followupMessage?: string;
   followupImageUrl?: string;

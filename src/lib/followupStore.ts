@@ -83,7 +83,7 @@ const defaultVariants: WaCampaignVariant[] = [];
 const defaultStore: FollowupStoreData = {
   settings: {
     auto_followup: true,
-    ai_brain: true,
+    ai_brain: false,
     antiban: true,
     auto_cleanup: true,
     gender_detection: true,
@@ -295,14 +295,30 @@ export async function getFollowupData() {
     }
   }
 
-  // If local store has no variants (e.g. after fresh deploy), restore from Supabase campaigns
+  // If local store has no variants (e.g. after fresh deploy), restore from Supabase campaigns' followupConfig
   if (!store.variants || store.variants.length === 0) {
     try {
       const allCamps = await getAllCampaigns();
-      const campWithVars = allCamps.find((c) => c.variants && c.variants.length > 0);
-      if (campWithVars && campWithVars.variants && campWithVars.variants.length > 0) {
-        store.variants = campWithVars.variants;
+      const campWithFupVars = allCamps.find((c) => (c.followupConfig as any)?.followupVariants?.length > 0);
+      if (campWithFupVars && (campWithFupVars.followupConfig as any)?.followupVariants?.length > 0) {
+        store.variants = (campWithFupVars.followupConfig as any).followupVariants;
         writeStore(store);
+      } else {
+        const campWithSteps = allCamps.find((c) => c.followupConfig?.steps && c.followupConfig.steps.length > 0);
+        if (campWithSteps && campWithSteps.followupConfig?.steps) {
+          store.variants = campWithSteps.followupConfig.steps.map((s) => ({
+            id: `var_${s.stepNumber}`,
+            name: s.title || `Variation ${s.stepNumber}`,
+            isActive: true,
+            welcomeMessage: s.message || '',
+            imageUrl: s.imageUrl || '',
+            audioUrl: s.audioUrl || '',
+            videoUrl: s.videoUrl || '',
+            documentUrl: s.documentUrl || '',
+            documentName: s.documentName || '',
+          }));
+          writeStore(store);
+        }
       }
     } catch {}
   }
@@ -426,13 +442,15 @@ export async function saveFollowupAll(payload: { variants?: WaCampaignVariant[];
 
       if (isTarget) {
         await updateCampaign(c.id, {
-          variants: store.variants,
+          // DO NOT touch c.variants! Campaign auto-reply variants belong to the campaign.
           followupConfig: {
             ...(c.followupConfig || {}),
             followupEnabled: isAutoFollowup,
             aiEnabled: false, // User requested 100% exact text, strictly NO AI rewriting!
             minDelayMinutes: Number(store.settings.min_delay_minutes) || 3,
             maxDelayMinutes: Number(store.settings.max_delay_minutes) || 5,
+            minBatchPeople: Number(store.settings.min_batch_people) || 3,
+            maxBatchPeople: Number(store.settings.max_batch_people) || 5,
             followupMessage: primaryVar?.welcomeMessage || '',
             followupImageUrl: primaryVar?.imageUrl || '',
             followupAudioUrl: primaryVar?.audioUrl || '',
@@ -448,6 +466,7 @@ export async function saveFollowupAll(payload: { variants?: WaCampaignVariant[];
               documentUrl: v.documentUrl || '',
               documentName: v.documentName || '',
             })),
+            followupVariants: store.variants,
           },
         });
       }

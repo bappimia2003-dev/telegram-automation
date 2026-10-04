@@ -146,6 +146,7 @@ function replaceVariables(
  * with backwards-compatible fallback to top-level legacy fields.
  */
 function getStepConfig(fup: WaFollowupConfig, stepNumber: number, campaign?: WaCampaign) {
+  // 1. Primary: Match explicit step in fup.steps
   const step = fup.steps?.find((s) => s.stepNumber === stepNumber);
   if (step && (step.message || step.imageUrl || step.audioUrl || step.videoUrl || step.documentUrl)) {
     let img = step.imageUrl || '';
@@ -163,6 +164,15 @@ function getStepConfig(fup: WaFollowupConfig, stepNumber: number, campaign?: WaC
         docName = f.name;
       }
     }
+    // Also fallback to top-level fup image/media if not specifically set on step
+    if (!img && fup.followupImageUrl) img = fup.followupImageUrl;
+    if (!aud && fup.followupAudioUrl) aud = fup.followupAudioUrl;
+    if (!vid && fup.followupVideoUrl) vid = fup.followupVideoUrl;
+    if (!doc && fup.followupDocumentUrl) {
+      doc = fup.followupDocumentUrl;
+      docName = fup.followupDocumentName || docName;
+    }
+
     return {
       message: step.message !== undefined ? step.message : (stepNumber === 1 ? (fup.followupMessage || '') : ''),
       imageUrl: img,
@@ -174,11 +184,11 @@ function getStepConfig(fup: WaFollowupConfig, stepNumber: number, campaign?: WaC
     };
   }
 
-  // Support variations from new-followup or campaign variants
-  const activeVariants = (campaign?.variants || []).filter((v) => v.isActive);
-  if (activeVariants.length > 0) {
-    const variantIndex = (stepNumber - 1) % activeVariants.length;
-    const variant = activeVariants[variantIndex] || activeVariants[0];
+  // 2. Secondary: Check explicit followupVariants stored in followupConfig (never campaign auto-reply variants!)
+  const fupVariants = ((fup as any).followupVariants || []).filter((v: any) => v.isActive);
+  if (fupVariants.length > 0) {
+    const variantIndex = (stepNumber - 1) % fupVariants.length;
+    const variant = fupVariants[variantIndex] || fupVariants[0];
     return {
       message: variant.welcomeMessage || '',
       imageUrl: variant.imageUrl || '',
@@ -190,30 +200,15 @@ function getStepConfig(fup: WaFollowupConfig, stepNumber: number, campaign?: WaC
     };
   }
 
-  // Fallback to top-level campaign follow-up media (preserving image for Step 1 too!)
-  let img = fup.followupImageUrl || campaign?.imageUrl || '';
-  let aud = fup.followupAudioUrl || campaign?.audioUrl || '';
-  let vid = fup.followupVideoUrl || campaign?.videoUrl || '';
-  let doc = fup.followupDocumentUrl || campaign?.documentUrl || '';
-  let docName = fup.followupDocumentName || campaign?.documentName || 'Document';
-  const files = fup.followupFiles || [];
-  for (const f of files) {
-    if (f.type === 'image' && !img) img = f.url;
-    if (f.type === 'audio' && !aud) aud = f.url;
-    if (f.type === 'video' && !vid) vid = f.url;
-    if (f.type === 'document' && !doc) {
-      doc = f.url;
-      docName = f.name;
-    }
-  }
+  // 3. Fallback: Top-level followup fields
   return {
-    message: stepNumber === 1 ? (fup.followupMessage || campaign?.welcomeMessage || '') : '',
-    imageUrl: img,
-    audioUrl: aud,
-    videoUrl: vid,
-    documentUrl: doc,
-    documentName: docName,
-    files,
+    message: stepNumber === 1 ? (fup.followupMessage || '') : '',
+    imageUrl: fup.followupImageUrl || '',
+    audioUrl: fup.followupAudioUrl || '',
+    videoUrl: fup.followupVideoUrl || '',
+    documentUrl: fup.followupDocumentUrl || '',
+    documentName: fup.followupDocumentName || 'Document',
+    files: fup.followupFiles || [],
   };
 }
 
@@ -314,12 +309,25 @@ async function dispatchStepFollowup(
   // Case 5: Image + Text (as caption)
   if (hasImage && msg) {
     try {
+      try {
+        await sock.sendPresenceUpdate('composing', contact.phoneNumber);
+      } catch {}
+      await sleep(1000);
       await sendImageMessage(sock, contact.phoneNumber, stepConfig.imageUrl, msg);
       await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'image', stepConfig.imageUrl);
       log('FOLLOWUP', `✅ Step ${stepNumber} delivered image with caption to ${contact.phoneNumber}`);
       return true;
     } catch (e: any) {
       errLog('FOLLOWUP', `Step ${stepNumber} image with caption failed: ${e.message}`);
+      // Fallback: If image fetch/network failed, deliver exact text so customer is not missed
+      try {
+        await sendTextMessage(sock, contact.phoneNumber, msg);
+        await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'text', '');
+        log('FOLLOWUP', `✅ Step ${stepNumber} fallback text delivered to ${contact.phoneNumber}`);
+        return true;
+      } catch (err: any) {
+        return false;
+      }
     }
   }
 
@@ -332,6 +340,13 @@ async function dispatchStepFollowup(
       return true;
     } catch (e: any) {
       errLog('FOLLOWUP', `Step ${stepNumber} video with caption failed: ${e.message}`);
+      try {
+        await sendTextMessage(sock, contact.phoneNumber, msg);
+        await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'text', '');
+        return true;
+      } catch {
+        return false;
+      }
     }
   }
 
@@ -341,29 +356,30 @@ async function dispatchStepFollowup(
       try {
         await sock.sendPresenceUpdate('composing', contact.phoneNumber);
       } catch {}
-      await sleep(1500);
+      await sleep(1000);
       await sendTextMessage(sock, contact.phoneNumber, msg);
 
       try {
         await sock.sendPresenceUpdate('recording', contact.phoneNumber);
       } catch {}
-      await sleep(1500);
+      await sleep(1000);
       await sendAudioMessage(sock, contact.phoneNumber, stepConfig.audioUrl);
       await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'audio', stepConfig.audioUrl);
       log('FOLLOWUP', `✅ Step ${stepNumber} delivered text + voice note to ${contact.phoneNumber}`);
       return true;
     } catch (e: any) {
       errLog('FOLLOWUP', `Step ${stepNumber} text + audio failed: ${e.message}`);
+      return false;
     }
   }
 
-  // Case 8: Text only (or fallback)
+  // Case 8: Text only
   if (msg) {
     try {
       try {
         await sock.sendPresenceUpdate('composing', contact.phoneNumber);
       } catch {}
-      await sleep(2000);
+      await sleep(1500);
       await sendTextMessage(sock, contact.phoneNumber, msg);
       await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'text', '');
       log('FOLLOWUP', `✅ Step ${stepNumber} delivered text to ${contact.phoneNumber}: "${msg.slice(0, 60)}..."`);
@@ -377,8 +393,46 @@ async function dispatchStepFollowup(
   return false;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Anti-Blast Staggered Scheduler State & Concurrency Protection
+// ─────────────────────────────────────────────────────────────────────────────
+let isCycleRunning = false;
+const inFlightKeys = new Set<string>(); // key: `${campaignId}:${phoneNumber}`
+const accountCooldownMap = new Map<string, number>(); // accountId -> nextAllowedDispatchTimestamp
+const accountBatchCountMap = new Map<string, number>(); // accountId -> messagesSentInCurrentBatch
+
 /**
- * Process follow-ups for a single campaign.
+ * Apply randomized cooldown after sending a follow-up:
+ * - Between individual sends: random 60 to 180 seconds (1 to 3 minutes), plus random seconds & ms.
+ * - When batch limit (3 to 5 people) is reached: pause for random 4 to 8 minutes.
+ * - Result: No two contacts ever receive at the same time; every recipient is on a different minute and second!
+ */
+function applyAccountCooldown(accountId: string, fup: WaFollowupConfig): void {
+  const currentBatch = (accountBatchCountMap.get(accountId) || 0) + 1;
+  const minBatch = Number((fup as any).minBatchPeople) || 3;
+  const maxBatch = Number((fup as any).maxBatchPeople) || 5;
+  const batchTarget = Math.max(2, Math.floor(Math.random() * (maxBatch - minBatch + 1)) + minBatch);
+
+  if (currentBatch >= batchTarget) {
+    // Batch limit reached: Longer human-like pause (4 to 8 minutes)
+    accountBatchCountMap.set(accountId, 0);
+    const batchPauseSeconds = Math.floor(Math.random() * (480 - 240 + 1)) + 240;
+    const batchPauseMs = batchPauseSeconds * 1000 + Math.floor(Math.random() * 999);
+    accountCooldownMap.set(accountId, Date.now() + batchPauseMs);
+    log('FOLLOWUP', `🛑 [Batch limit of ${batchTarget} reached on Acc: ${accountId}] Anti-ban pause for ${(batchPauseSeconds / 60).toFixed(1)} minutes before next batch.`);
+  } else {
+    // Normal interval between individual recipients:
+    // Random 60 to 180 seconds (1 to 3 minutes) with unique random seconds & ms
+    accountBatchCountMap.set(accountId, currentBatch);
+    const gapSeconds = Math.floor(Math.random() * (160 - 60 + 1)) + 60;
+    const gapMs = gapSeconds * 1000 + Math.floor(Math.random() * 999);
+    accountCooldownMap.set(accountId, Date.now() + gapMs);
+    log('FOLLOWUP', `⏳ [Staggered Pacing on Acc: ${accountId}] Next follow-up allowed in ${gapSeconds}s (${(gapSeconds / 60).toFixed(2)} min). Batch progress: ${currentBatch}/${batchTarget}.`);
+  }
+}
+
+/**
+ * Process follow-ups for a single campaign with strictly staggered, non-overlapping timing.
  */
 async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
   const fup = campaign.followupConfig;
@@ -386,8 +440,16 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
     return; // Strict safety check
   }
 
-  const accountId = campaign.accountId && campaign.accountId !== 'all' ? campaign.accountId : null;
-  const sock = getActiveSock(accountId);
+  const accountId = campaign.accountId && campaign.accountId !== 'all' ? campaign.accountId : (campaign.id || 'default');
+  
+  // 1. Staggered Pacing Check: If this account is in cooldown, skip this tick
+  const now = Date.now();
+  const nextAllowed = accountCooldownMap.get(accountId) || 0;
+  if (now < nextAllowed) {
+    return; // Still waiting randomized interval between contacts
+  }
+
+  const sock = getActiveSock(campaign.accountId && campaign.accountId !== 'all' ? campaign.accountId : null);
   if (!sock) {
     return; // No WhatsApp connection available for this account
   }
@@ -395,10 +457,14 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
   const contacts = await getRecentContactedUsers(campaign.id);
   if (contacts.length === 0) return;
 
-  const now = Date.now();
   const todayStr = new Date().toISOString().split('T')[0];
 
   for (const contact of contacts) {
+    const flightKey = `${campaign.id}:${contact.phoneNumber}`;
+    if (inFlightKeys.has(flightKey)) {
+      continue; // Never process the same contact concurrently
+    }
+
     try {
       const initialContactMs = new Date(contact.sentAt).getTime();
       const ageMinutes = (now - initialContactMs) / (60 * 1000);
@@ -406,7 +472,6 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
       // Fetch message logs for this contact
       const logs = await getContactLogs(campaign.id, contact.phoneNumber);
       const state = analyzeContactFollowupState(logs, initialContactMs);
-
       const gender = ruleBasedGender(contact.contactName, '');
 
       // ─────────────────────────────────────────────────────────────────────────
@@ -414,23 +479,20 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
       // ─────────────────────────────────────────────────────────────────────────
       if (state.promiseTargetDate && !state.promiseAlreadySent) {
         if (todayStr >= state.promiseTargetDate) {
-          log('FOLLOWUP', `📅 Promise date reached (${state.promiseTargetDate}) for ${contact.phoneNumber}. Sending reminder...`);
-          const msg = await generateFollowupText({
-            step: 'promise',
-            contactName: contact.contactName,
-            gender,
-            campaignName: campaign.name,
-            understandingText: fup.understandingText,
-            baseTemplate: fup.followupMessage,
-            apiKeyOrId: fup.aiApiKey,
-            preferredModel: fup.aiModel,
-          });
+          inFlightKeys.add(flightKey);
+          try {
+            log('FOLLOWUP', `📅 Promise date reached (${state.promiseTargetDate}) for ${contact.phoneNumber}. Sending reminder...`);
+            const step1Config = getStepConfig(fup, 1, campaign);
+            const msg = step1Config.message || 'আসসালামু আলাইকুম {name}! আপনার আগ্রহের অফারটির বিষয়ে জানাতে পারেন।';
+            await sendTextMessage(sock, contact.phoneNumber, msg);
+            await markPromiseSent(campaign.id, contact.phoneNumber, contact.contactName);
+            log('FOLLOWUP', `✅ Promise reminder sent to ${contact.phoneNumber}`);
 
-          await sendTextMessage(sock, contact.phoneNumber, msg);
-          await markPromiseSent(campaign.id, contact.phoneNumber, contact.contactName);
-          log('FOLLOWUP', `✅ Promise reminder sent to ${contact.phoneNumber}`);
-          await sleep(2000);
-          continue;
+            applyAccountCooldown(accountId, fup);
+            break; // Stop after 1 send to maintain strictly staggered pacing
+          } finally {
+            inFlightKeys.delete(flightKey);
+          }
         }
       }
 
@@ -438,38 +500,46 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
       // Case B: If customer REPLIED, manual takeover is ACTIVE -> STOP AUTO FOLLOW-UP!
       // ─────────────────────────────────────────────────────────────────────────
       if (state.hasReplied) {
-        // Customer replied, human takeover is active. Do NOT send automated follow-up.
         continue;
       }
 
       // ─────────────────────────────────────────────────────────────────────────
-      // Step 1: Configured delay after initial contact (default ~3 min)
+      // Step 1: Configured delay with individualized randomized jitter per contact
       // ─────────────────────────────────────────────────────────────────────────
       if (state.highestStep === 0) {
         let minDelay = Number(fup.minDelayMinutes) || 3;
         if (minDelay <= 0) minDelay = 2;
         const phoneDigits = contact.phoneNumber.replace(/\D/g, '');
-        const seed = phoneDigits.length >= 2 ? parseInt(phoneDigits.slice(-2), 10) : 12;
-        const targetMinutes = minDelay + ((seed % 15) / 10);
+        // Deterministic recipient seed so every contact gets a unique second & minute target
+        const seed = phoneDigits.length >= 4 ? parseInt(phoneDigits.slice(-4), 10) : 1234;
+        const jitterMinutes = ((seed % 150) / 60) + ((seed % 10) * 0.05); // 0.5 to 2.5 min jitter
+        const targetMinutes = minDelay + jitterMinutes;
 
         if (ageMinutes >= targetMinutes) {
-          // Safety: Don't blast contacts older than 24 hours
+          // Safety: Don't blast ancient contacts older than 24 hours
           if (ageMinutes > 1440) {
             continue;
           }
 
-          log('FOLLOWUP', `⏳ [Step 1: ${targetMinutes.toFixed(1)}-min check] Sending to ${contact.phoneNumber} (${contact.contactName}) for "${campaign.name}"...`);
-
-          const step1Config = getStepConfig(fup, 1, campaign);
-          await dispatchStepFollowup(sock, campaign, contact, 1, step1Config, gender, fup);
-
-          // Always explicitly pause typing presence so "typing..." never stays stuck!
+          inFlightKeys.add(flightKey);
           try {
-            await sock.sendPresenceUpdate('paused', contact.phoneNumber);
-          } catch {}
+            log('FOLLOWUP', `⏳ [Step 1: ${targetMinutes.toFixed(2)}-min target] Sending to ${contact.phoneNumber} (${contact.contactName}) for "${campaign.name}"...`);
 
-          await sleep(Math.floor(Math.random() * 2000) + 2000);
-          continue;
+            const step1Config = getStepConfig(fup, 1, campaign);
+            const success = await dispatchStepFollowup(sock, campaign, contact, 1, step1Config, gender, fup);
+
+            try {
+              await sock.sendPresenceUpdate('paused', contact.phoneNumber);
+            } catch {}
+
+            if (success) {
+              // Apply randomized pacing gap and exit loop: only 1 send per tick!
+              applyAccountCooldown(accountId, fup);
+              break;
+            }
+          } finally {
+            inFlightKeys.delete(flightKey);
+          }
         }
       }
 
@@ -478,19 +548,25 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
       // ─────────────────────────────────────────────────────────────────────────
       if (state.highestStep === 1) {
         const hoursSinceStep1 = (now - state.lastStepTimeMs) / (60 * 60 * 1000);
-        // Trigger after 3 hours
         if (hoursSinceStep1 >= 3) {
-          log('FOLLOWUP', `🕒 [Step 2: 3-4h nudge] Sending to ${contact.phoneNumber} (${contact.contactName})...`);
-
-          const step2Config = getStepConfig(fup, 2, campaign);
-          await dispatchStepFollowup(sock, campaign, contact, 2, step2Config, gender, fup);
-
+          inFlightKeys.add(flightKey);
           try {
-            await sock.sendPresenceUpdate('paused', contact.phoneNumber);
-          } catch {}
+            log('FOLLOWUP', `🕒 [Step 2: 3-4h nudge] Sending to ${contact.phoneNumber} (${contact.contactName})...`);
 
-          await sleep(Math.floor(Math.random() * 2000) + 2000);
-          continue;
+            const step2Config = getStepConfig(fup, 2, campaign);
+            const success = await dispatchStepFollowup(sock, campaign, contact, 2, step2Config, gender, fup);
+
+            try {
+              await sock.sendPresenceUpdate('paused', contact.phoneNumber);
+            } catch {}
+
+            if (success) {
+              applyAccountCooldown(accountId, fup);
+              break; // Crucial: Break loop to maintain staggered pacing!
+            }
+          } finally {
+            inFlightKeys.delete(flightKey);
+          }
         }
       }
 
@@ -500,18 +576,25 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
       if (state.highestStep === 2) {
         const hoursSinceStep2 = (now - state.lastStepTimeMs) / (60 * 60 * 1000);
         if (hoursSinceStep2 >= 20) {
-          log('FOLLOWUP', `🌅 [Step 3: Next-day value] Sending to ${contact.phoneNumber}...`);
-
-          const step3Config = getStepConfig(fup, 3, campaign);
-          await dispatchStepFollowup(sock, campaign, contact, 3, step3Config, gender, fup);
-
+          inFlightKeys.add(flightKey);
           try {
-            await sock.sendPresenceUpdate('paused', contact.phoneNumber);
-          } catch {}
+            log('FOLLOWUP', `🌅 [Step 3: Next-day value] Sending to ${contact.phoneNumber}...`);
 
-          log('FOLLOWUP', `✅ Step 3 completed for ${contact.phoneNumber}. Follow-up sequence finished.`);
-          await sleep(Math.floor(Math.random() * 2000) + 2000);
-          continue;
+            const step3Config = getStepConfig(fup, 3, campaign);
+            const success = await dispatchStepFollowup(sock, campaign, contact, 3, step3Config, gender, fup);
+
+            try {
+              await sock.sendPresenceUpdate('paused', contact.phoneNumber);
+            } catch {}
+
+            if (success) {
+              log('FOLLOWUP', `✅ Step 3 completed for ${contact.phoneNumber}. Follow-up sequence finished.`);
+              applyAccountCooldown(accountId, fup);
+              break; // Crucial: Break loop!
+            }
+          } finally {
+            inFlightKeys.delete(flightKey);
+          }
         }
       }
     } catch (err: any) {
@@ -524,17 +607,18 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
 }
 
 /**
- * Main scheduler loop: runs every 15 seconds in background for accurate 2-minute timing.
+ * Main scheduler loop: runs every 15 seconds in background with strict mutex lock.
  */
 export function startFollowupScheduler(): void {
   const INTERVAL_MS = 15 * 1000; // 15 seconds
 
-  log('FOLLOWUP', '🚀 Intelligent Multi-Step Follow-up Scheduler started (polling every 15s)...');
+  log('FOLLOWUP', '🚀 Intelligent Multi-Step Follow-up Scheduler started (polling every 15s with staggered anti-blast pacing)...');
 
   const runCycle = async () => {
+    if (isCycleRunning) return; // Prevent concurrent cycle execution
+    isCycleRunning = true;
     try {
       const campaigns = await getCampaignsWithFollowup();
-      // If no campaigns have follow-up enabled, do nothing
       if (campaigns.length === 0) return;
 
       for (const campaign of campaigns) {
@@ -544,6 +628,8 @@ export function startFollowupScheduler(): void {
       }
     } catch (err: any) {
       // transient network blip
+    } finally {
+      isCycleRunning = false;
     }
   };
 

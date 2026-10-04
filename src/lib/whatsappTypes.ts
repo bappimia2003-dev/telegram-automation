@@ -106,6 +106,9 @@ export interface WaFollowupConfig {
   antiBanJitter?: boolean;
   minDelayMinutes?: number;
   maxDelayMinutes?: number;
+  minBatchPeople?: number;
+  maxBatchPeople?: number;
+  followupVariants?: WaCampaignVariant[];
 
   // 3-step follow-up system (Step 1: 3-5 min random, Step 2: 3-4h, Step 3: next day)
   steps?: WaFollowupStep[];

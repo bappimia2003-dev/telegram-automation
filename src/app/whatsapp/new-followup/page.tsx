@@ -1092,12 +1092,14 @@ export default function NewFollowupPage() {
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Toggle 1: Auto Follow-up */}
           <div className="flex items-center justify-between p-4 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] gap-3">
             <div className="flex-1 min-w-0 pr-1">
               <div className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">⚡ অটো ফলো-আপ সক্রিয় (Auto Follow-up)</div>
-              <div className="text-xs sm:text-[13px] font-semibold text-gray-700 dark:text-gray-300 mt-1 leading-relaxed">২ মি, ৩ ঘণ্টা, ডে ১ ও ডে ২ এ ভ্যারিয়েশন রোটেট করে পাঠাবে</div>
+              <div className="text-xs sm:text-[13px] font-semibold text-gray-700 dark:text-gray-300 mt-1 leading-relaxed">
+                নিচে আপনার নির্ধারিত সময় ও বিরতি অনুযায়ী হুবহু টেক্সট ও ছবি পাঠাবে
+              </div>
             </div>
             <Switch
               checked={settings.auto_followup}
@@ -1106,24 +1108,13 @@ export default function NewFollowupPage() {
             />
           </div>
 
-          {/* Toggle 2: Gemini AI Brain */}
-          <div className="flex items-center justify-between p-4 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] gap-3">
-            <div className="flex-1 min-w-0 pr-1">
-              <div className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">🧠 Gemini AI ব্রেইন (Smart Variation)</div>
-              <div className="text-xs sm:text-[13px] font-semibold text-gray-700 dark:text-gray-300 mt-1 leading-relaxed">ন্যাচারাল বাংলায় প্রতিবার টেক্সট সামান্য বদলে পাঠাবে</div>
-            </div>
-            <Switch
-              checked={settings.ai_brain}
-              onCheckedChange={(checked) => handleToggle('ai_brain', settings.ai_brain)}
-              className="data-[state=checked]:bg-green-700 shrink-0"
-            />
-          </div>
-
-          {/* Toggle 3: Anti-Ban Protection */}
+          {/* Toggle 2: Anti-Ban Protection */}
           <div className="flex items-center justify-between p-4 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] gap-3">
             <div className="flex-1 min-w-0 pr-1">
               <div className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">🛡️ অ্যান্টি-ব্যান গার্ড (Anti-Ban Jitter)</div>
-              <div className="text-xs sm:text-[13px] font-semibold text-gray-700 dark:text-gray-300 mt-1 leading-relaxed">টাইপিং ৩-৮ সেকেন্ড, র্যান্ডম হিউম্যান ডিলে ও নাইট লক</div>
+              <div className="text-xs sm:text-[13px] font-semibold text-gray-700 dark:text-gray-300 mt-1 leading-relaxed">
+                র‍্যান্ডম সেকেন্ড ও মিনিট বিরতি, হিউম্যান টাইপিং ও নাইট লক
+              </div>
             </div>
             <Switch
               checked={settings.antiban}
@@ -1132,10 +1123,13 @@ export default function NewFollowupPage() {
             />
           </div>
 
-          {/* Toggle 4: Rolling 30-Day Cleanup */}
+          {/* Toggle 3: Rolling 30-Day Cleanup */}
           <div className="flex items-center justify-between p-4 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] gap-3">
             <div className="flex-1 min-w-0 pr-1">
-              <div className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">🧹 রোলিং ৩০-দিনের ডেটা ক্লিনআপ (Rolling 30-Day Window)</div>
+              <div className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">🧹 রোলিং ৩০-দিনের ডেটা ক্লিনআপ</div>
+              <div className="text-xs sm:text-[13px] font-semibold text-gray-700 dark:text-gray-300 mt-1 leading-relaxed">
+                ৩০ দিন পর সম্পন্ন হওয়া লিড ডেটা স্বয়ংক্রিয় ক্লিনআপ করবে
+              </div>
             </div>
             <Switch
               checked={settings.auto_cleanup}
