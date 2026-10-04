@@ -354,8 +354,7 @@ export async function generateFollowupText(params: {
     const prompt = `
 You are a warm, polite, and courteous Bangladeshi sales assistant chatting with a customer on WhatsApp.
 Customer Name / Honorific: "${greetingName || 'সম্মানিত কাস্টমার'}"
-Campaign / Product: "${campaignName}"
-Product Details / Notes: "${understandingText || ''}"
+Product Details / Notes: "${understandingText || 'আমাদের অফার'}"
 Follow-up Stage: ${step} (1 = 2-min gentle check, 2 = 3-hour friendly check, 3 = next-day courteous closing, promise = promised date reminder)
 Base Draft: "${fallback}"
 
@@ -363,8 +362,9 @@ Strict Instructions:
 1. Write 1 to 2 short sentences in 100% natural, polite, everyday Bangladeshi Bangla/Banglish.
 2. Address the customer respectfully (e.g. "${greetingName ? greetingName : ''}"). NEVER write awkward expressions like "নাম আপনি".
 3. Sound like a real, helpful human typing in WhatsApp — NOT a robot or corporate automated system.
-4. If relevant, casually touch upon the offer ("${understandingText || campaignName}").
-5. Output ONLY the plain message text to send directly to the customer. No quotes, no intro notes, no markdown explanations.
+4. STRICT: NEVER mention internal campaign names, codes, or labels (such as "${campaignName}", "T1", "Camp 1", etc.). Customers must NEVER hear internal admin codes! Instead, refer to it naturally as "আমাদের অফারটি" (our offer), "প্যাকেজটি", or "প্রোডাক্টটি".
+5. If product details/price are mentioned in Product Details ("${understandingText || ''}"), reference them naturally (e.g. price 350 taka) without sounding pushy.
+6. Output ONLY the plain message text to send directly to the customer. No quotes, no intro notes, no markdown explanations.
 `;
 
     const generated = await callGemini(rawKey, prompt, preferredModel || 'gemini-flash-latest');
@@ -376,6 +376,20 @@ Strict Instructions:
 
     if (clean.startsWith('"') && clean.endsWith('"')) {
       clean = clean.slice(1, -1).trim();
+    }
+
+    // Safety Filter: Strictly scrub any accidental occurrence of internal campaign name (e.g. "T1", "T1 অফারটি")
+    if (campaignName && campaignName.trim()) {
+      const cName = campaignName.trim();
+      const escaped = cName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      clean = clean
+        .replace(new RegExp(`${escaped}\\s*(-এর|এর)\\s*`, 'gi'), '')
+        .replace(new RegExp(`${escaped}\\s*অফারটি`, 'gi'), 'আমাদের অফারটি')
+        .replace(new RegExp(`${escaped}\\s*প্যাকেজটি`, 'gi'), 'আমাদের প্যাকেজটি')
+        .replace(new RegExp(`${escaped}\\s*প্রোডাক্টটি`, 'gi'), 'আমাদের প্রোডাক্টটি')
+        .replace(new RegExp(`\\b${escaped}\\b`, 'gi'), '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
     }
 
     if (clean && clean.length > 5) {
