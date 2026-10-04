@@ -13,6 +13,8 @@ exports.getAllDbAccounts = getAllDbAccounts;
 exports.deleteDbAccount = deleteDbAccount;
 exports.backupAuthSession = backupAuthSession;
 exports.restoreAuthSession = restoreAuthSession;
+exports.saveMediaBackup = saveMediaBackup;
+exports.restoreMediaBackup = restoreMediaBackup;
 exports.getCampaignsWithFollowup = getCampaignsWithFollowup;
 exports.getRecentContactedUsers = getRecentContactedUsers;
 exports.getContactLogs = getContactLogs;
@@ -385,6 +387,47 @@ async function restoreAuthSession(accountId, authDir) {
     catch (err) {
         (0, utils_js_1.errLog)('AUTH_SYNC', `Exception restoring session ${accountId}:`, err.message);
         return false;
+    }
+}
+/**
+ * Persist uploaded media permanently to Supabase Cloud DB so it survives Railway restarts.
+ */
+async function saveMediaBackup(filename, base64, mimeType = 'application/octet-stream') {
+    if (!supabase)
+        return;
+    try {
+        await supabase.from('wa_connection').upsert({
+            id: `file_${filename}`,
+            phone_number: filename,
+            qr_code: base64,
+            status: mimeType,
+            last_connected: new Date().toISOString(),
+        });
+        (0, utils_js_1.log)('MEDIA', `💾 Backed up media ${filename} to Cloud DB permanently.`);
+    }
+    catch (err) {
+        (0, utils_js_1.errLog)('MEDIA', `Error backing up media ${filename}:`, err.message);
+    }
+}
+/**
+ * Restore media from Supabase Cloud DB if not present on container disk.
+ */
+async function restoreMediaBackup(filename) {
+    if (!supabase)
+        return null;
+    try {
+        const { data, error } = await supabase
+            .from('wa_connection')
+            .select('qr_code, status')
+            .eq('id', `file_${filename}`)
+            .maybeSingle();
+        if (error || !data || !data.qr_code)
+            return null;
+        const buffer = Buffer.from(data.qr_code, 'base64');
+        return { buffer, mimeType: data.status || 'application/octet-stream' };
+    }
+    catch {
+        return null;
     }
 }
 // ─── Intelligent Multi-Step Follow-up DB Helpers ─────────────────────────────

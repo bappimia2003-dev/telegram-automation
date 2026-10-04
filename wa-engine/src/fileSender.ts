@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import { restoreMediaBackup } from './db.js';
 import { log, errLog } from './utils.js';
 
 async function getMediaBuffer(source: string): Promise<Buffer> {
@@ -8,16 +9,40 @@ async function getMediaBuffer(source: string): Promise<Buffer> {
     return Buffer.from(b64, 'base64');
   }
 
-  if (source.startsWith('http://') || source.startsWith('https://')) {
-    const res = await fetch(source);
-    if (!res.ok) throw new Error(`HTTP Error ${res.status} fetching media from ${source}`);
-    const arrayBuf = await res.arrayBuffer();
-    return Buffer.from(arrayBuf);
+  // Local file on disk
+  const uploadsDir = path.join(process.cwd(), 'uploads');
+  const possibleFilename = source.split('/').pop()?.split('?')[0];
+  if (possibleFilename && fs.existsSync(path.join(uploadsDir, possibleFilename))) {
+    return fs.readFileSync(path.join(uploadsDir, possibleFilename));
   }
 
-  // Local file
   if (fs.existsSync(source)) {
     return fs.readFileSync(source);
+  }
+
+  if (source.startsWith('http://') || source.startsWith('https://')) {
+    try {
+      const res = await fetch(source);
+      if (res.ok) {
+        const arrayBuf = await res.arrayBuffer();
+        return Buffer.from(arrayBuf);
+      }
+    } catch {}
+
+    // Fallback: restore from Supabase Cloud DB if URL is an uploaded file
+    if (possibleFilename) {
+      const restored = await restoreMediaBackup(possibleFilename);
+      if (restored) {
+        return restored.buffer;
+      }
+    }
+
+    throw new Error(`Media source not found or unreachable: ${source}`);
+  }
+
+  if (possibleFilename) {
+    const restored = await restoreMediaBackup(possibleFilename);
+    if (restored) return restored.buffer;
   }
 
   throw new Error(`Media source not found or unreachable: ${source}`);

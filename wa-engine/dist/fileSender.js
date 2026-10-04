@@ -10,22 +10,44 @@ exports.sendAudioMessage = sendAudioMessage;
 exports.sendDocumentMessage = sendDocumentMessage;
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
+const db_js_1 = require("./db.js");
 const utils_js_1 = require("./utils.js");
 async function getMediaBuffer(source) {
     if (source.startsWith('data:')) {
         const [, b64] = source.split(';base64,');
         return Buffer.from(b64, 'base64');
     }
-    if (source.startsWith('http://') || source.startsWith('https://')) {
-        const res = await fetch(source);
-        if (!res.ok)
-            throw new Error(`HTTP Error ${res.status} fetching media from ${source}`);
-        const arrayBuf = await res.arrayBuffer();
-        return Buffer.from(arrayBuf);
+    // Local file on disk
+    const uploadsDir = path_1.default.join(process.cwd(), 'uploads');
+    const possibleFilename = source.split('/').pop()?.split('?')[0];
+    if (possibleFilename && fs_1.default.existsSync(path_1.default.join(uploadsDir, possibleFilename))) {
+        return fs_1.default.readFileSync(path_1.default.join(uploadsDir, possibleFilename));
     }
-    // Local file
     if (fs_1.default.existsSync(source)) {
         return fs_1.default.readFileSync(source);
+    }
+    if (source.startsWith('http://') || source.startsWith('https://')) {
+        try {
+            const res = await fetch(source);
+            if (res.ok) {
+                const arrayBuf = await res.arrayBuffer();
+                return Buffer.from(arrayBuf);
+            }
+        }
+        catch { }
+        // Fallback: restore from Supabase Cloud DB if URL is an uploaded file
+        if (possibleFilename) {
+            const restored = await (0, db_js_1.restoreMediaBackup)(possibleFilename);
+            if (restored) {
+                return restored.buffer;
+            }
+        }
+        throw new Error(`Media source not found or unreachable: ${source}`);
+    }
+    if (possibleFilename) {
+        const restored = await (0, db_js_1.restoreMediaBackup)(possibleFilename);
+        if (restored)
+            return restored.buffer;
     }
     throw new Error(`Media source not found or unreachable: ${source}`);
 }

@@ -371,6 +371,46 @@ export async function restoreAuthSession(accountId: string, authDir: string): Pr
   }
 }
 
+/**
+ * Persist uploaded media permanently to Supabase Cloud DB so it survives Railway restarts.
+ */
+export async function saveMediaBackup(filename: string, base64: string, mimeType = 'application/octet-stream'): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.from('wa_connection').upsert({
+      id: `file_${filename}`,
+      phone_number: filename,
+      qr_code: base64,
+      status: mimeType,
+      last_connected: new Date().toISOString(),
+    });
+    log('MEDIA', `💾 Backed up media ${filename} to Cloud DB permanently.`);
+  } catch (err: any) {
+    errLog('MEDIA', `Error backing up media ${filename}:`, err.message);
+  }
+}
+
+/**
+ * Restore media from Supabase Cloud DB if not present on container disk.
+ */
+export async function restoreMediaBackup(filename: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('wa_connection')
+      .select('qr_code, status')
+      .eq('id', `file_${filename}`)
+      .maybeSingle();
+
+    if (error || !data || !data.qr_code) return null;
+
+    const buffer = Buffer.from(data.qr_code, 'base64');
+    return { buffer, mimeType: data.status || 'application/octet-stream' };
+  } catch {
+    return null;
+  }
+}
+
 // ─── Intelligent Multi-Step Follow-up DB Helpers ─────────────────────────────
 // No schema changes required: uses wa_message_logs with specific message_type values:
 //   'incoming'       -> customer replied (stops auto follow-up / activates manual takeover)

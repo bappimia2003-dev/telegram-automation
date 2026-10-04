@@ -13,7 +13,7 @@ import {
   initAllAccounts,
   isSessionActive,
 } from './whatsapp.js';
-import { getAllDbAccounts } from './db.js';
+import { getAllDbAccounts, saveMediaBackup, restoreMediaBackup } from './db.js';
 import { log, errLog } from './utils.js';
 import { startFollowupScheduler } from './followupScheduler.js';
 
@@ -30,6 +30,30 @@ const uploadsDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
+
+// Auto-restore uploaded media from Supabase Cloud DB if missing from container disk (survives redeploys)
+app.get('/uploads/:filename', async (req, res, next) => {
+  const filename = req.params.filename;
+  const filePath = path.join(uploadsDir, filename);
+
+  if (fs.existsSync(filePath)) {
+    return next();
+  }
+
+  try {
+    const restored = await restoreMediaBackup(filename);
+    if (restored) {
+      await fs.promises.writeFile(filePath, restored.buffer).catch(() => {});
+      res.setHeader('Content-Type', restored.mimeType);
+      return res.send(restored.buffer);
+    }
+  } catch (err: any) {
+    errLog('MEDIA', `Failed restoring ${filename}:`, err.message);
+  }
+
+  next();
+});
+
 app.use('/uploads', express.static(uploadsDir));
 
 // Dedicated file upload endpoint for WhatsApp media (audio, video, images, documents)
@@ -43,13 +67,19 @@ app.post('/upload', async (req, res) => {
     const safeName = `wa-${Date.now()}-${uuidv4().slice(0, 8)}${ext}`;
     const filePath = path.join(uploadsDir, safeName);
     const cleanBase64 = base64.replace(/^data:[^;]+;base64,/, '');
-    await fs.promises.writeFile(filePath, Buffer.from(cleanBase64, 'base64'));
+    const buffer = Buffer.from(cleanBase64, 'base64');
+
+    // 1. Write to container disk
+    await fs.promises.writeFile(filePath, buffer);
+
+    // 2. Persist permanently to Supabase Cloud DB so it survives redeploys
+    saveMediaBackup(safeName, cleanBase64, mimeType || 'application/octet-stream').catch(() => {});
 
     const host = req.get('x-forwarded-host') || req.get('host');
     const proto = req.get('x-forwarded-proto') || 'https';
     const publicUrl = `${proto}://${host}/uploads/${safeName}`;
 
-    log('UPLOAD', `Saved ${safeName} (${(cleanBase64.length * 0.75 / 1024).toFixed(1)} KB) -> ${publicUrl}`);
+    log('UPLOAD', `Saved ${safeName} (${(cleanBase64.length * 0.75 / 1024).toFixed(1)} KB) -> ${publicUrl} (Cloud backed up)`);
     res.json({ ok: true, url: publicUrl, filename });
   } catch (err: any) {
     errLog('UPLOAD', 'Upload error:', err.message);
@@ -61,9 +91,9 @@ app.post('/upload', async (req, res) => {
 app.get('/health', (_req, res) => {
   res.json({
     ok: true,
-    version: '2.6.0',
-    buildDate: '2026-10-04T06:22:00Z',
-    features: ['random-ms-delay-3-4s', 'variation-rotation-ab', 'intelligent-multistep-followup', 'promise-date-scheduler', 'trigger-followup-on-reply-off'],
+    version: '2.7.0',
+    buildDate: '2026-10-04T06:30:00Z',
+    features: ['random-ms-delay-3-4s', 'variation-rotation-ab', 'intelligent-multistep-followup', 'promise-date-scheduler', 'trigger-followup-on-reply-off', 'persistent-cloud-media'],
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
   });
@@ -71,9 +101,9 @@ app.get('/health', (_req, res) => {
 
 app.get('/version', (_req, res) => {
   res.json({
-    version: '2.6.0',
-    buildDate: '2026-10-04T06:22:00Z',
-    features: ['random-ms-delay-3-4s', 'variation-rotation-ab', 'intelligent-multistep-followup', 'promise-date-scheduler', 'trigger-followup-on-reply-off'],
+    version: '2.7.0',
+    buildDate: '2026-10-04T06:30:00Z',
+    features: ['random-ms-delay-3-4s', 'variation-rotation-ab', 'intelligent-multistep-followup', 'promise-date-scheduler', 'trigger-followup-on-reply-off', 'persistent-cloud-media'],
     uptime: Math.floor(process.uptime()),
   });
 });
