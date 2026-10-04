@@ -544,20 +544,33 @@ export async function clearContactInboundReplies(campaignId: string, phoneNumber
 }
 
 /**
- * Find the most recent campaign for a phone number.
+ * Find the most recent campaign for a phone number (optionally scoped to account).
  */
-export async function findContactCampaign(phoneNumber: string): Promise<string | null> {
+export async function findContactCampaign(phoneNumber: string, accountId?: string): Promise<string | null> {
   if (!supabase) return null;
   try {
     const { data } = await supabase
       .from('wa_contacted_users')
-      .select('campaign_id')
+      .select('campaign_id, sent_at')
       .eq('phone_number', phoneNumber)
-      .order('sent_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .order('sent_at', { ascending: false });
 
-    return data?.campaign_id || null;
+    if (!data || data.length === 0) return null;
+
+    if (!accountId) {
+      return data[0].campaign_id || null;
+    }
+
+    // Prefer campaigns belonging to this accountId or 'all'
+    const campaigns = await getActiveCampaigns();
+    for (const record of data) {
+      const camp = campaigns.find((c) => c.id === record.campaign_id);
+      if (camp && (!camp.accountId || camp.accountId === 'all' || camp.accountId === accountId)) {
+        return camp.id;
+      }
+    }
+
+    return data[0].campaign_id || null;
   } catch {
     return null;
   }

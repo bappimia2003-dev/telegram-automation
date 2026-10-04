@@ -27,6 +27,7 @@ export interface WaFollowupConfig {
   followupAudioUrl?: string;
   followupDocumentUrl?: string;
   followupDocumentName?: string;
+  followupFiles?: Array<{ id: string; name: string; url: string; type: string; size?: number }>;
 }
 
 export interface WaCampaign {

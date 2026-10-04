@@ -32,6 +32,7 @@ function getActiveSock(preferAccountId) {
         const sock = (0, whatsapp_js_1.getSocket)(preferAccountId);
         if (sock)
             return sock;
+        return null; // Strict account isolation: don't accidentally send follow-up from another SIM!
     }
     const accounts = (0, whatsapp_js_1.getAllAccountsInfo)();
     for (const acc of accounts) {
@@ -54,6 +55,11 @@ function analyzeContactFollowupState(logs, initialContactTimeMs) {
     let promiseAlreadySent = false;
     for (const l of logs) {
         const logTimeMs = new Date(l.sentAt).getTime();
+        // CRITICAL: Ignore any historical logs from previous test sessions or before the current campaign trigger!
+        // This guarantees that every new trigger starts clean at Step 1.
+        if (logTimeMs < initialContactTimeMs - 2000) {
+            continue;
+        }
         // Inbound reply from customer AFTER the auto-campaign message was delivered
         if (l.messageType === 'incoming' && logTimeMs > initialContactTimeMs + 2000) {
             hasReplied = true;
@@ -90,13 +96,33 @@ async function processCampaignFollowups(campaign) {
     const accountId = campaign.accountId && campaign.accountId !== 'all' ? campaign.accountId : null;
     const sock = getActiveSock(accountId);
     if (!sock) {
-        return; // No WhatsApp connection available
+        return; // No WhatsApp connection available for this account
     }
     const contacts = await (0, db_js_1.getRecentContactedUsers)(campaign.id);
     if (contacts.length === 0)
         return;
     const now = Date.now();
     const todayStr = new Date().toISOString().split('T')[0];
+    // Resolve media files from both followupFiles array and top-level fields
+    let audioUrl = fup.followupAudioUrl || campaign.audioUrl || '';
+    let imageUrl = fup.followupImageUrl || campaign.imageUrl || '';
+    let videoUrl = fup.followupVideoUrl || campaign.videoUrl || '';
+    let documentUrl = fup.followupDocumentUrl || campaign.documentUrl || '';
+    let documentName = fup.followupDocumentName || campaign.documentName || 'Document';
+    if (Array.isArray(fup.followupFiles) && fup.followupFiles.length > 0) {
+        for (const f of fup.followupFiles) {
+            if (f.type === 'audio' && !audioUrl)
+                audioUrl = f.url;
+            if (f.type === 'image' && !imageUrl)
+                imageUrl = f.url;
+            if (f.type === 'video' && !videoUrl)
+                videoUrl = f.url;
+            if (f.type === 'document' && !documentUrl) {
+                documentUrl = f.url;
+                documentName = f.name;
+            }
+        }
+    }
     for (const contact of contacts) {
         try {
             const initialContactMs = new Date(contact.sentAt).getTime();
@@ -119,6 +145,7 @@ async function processCampaignFollowups(campaign) {
                         understandingText: fup.understandingText,
                         baseTemplate: fup.followupMessage,
                         apiKeyOrId: fup.aiApiKey,
+                        preferredModel: fup.aiModel,
                     });
                     await (0, fileSender_js_1.sendTextMessage)(sock, contact.phoneNumber, msg);
                     await (0, db_js_1.markPromiseSent)(campaign.id, contact.phoneNumber, contact.contactName);
@@ -138,8 +165,8 @@ async function processCampaignFollowups(campaign) {
             // Step 1: ~2 Minutes after initial contact (AI-optimized friendly check)
             // ─────────────────────────────────────────────────────────────────────────
             if (state.highestStep === 0) {
-                // Must be at least 2 minutes since initial message
-                if (ageMinutes >= 2) {
+                // Must be at least ~1.9 minutes (114 seconds) so with typing latency it delivers at exactly 2 minutes
+                if (ageMinutes >= 1.9) {
                     // Safety: If contact is older than 60 minutes and step 1 was never sent (e.g. old record),
                     // skip Step 1 to avoid mass-spamming ancient contacts.
                     if (ageMinutes > 60) {
@@ -154,6 +181,7 @@ async function processCampaignFollowups(campaign) {
                         understandingText: fup.understandingText,
                         baseTemplate: fup.followupMessage,
                         apiKeyOrId: fup.aiApiKey,
+                        preferredModel: fup.aiModel,
                     });
                     try {
                         await sock.sendPresenceUpdate('composing', contact.phoneNumber);
@@ -175,8 +203,6 @@ async function processCampaignFollowups(campaign) {
                 // Trigger after 3 hours
                 if (hoursSinceStep1 >= 3) {
                     (0, utils_js_1.log)('FOLLOWUP', `🕒 [Step 2: 3-4h nudge] Sending to ${contact.phoneNumber} (${contact.contactName})...`);
-                    const audioUrl = fup.followupAudioUrl || campaign.audioUrl || '';
-                    const imageUrl = fup.followupImageUrl || campaign.imageUrl || '';
                     const msg = await (0, ai_js_1.generateFollowupText)({
                         step: 2,
                         contactName: contact.contactName,
@@ -184,6 +210,7 @@ async function processCampaignFollowups(campaign) {
                         campaignName: campaign.name,
                         understandingText: fup.understandingText,
                         apiKeyOrId: fup.aiApiKey,
+                        preferredModel: fup.aiModel,
                     });
                     try {
                         await sock.sendPresenceUpdate('composing', contact.phoneNumber);
@@ -201,6 +228,16 @@ async function processCampaignFollowups(campaign) {
                         await (0, fileSender_js_1.sendImageMessage)(sock, contact.phoneNumber, imageUrl, msg);
                         await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 2, 'image', imageUrl);
                         (0, utils_js_1.log)('FOLLOWUP', `✅ Step 2 image sent to ${contact.phoneNumber}`);
+                    }
+                    else if (videoUrl) {
+                        await (0, fileSender_js_1.sendVideoMessage)(sock, contact.phoneNumber, videoUrl, msg);
+                        await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 2, 'video', videoUrl);
+                        (0, utils_js_1.log)('FOLLOWUP', `✅ Step 2 video sent to ${contact.phoneNumber}`);
+                    }
+                    else if (documentUrl) {
+                        await (0, fileSender_js_1.sendDocumentMessage)(sock, contact.phoneNumber, documentUrl, documentName);
+                        await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 2, 'document', documentUrl);
+                        (0, utils_js_1.log)('FOLLOWUP', `✅ Step 2 document sent to ${contact.phoneNumber}`);
                     }
                     else {
                         // Text nudge
@@ -226,16 +263,20 @@ async function processCampaignFollowups(campaign) {
                         campaignName: campaign.name,
                         understandingText: fup.understandingText,
                         apiKeyOrId: fup.aiApiKey,
+                        preferredModel: fup.aiModel,
                     });
                     try {
                         await sock.sendPresenceUpdate('composing', contact.phoneNumber);
                     }
                     catch { }
                     await (0, utils_js_1.sleep)(1500);
-                    const imageUrl = fup.followupImageUrl || campaign.imageUrl || '';
                     if (imageUrl) {
                         await (0, fileSender_js_1.sendImageMessage)(sock, contact.phoneNumber, imageUrl, msg);
                         await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 3, 'image', imageUrl);
+                    }
+                    else if (audioUrl) {
+                        await (0, fileSender_js_1.sendAudioMessage)(sock, contact.phoneNumber, audioUrl);
+                        await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 3, 'audio', audioUrl);
                     }
                     else {
                         await (0, fileSender_js_1.sendTextMessage)(sock, contact.phoneNumber, msg);
@@ -253,11 +294,11 @@ async function processCampaignFollowups(campaign) {
     }
 }
 /**
- * Main scheduler loop: runs every 30 seconds in background.
+ * Main scheduler loop: runs every 15 seconds in background for accurate 2-minute timing.
  */
 function startFollowupScheduler() {
-    const INTERVAL_MS = 30 * 1000; // 30 seconds
-    (0, utils_js_1.log)('FOLLOWUP', '🚀 Intelligent Multi-Step Follow-up Scheduler started (polling every 30s)...');
+    const INTERVAL_MS = 15 * 1000; // 15 seconds
+    (0, utils_js_1.log)('FOLLOWUP', '🚀 Intelligent Multi-Step Follow-up Scheduler started (polling every 15s)...');
     const runCycle = async () => {
         try {
             const campaigns = await (0, db_js_1.getCampaignsWithFollowup)();

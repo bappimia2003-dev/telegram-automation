@@ -154,28 +154,47 @@ function ruleBasedPromiseDate(message = '') {
     return null;
 }
 /**
- * Call Google AI Studio (Gemini) REST API directly without heavy external SDK dependencies.
+ * Call Google AI Studio (Gemini) REST API directly with automatic model fallback cascade.
+ * Tries modern active models: gemini-flash-latest -> gemini-flash-lite-latest -> gemini-3.5-flash-lite.
  */
-async function callGemini(apiKey, prompt, modelName = 'gemini-2.0-flash') {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 250,
-            },
-        }),
-    });
-    if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Gemini API returned ${res.status}: ${errText}`);
+async function callGemini(apiKey, prompt, preferredModel = 'gemini-flash-latest') {
+    const modelCandidates = [
+        preferredModel,
+        'gemini-flash-latest',
+        'gemini-flash-lite-latest',
+        'gemini-3.5-flash-lite',
+    ].filter((m, i, arr) => arr.indexOf(m) === i);
+    let lastError = null;
+    for (const model of modelCandidates) {
+        try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        temperature: 0.7,
+                        maxOutputTokens: 250,
+                    },
+                }),
+            });
+            if (!res.ok) {
+                const errText = await res.text();
+                throw new Error(`Gemini API [${model}] returned ${res.status}: ${errText.slice(0, 150)}`);
+            }
+            const json = await res.json();
+            const text = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            if (text.trim()) {
+                return text.trim();
+            }
+        }
+        catch (err) {
+            lastError = err;
+            // Try next model candidate
+        }
     }
-    const json = await res.json();
-    const text = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    return text.trim();
+    throw lastError || new Error('All Gemini model candidates failed');
 }
 /**
  * Intelligent Gender and Customer Intent detection using Gemini AI + fast rule fallback.
@@ -219,7 +238,7 @@ Tasks:
 Return ONLY JSON:
 {"gender":"apu"|"vai"|"apni","promiseDate":"YYYY-MM-DD"|null,"status":"replied_active"|"promised"|"declined"|"silent"}
 `;
-        const raw = await callGemini(rawKey, prompt, 'gemini-2.0-flash');
+        const raw = await callGemini(rawKey, prompt, 'gemini-flash-latest');
         const clean = raw.replace(/```json|```/g, '').trim();
         const parsed = JSON.parse(clean);
         return {
@@ -242,27 +261,59 @@ Return ONLY JSON:
  * Falls back to customized template if Gemini call fails.
  */
 async function generateFollowupText(params) {
-    const { step, contactName, gender, campaignName, understandingText, baseTemplate, apiKeyOrId } = params;
-    const honorific = gender === 'apu' ? 'আপু' : gender === 'vai' ? 'ভাইয়া' : 'আপনি';
-    const nameLabel = contactName && contactName !== 'Customer' ? `${contactName} ${honorific}` : honorific;
-    // Default fallback templates
+    const { step, contactName, gender, campaignName, understandingText, baseTemplate, apiKeyOrId, preferredModel } = params;
+    // Format natural, culturally fluent Bengali greeting/honorific (NEVER output "Name আপনি"!)
+    const cleanName = (contactName || '').trim();
+    const hasValidName = cleanName && cleanName !== 'Customer' && !cleanName.includes('@') && cleanName.length < 25;
+    let nameLabel = '';
+    let greetingName = '';
+    if (hasValidName) {
+        if (gender === 'apu') {
+            nameLabel = `${cleanName} আপু`;
+            greetingName = `${cleanName} আপু`;
+        }
+        else if (gender === 'vai') {
+            nameLabel = `${cleanName} ভাইয়া`;
+            greetingName = `${cleanName} ভাইয়া`;
+        }
+        else {
+            nameLabel = cleanName;
+            greetingName = cleanName;
+        }
+    }
+    else {
+        if (gender === 'apu') {
+            nameLabel = 'আপু';
+            greetingName = 'আপু';
+        }
+        else if (gender === 'vai') {
+            nameLabel = 'ভাইয়া';
+            greetingName = 'ভাইয়া';
+        }
+        else {
+            nameLabel = '';
+            greetingName = '';
+        }
+    }
+    // Default fallback templates (100% natural conversational Bengali)
+    const greeting = greetingName ? `আসসালামু আলাইকুম ${greetingName}!` : 'আসসালামু আলাইকুম!';
     let fallback = '';
     if (step === 1) {
-        fallback = `আসসালামু আলাইকুম ${nameLabel}! অফারটির বিস্তারিত কি দেখেছেন? কোনো প্রশ্ন থাকলে নির্দ্বিধায় বলুন, সাহায্য করতে পারলে খুশি হবো।`;
+        fallback = `${greeting} আমাদের অফারটির বিস্তারিত কি দেখেছেন? কোনো কিছু জানার থাকলে নির্দ্বিধায় বলতে পারেন।`;
     }
     else if (step === 2) {
-        fallback = `${nameLabel}, আশা করি ভালো আছেন! অফারটি কিন্তু খুব সীমিত সময়ের জন্য এভেইলেবল। আপনি চাইলে এখনই কনফার্ম করে রাখতে পারেন।`;
+        fallback = `${greetingName ? greetingName + ', আশা' : 'আশা'} করি ভালো আছেন! অফারটি কিন্তু সীমিত সময়ের জন্য চালু আছে। আপনার প্রয়োজন হলে এখনই জানিয়ে রাখতে পারেন।`;
     }
     else if (step === 3) {
-        fallback = `শুভ সকাল ${nameLabel}! আপনার জন্য কি প্যাকেজটি রিজার্ভ রাখব? আপনার মতামতটি জানালে সুবিধা হতো। ধন্যবাদ!`;
+        fallback = `শুভ সকাল ${greetingName}! আপনার কি এই প্যাকেজটির প্রয়োজন আছে? আপনার মতামত জানালে সুবিধা হতো। ধন্যবাদ!`;
     }
     else if (step === 'promise') {
-        fallback = `আসসালামু আলাইকুম ${nameLabel}! আপনি আজকে যোগাযোগ করতে বলেছিলেন। অফারটি এখনো আপনার জন্য চালু আছে, কোনো প্রশ্ন থাকলে জানাতে পারেন!`;
+        fallback = `${greeting} আপনি আজকে যোগাযোগ করতে বলেছিলেন। অফারটি এখনো আপনার জন্য এভেইলেবল আছে, কোনো প্রশ্ন থাকলে জানাতে পারেন!`;
     }
     if (baseTemplate && baseTemplate.trim()) {
         fallback = baseTemplate
-            .replace(/\{name\}/g, nameLabel)
-            .replace(/\{honorific\}/g, honorific);
+            .replace(/\{name\}/g, greetingName || 'ভাইয়া/আপু')
+            .replace(/\{honorific\}/g, gender === 'apu' ? 'আপু' : gender === 'vai' ? 'ভাইয়া' : '');
     }
     const rawKey = await resolveGeminiApiKey(apiKeyOrId);
     if (!rawKey) {
@@ -270,24 +321,31 @@ async function generateFollowupText(params) {
     }
     try {
         const prompt = `
-You are a warm, polite, and respectful Bangladeshi sales manager at a business.
-Customer Name/Honorific: "${nameLabel}"
+You are a warm, polite, and courteous Bangladeshi sales assistant chatting with a customer on WhatsApp.
+Customer Name / Honorific: "${greetingName || 'সম্মানিত কাস্টমার'}"
 Campaign / Product: "${campaignName}"
-Product Details / Knowledge: "${understandingText || ''}"
-Follow-up Step: ${step} (1 = 2-min gentle check, 2 = 3-hour friendly nudge, 3 = next-day courteous closing, promise = promised date reminder)
+Product Details / Notes: "${understandingText || ''}"
+Follow-up Stage: ${step} (1 = 2-min gentle check, 2 = 3-hour friendly check, 3 = next-day courteous closing, promise = promised date reminder)
 Base Draft: "${fallback}"
 
-Instructions:
-1. Write a 100% natural, polite, and human-like conversational WhatsApp message in sweet Bangladeshi Bangla/Banglish.
-2. Address the customer respectfully with "${nameLabel}".
-3. Keep it short (1 to 3 short sentences max).
-4. Do NOT sound like an automated robot or AI. Sound like a real friendly person typing on WhatsApp.
-5. If product details/pricing ("${understandingText || ''}") is relevant, casually reference it if helpful.
-6. Output ONLY the plain text message to send directly. No quotes, no markdown, no introductory words.
+Strict Instructions:
+1. Write 1 to 2 short sentences in 100% natural, polite, everyday Bangladeshi Bangla/Banglish.
+2. Address the customer respectfully (e.g. "${greetingName ? greetingName : ''}"). NEVER write awkward expressions like "নাম আপনি".
+3. Sound like a real, helpful human typing in WhatsApp — NOT a robot or corporate automated system.
+4. If relevant, casually touch upon the offer ("${understandingText || campaignName}").
+5. Output ONLY the plain message text to send directly to the customer. No quotes, no intro notes, no markdown explanations.
 `;
-        const generated = await callGemini(rawKey, prompt, 'gemini-2.0-flash');
-        if (generated && generated.length > 5) {
-            return generated;
+        const generated = await callGemini(rawKey, prompt, preferredModel || 'gemini-flash-latest');
+        // Clean up any extraneous quotes or formatting
+        let clean = generated
+            .replace(/^["'`]+|["'`]+$/g, '')
+            .replace(/^(এখানে একটি.*?হলো[:\n]*|এখানে আপনার.*?বাক্য[:\n]*)/i, '')
+            .trim();
+        if (clean.startsWith('"') && clean.endsWith('"')) {
+            clean = clean.slice(1, -1).trim();
+        }
+        if (clean && clean.length > 5) {
+            return clean;
         }
     }
     catch (err) {

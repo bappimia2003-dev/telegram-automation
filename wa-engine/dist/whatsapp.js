@@ -227,7 +227,7 @@ async function startWhatsApp(accountId = 'main', accountName) {
                     else {
                         // B. CUSTOMER REPLY! (Customer replied to our message)
                         // Follow-up is turned OFF IMMEDIATELY for this customer!
-                        const campaignId = await (0, db_js_1.findContactCampaign)(sender);
+                        const campaignId = await (0, db_js_1.findContactCampaign)(sender, accountId);
                         if (campaignId) {
                             (0, utils_js_1.log)('WA', `🛑 Customer ${sender} replied: "${messageText}". Follow-up turned OFF immediately!`);
                             await (0, db_js_1.logInboundMessage)(campaignId, sender, pushName, messageText);

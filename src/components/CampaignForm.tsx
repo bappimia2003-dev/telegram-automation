@@ -125,7 +125,7 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
       initialData?.followupConfig || {
         aiEnabled: true,
         aiApiKey: '',
-        aiModel: 'gemini-2.5-flash',
+        aiModel: 'gemini-flash-latest',
         aiSystemPrompt: 'প্রোডাক্ট নলেজ ও তথ্যের আলোকে ফলো-আপ মেসেজটি মিষ্টি, আকর্ষণীয় ও মার্জিত বাংলায় গুছিয়ে লিখে পাঠাবে। কোনো রোবোটিক ভাব রাখবে না।',
         understandingFiles: [],
         understandingText: '',
