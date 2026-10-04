@@ -10,6 +10,25 @@ export interface WaCampaignVariant {
   documentName: string;
 }
 
+export interface WaFollowupConfig {
+  aiEnabled: boolean;
+  aiApiKey?: string;
+  aiModel?: string;
+  aiSystemPrompt?: string;
+  understandingText?: string;
+  followupEnabled: boolean;
+  followupDelayValue?: number;
+  followupDelayUnit?: 'minutes' | 'hours' | 'days';
+  followupCondition?: 'no_reply' | 'unconfirmed' | 'always';
+  antiBanJitter?: boolean;
+  followupMessage?: string;
+  followupImageUrl?: string;
+  followupVideoUrl?: string;
+  followupAudioUrl?: string;
+  followupDocumentUrl?: string;
+  followupDocumentName?: string;
+}
+
 export interface WaCampaign {
   id: string;
   name: string;
@@ -26,6 +45,7 @@ export interface WaCampaign {
   sendOrder: string;
   delayBetweenSends: number;
   accountId?: string;
+  followupConfig?: WaFollowupConfig;
   isActive: boolean;
   chatReplyEnabled: boolean;
   totalSent: number;

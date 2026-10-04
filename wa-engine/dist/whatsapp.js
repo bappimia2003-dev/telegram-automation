@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.isSessionActive = isSessionActive;
 exports.getConnectionInfo = getConnectionInfo;
 exports.getAllAccountsInfo = getAllAccountsInfo;
+exports.getSocket = getSocket;
 exports.startWhatsApp = startWhatsApp;
 exports.disconnectWhatsApp = disconnectWhatsApp;
 exports.removeWhatsAppAccount = removeWhatsAppAccount;
@@ -61,6 +62,14 @@ function getAllAccountsInfo() {
         });
     }
     return list;
+}
+/** Return the Baileys socket for a given accountId if it's connected, else null */
+function getSocket(accountId) {
+    const session = sessions.get(accountId);
+    if (session && session.sock && session.status === 'connected') {
+        return session.sock;
+    }
+    return null;
 }
 async function startWhatsApp(accountId = 'main', accountName) {
     const session = getOrCreateSession(accountId, accountName);

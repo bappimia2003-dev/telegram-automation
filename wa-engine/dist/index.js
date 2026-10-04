@@ -12,6 +12,7 @@ const uuid_1 = require("uuid");
 const whatsapp_js_1 = require("./whatsapp.js");
 const db_js_1 = require("./db.js");
 const utils_js_1 = require("./utils.js");
+const followupScheduler_js_1 = require("./followupScheduler.js");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const PORT = Number(process.env.PORT) || 3005;
@@ -165,6 +166,8 @@ app.listen(PORT, '0.0.0.0', () => {
     (0, whatsapp_js_1.initAllAccounts)().catch((err) => {
         (0, utils_js_1.errLog)('SERVER', 'Error initializing accounts on boot:', err.message);
     });
+    // Start the follow-up scheduler (checks every 60s for pending follow-ups)
+    (0, followupScheduler_js_1.startFollowupScheduler)();
     // Watcher: Poll DB every 4s for any account marked 'connecting' without an active socket
     setInterval(async () => {
         try {

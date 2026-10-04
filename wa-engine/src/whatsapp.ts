@@ -65,6 +65,15 @@ export function getAllAccountsInfo() {
   return list;
 }
 
+/** Return the Baileys socket for a given accountId if it's connected, else null */
+export function getSocket(accountId: string): any | null {
+  const session = sessions.get(accountId);
+  if (session && session.sock && session.status === 'connected') {
+    return session.sock;
+  }
+  return null;
+}
+
 export async function startWhatsApp(accountId = 'main', accountName?: string): Promise<any> {
   const session = getOrCreateSession(accountId, accountName);
 

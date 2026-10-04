@@ -15,6 +15,7 @@ import {
 } from './whatsapp.js';
 import { getAllDbAccounts } from './db.js';
 import { log, errLog } from './utils.js';
+import { startFollowupScheduler } from './followupScheduler.js';
 
 dotenv.config();
 
@@ -182,6 +183,9 @@ app.listen(PORT, '0.0.0.0', () => {
     errLog('SERVER', 'Error initializing accounts on boot:', err.message);
   });
 
+  // Start the follow-up scheduler (checks every 60s for pending follow-ups)
+  startFollowupScheduler();
+
   // Watcher: Poll DB every 4s for any account marked 'connecting' without an active socket
   setInterval(async () => {
     try {
@@ -199,3 +203,4 @@ app.listen(PORT, '0.0.0.0', () => {
     }
   }, 4000);
 });
+

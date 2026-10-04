@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
-import { WaCampaign, WaContactedUser, WaMessageLog, WaConnection } from './types.js';
+import { WaCampaign, WaContactedUser, WaMessageLog, WaConnection, WaFollowupConfig } from './types.js';
 import { log, errLog } from './utils.js';
 
 dotenv.config();
@@ -22,10 +22,11 @@ if (SUPABASE_URL && SUPABASE_KEY) {
   errLog('DB', 'SUPABASE_URL or SUPABASE_KEY missing in environment!');
 }
 
-function parseDescriptionTags(rawDesc: string): { accountId: string; variants: any[]; description: string } {
+function parseDescriptionTags(rawDesc: string): { accountId: string; variants: any[]; followupConfig: WaFollowupConfig | undefined; description: string } {
   let description = rawDesc || '';
   let accountId = 'all';
   let variants: any[] = [];
+  let followupConfig: WaFollowupConfig | undefined = undefined;
 
   // Extract [acc:...]
   if (description.includes('[acc:')) {
@@ -59,11 +60,30 @@ function parseDescriptionTags(rawDesc: string): { accountId: string; variants: a
     }
   }
 
-  return { accountId, variants, description };
+  // Extract [fup:...]
+  if (description.includes('[fup:')) {
+    const start = description.indexOf('[fup:');
+    const end = description.indexOf(']', start);
+    if (end !== -1) {
+      const fupRaw = description.substring(start + 5, end);
+      try {
+        let decoded = fupRaw;
+        if (!fupRaw.startsWith('{')) {
+          decoded = Buffer.from(fupRaw, 'base64').toString('utf-8');
+        }
+        followupConfig = JSON.parse(decoded);
+      } catch (e) {
+        // ignore parse error
+      }
+      description = (description.substring(0, start) + description.substring(end + 1)).trim();
+    }
+  }
+
+  return { accountId, variants, followupConfig, description };
 }
 
 function rowToCampaign(r: any): WaCampaign {
-  const { accountId, variants: parsedVariants, description } = parseDescriptionTags(r.description || '');
+  const { accountId, variants: parsedVariants, followupConfig, description } = parseDescriptionTags(r.description || '');
 
   let variants = parsedVariants;
   if (!variants || variants.length === 0) {
@@ -98,6 +118,7 @@ function rowToCampaign(r: any): WaCampaign {
     variants,
     sendOrder: r.send_order || 'message,image,video,audio,document',
     delayBetweenSends: r.delay_between_sends ?? 3,
+    followupConfig,
     isActive: Boolean(r.is_active),
     chatReplyEnabled: Boolean(r.chat_reply_enabled),
     totalSent: r.total_sent ?? 0,
@@ -349,3 +370,76 @@ export async function restoreAuthSession(accountId: string, authDir: string): Pr
     return false;
   }
 }
+
+// ─── Follow-up Scheduler DB helpers ─────────────────────────────────────────
+
+/**
+ * Get all active campaigns that have followupEnabled=true in their [fup:] config.
+ * The full WaCampaign objects (with followupConfig parsed) are returned.
+ */
+export async function getCampaignsWithFollowup(): Promise<WaCampaign[]> {
+  const all = await getActiveCampaigns();
+  return all.filter(
+    (c) => c.followupConfig?.followupEnabled === true
+  );
+}
+
+/**
+ * Get wa_contacted_users rows for a campaign that have NOT yet received a follow-up
+ * (followup_sent_at IS NULL) and were contacted at least `delayMs` milliseconds ago.
+ */
+export async function getPendingFollowupContacts(
+  campaignId: string,
+  delayMs: number
+): Promise<{ id: string; phoneNumber: string; contactName: string; sentAt: string }[]> {
+  if (!supabase) return [];
+  try {
+    // Fetch all contacted users for this campaign that haven't had followup sent yet
+    const { data, error } = await supabase
+      .from('wa_contacted_users')
+      .select('id, phone_number, contact_name, sent_at, followup_sent_at')
+      .eq('campaign_id', campaignId)
+      .is('followup_sent_at', null)
+      .eq('status', 'sent');
+
+    if (error) {
+      errLog('DB', 'Error fetching pending followup contacts:', error.message);
+      return [];
+    }
+
+    const now = Date.now();
+    return (data || [])
+      .filter((row: any) => {
+        const sentAt = new Date(row.sent_at).getTime();
+        return (now - sentAt) >= delayMs;
+      })
+      .map((row: any) => ({
+        id: row.id,
+        phoneNumber: row.phone_number,
+        contactName: row.contact_name,
+        sentAt: row.sent_at,
+      }));
+  } catch (e: any) {
+    errLog('DB', 'Exception fetching pending followup contacts:', e.message);
+    return [];
+  }
+}
+
+/**
+ * Mark a wa_contacted_users row as having received a follow-up message.
+ */
+export async function markFollowupSent(contactedUserId: string): Promise<void> {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase
+      .from('wa_contacted_users')
+      .update({ followup_sent_at: new Date().toISOString() })
+      .eq('id', contactedUserId);
+    if (error) {
+      errLog('DB', 'Error marking followup sent:', error.message);
+    }
+  } catch (e: any) {
+    errLog('DB', 'Exception marking followup sent:', e.message);
+  }
+}
+
