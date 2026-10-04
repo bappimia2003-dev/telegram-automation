@@ -44,6 +44,21 @@ interface CampaignFormProps {
   returnTo?: string;
 }
 
+async function parseJsonSafely(res: Response, defaultAction = 'Action'): Promise<any> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    if (res.status === 413) {
+      throw new Error('File or data is too large for serverless limit (max 4.5MB). Please upload a smaller media file or audio clip.');
+    }
+    if (!res.ok) {
+      throw new Error(`Server returned error ${res.status}: ${res.statusText || defaultAction + ' failed'}`);
+    }
+    throw new Error(text.slice(0, 120) || defaultAction + ' failed');
+  }
+}
+
 export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormProps) {
   const router = useRouter();
 
@@ -174,8 +189,8 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
           label: newApiLabelInput.trim() || newApiGmailInput.trim().split('@')[0],
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to save API key');
+      const data = await parseJsonSafely(res, 'Save API key');
+      if (!data || !res.ok) throw new Error(data?.error || 'Failed to save API key');
 
       setApiKeys((prev) => [...prev, data]);
       updateFup('aiApiKey', data.id);
@@ -194,6 +209,12 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 25 * 1024 * 1024) {
+      setError(`File "${file.name}" is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Maximum allowed size is 25 MB.`);
+      e.target.value = '';
+      return;
+    }
+
     setIsUploadingDoc(true);
     setError(null);
 
@@ -207,8 +228,8 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
         body: formData,
       });
 
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || 'Upload failed');
+      const data = await parseJsonSafely(res, 'Document upload');
+      if (!data || !data.ok) throw new Error(data?.error || 'Upload failed');
 
       const newDoc: WaUnderstandingFile = {
         id: `doc_${Date.now()}`,
@@ -245,6 +266,12 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 25 * 1024 * 1024) {
+      setError(`Media file "${file.name}" is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Maximum allowed size is 25 MB.`);
+      e.target.value = '';
+      return;
+    }
+
     setIsUploadingFollowupMedia(type);
     setError(null);
 
@@ -258,8 +285,8 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
         body: formData,
       });
 
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || 'Upload failed');
+      const data = await parseJsonSafely(res, `Follow-up ${type} upload`);
+      if (!data || !data.ok) throw new Error(data?.error || 'Upload failed');
 
       const newMediaFile: WaFollowupMediaFile = {
         id: `fup_media_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -360,6 +387,12 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 25 * 1024 * 1024) {
+      setError(`File "${file.name}" is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Maximum allowed size is 25 MB.`);
+      e.target.value = '';
+      return;
+    }
+
     setUploadingVariant({ variantId, type });
     setError(null);
 
@@ -373,9 +406,9 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
         body: formData,
       });
 
-      const data = await res.json();
-      if (!data.ok) {
-        throw new Error(data.error || 'Upload failed');
+      const data = await parseJsonSafely(res, `${type} upload`);
+      if (!data || !data.ok) {
+        throw new Error(data?.error || 'Upload failed');
       }
 
       if (type === 'image') updateVariantField(variantId, 'imageUrl', data.url);
@@ -443,9 +476,9 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
-      if (!data.ok) {
-        throw new Error(data.error || 'Failed to save campaign');
+      const data = await parseJsonSafely(res, 'Saving campaign');
+      if (!data || !data.ok) {
+        throw new Error(data?.error || 'Failed to save campaign');
       }
 
 

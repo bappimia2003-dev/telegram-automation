@@ -6,6 +6,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const uuid_1 = require("uuid");
 const whatsapp_js_1 = require("./whatsapp.js");
 const db_js_1 = require("./db.js");
 const utils_js_1 = require("./utils.js");
@@ -13,7 +16,36 @@ dotenv_1.default.config();
 const app = (0, express_1.default)();
 const PORT = Number(process.env.PORT) || 3005;
 app.use((0, cors_1.default)());
-app.use(express_1.default.json());
+app.use(express_1.default.json({ limit: '100mb' }));
+app.use(express_1.default.urlencoded({ extended: true, limit: '100mb' }));
+const uploadsDir = path_1.default.join(process.cwd(), 'uploads');
+if (!fs_1.default.existsSync(uploadsDir)) {
+    fs_1.default.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express_1.default.static(uploadsDir));
+// Dedicated file upload endpoint for WhatsApp media (audio, video, images, documents)
+app.post('/upload', async (req, res) => {
+    try {
+        const { filename, base64, mimeType } = req.body;
+        if (!filename || !base64) {
+            return res.status(400).json({ ok: false, error: 'Missing filename or base64 data' });
+        }
+        const ext = path_1.default.extname(filename) || '.bin';
+        const safeName = `wa-${Date.now()}-${(0, uuid_1.v4)().slice(0, 8)}${ext}`;
+        const filePath = path_1.default.join(uploadsDir, safeName);
+        const cleanBase64 = base64.replace(/^data:[^;]+;base64,/, '');
+        await fs_1.default.promises.writeFile(filePath, Buffer.from(cleanBase64, 'base64'));
+        const host = req.get('x-forwarded-host') || req.get('host');
+        const proto = req.get('x-forwarded-proto') || 'https';
+        const publicUrl = `${proto}://${host}/uploads/${safeName}`;
+        (0, utils_js_1.log)('UPLOAD', `Saved ${safeName} (${(cleanBase64.length * 0.75 / 1024).toFixed(1)} KB) -> ${publicUrl}`);
+        res.json({ ok: true, url: publicUrl, filename });
+    }
+    catch (err) {
+        (0, utils_js_1.errLog)('UPLOAD', 'Upload error:', err.message);
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
 // 1. Health check & version
 app.get('/health', (_req, res) => {
     res.json({

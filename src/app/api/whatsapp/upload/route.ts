@@ -17,7 +17,33 @@ export async function POST(request: Request) {
     const ext = file.name.split('.').pop() || 'bin';
     const safeName = `wa-${type}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${ext}`;
 
-    // 1. Try Supabase Storage 'media' bucket
+    // 1. Prioritize Railway Engine Backend for cloud hosting
+    const engineUrl = process.env.WA_ENGINE_URL || process.env.NEXT_PUBLIC_WA_ENGINE_URL;
+    if (engineUrl) {
+      try {
+        const engineRes = await fetch(`${engineUrl}/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: file.name,
+            base64: buffer.toString('base64'),
+            mimeType: file.type || 'application/octet-stream',
+          }),
+        });
+        const engineData = await engineRes.json().catch(() => null);
+        if (engineData && engineData.ok && engineData.url) {
+          return NextResponse.json({
+            ok: true,
+            url: engineData.url,
+            filename: file.name,
+          });
+        }
+      } catch (engineErr: any) {
+        console.warn('Railway engine upload failed, trying storage fallback:', engineErr.message);
+      }
+    }
+
+    // 2. Try Supabase Storage 'media' bucket
     const supabase = getSupabase();
     if (supabase) {
       try {
