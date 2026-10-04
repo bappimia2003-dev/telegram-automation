@@ -124,14 +124,17 @@ export default function WhatsAppNumberDetailPage() {
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    const newName = editName.trim();
+    const newPhone = editPhone.trim();
+    setAccount((prev) => (prev ? { ...prev, name: newName, phoneNumber: newPhone || prev.phoneNumber } : prev));
+    setShowEdit(false);
     setActionLoading(true);
     try {
       await fetch(`/api/whatsapp/accounts/${accountId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editName.trim(), phoneNumber: editPhone.trim() }),
+        body: JSON.stringify({ name: newName, phoneNumber: newPhone }),
       });
-      setShowEdit(false);
       await fetchNumberData();
     } catch (err) {
       console.error(err);

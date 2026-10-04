@@ -153,19 +153,28 @@ export function WhatsAppNumbers({ campaigns = [], accounts: propAccounts, initia
     e.preventDefault();
     if (!editModalAccount || !editName.trim()) return;
 
+    const targetId = editModalAccount.id;
+    const newName = editName.trim();
+    const newPhone = editPhone.trim();
+
+    // Optimistically update local state immediately so user sees the change right away
+    setAccounts((prev) =>
+      prev.map((a) => (a.id === targetId ? { ...a, name: newName, phoneNumber: newPhone || a.phoneNumber } : a))
+    );
+    setEditModalAccount(null);
+
     setLoading(true);
     try {
-      const res = await fetch(`/api/whatsapp/accounts/${editModalAccount.id}`, {
+      const res = await fetch(`/api/whatsapp/accounts/${targetId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          name: editName.trim(),
-          phoneNumber: editPhone.trim(),
+          name: newName,
+          phoneNumber: newPhone,
         }),
       });
       const data = await res.json();
       if (data.ok) {
-        setEditModalAccount(null);
         await fetchAccounts();
         if (onDataChange) onDataChange();
       }

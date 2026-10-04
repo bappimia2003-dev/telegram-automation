@@ -158,6 +158,18 @@ app.delete('/accounts/:id', async (req, res) => {
         res.status(500).json({ ok: false, error: err.message });
     }
 });
+// 7. Multi-Account: Update account details in memory
+app.put('/accounts/:id', (req, res) => {
+    try {
+        const accountId = req.params.id;
+        const { name, phoneNumber } = req.body;
+        (0, whatsapp_js_1.updateAccountInfo)(accountId, name, phoneNumber);
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
 // --- Legacy / Default routes for 'main' account ---
 app.get('/status', (req, res) => {
     const accountId = req.query?.accountId || 'main';

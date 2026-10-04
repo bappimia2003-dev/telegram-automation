@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.isSessionActive = isSessionActive;
 exports.getConnectionInfo = getConnectionInfo;
 exports.getAllAccountsInfo = getAllAccountsInfo;
+exports.updateAccountInfo = updateAccountInfo;
 exports.getSocket = getSocket;
 exports.startWhatsApp = startWhatsApp;
 exports.disconnectWhatsApp = disconnectWhatsApp;
@@ -68,6 +69,15 @@ function getAllAccountsInfo() {
         });
     }
     return list;
+}
+function updateAccountInfo(id, name, phoneNumber) {
+    const session = sessions.get(id);
+    if (session) {
+        if (name)
+            session.name = name;
+        if (phoneNumber)
+            session.phoneNumber = phoneNumber;
+    }
 }
 /** Return the Baileys socket for a given accountId if it's connected, else null */
 function getSocket(accountId) {

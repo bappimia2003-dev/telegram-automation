@@ -80,6 +80,14 @@ export function getAllAccountsInfo() {
   return list;
 }
 
+export function updateAccountInfo(id: string, name?: string, phoneNumber?: string) {
+  const session = sessions.get(id);
+  if (session) {
+    if (name) session.name = name;
+    if (phoneNumber) session.phoneNumber = phoneNumber;
+  }
+}
+
 /** Return the Baileys socket for a given accountId if it's connected, else null */
 export function getSocket(accountId: string): any | null {
   const session = sessions.get(accountId);

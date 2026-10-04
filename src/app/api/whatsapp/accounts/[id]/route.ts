@@ -51,6 +51,17 @@ export async function PUT(
       name: body.name,
       phoneNumber: body.phoneNumber,
     });
+
+    // Forward name/phone update to Railway engine in memory
+    try {
+      await fetch(`${WA_ENGINE_URL}/accounts/${accountId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: body.name, phoneNumber: body.phoneNumber }),
+        signal: AbortSignal.timeout(3000),
+      });
+    } catch {}
+
     return NextResponse.json({ ok: true, account: updated });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

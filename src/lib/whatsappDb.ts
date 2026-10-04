@@ -590,8 +590,13 @@ export async function updateWaConnection(updates: Partial<WaConnection> & { id?:
   };
 
   if (updates.status !== undefined) row.status = updates.status;
+  else if (existing?.status !== undefined) row.status = existing.status;
+
   if (updates.qrCode !== undefined) row.qr_code = updates.qrCode;
+  else if (existing?.qrCode !== undefined) row.qr_code = existing.qrCode;
+
   if (updates.lastConnected !== undefined) row.last_connected = updates.lastConnected;
+  else if (existing?.lastConnected !== undefined) row.last_connected = existing.lastConnected;
 
   const { data, error } = await supabase
     .from('wa_connection')

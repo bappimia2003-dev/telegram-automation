@@ -12,6 +12,7 @@ import {
   removeWhatsAppAccount,
   initAllAccounts,
   isSessionActive,
+  updateAccountInfo,
 } from './whatsapp.js';
 import { getAllDbAccounts, saveMediaBackup, restoreMediaBackup } from './db.js';
 import { log, errLog, getInMemoryLogs } from './utils.js';
@@ -176,6 +177,18 @@ app.delete('/accounts/:id', async (req, res) => {
     res.json({ ok: true, deleted: true });
   } catch (err: any) {
     errLog('API', 'Delete account error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// 7. Multi-Account: Update account details in memory
+app.put('/accounts/:id', (req, res) => {
+  try {
+    const accountId = req.params.id;
+    const { name, phoneNumber } = req.body;
+    updateAccountInfo(accountId, name, phoneNumber);
+    res.json({ ok: true });
+  } catch (err: any) {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
