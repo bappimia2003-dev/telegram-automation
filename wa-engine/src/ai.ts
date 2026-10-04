@@ -187,7 +187,7 @@ async function callGemini(apiKey: string, prompt: string, preferredModel = 'gemi
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 250,
+            maxOutputTokens: 1000,
           },
         }),
       });

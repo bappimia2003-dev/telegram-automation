@@ -213,9 +213,22 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
           } catch {}
           await sleep(1500);
 
-          await sendTextMessage(sock, contact.phoneNumber, msg);
-          await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, 1, 'text', '');
-          log('FOLLOWUP', `✅ Step 1 delivered to ${contact.phoneNumber}: "${msg.slice(0, 60)}..."`);
+          if (imageUrl) {
+            await sendImageMessage(sock, contact.phoneNumber, imageUrl, msg);
+            await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, 1, 'image', imageUrl);
+            log('FOLLOWUP', `✅ Step 1 delivered image+AI text to ${contact.phoneNumber}: "${msg.slice(0, 60)}..."`);
+          } else {
+            await sendTextMessage(sock, contact.phoneNumber, msg);
+            await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, 1, 'text', '');
+            log('FOLLOWUP', `✅ Step 1 delivered AI text to ${contact.phoneNumber}: "${msg.slice(0, 60)}..."`);
+          }
+
+          if (audioUrl) {
+            await sleep(2000);
+            await sendAudioMessage(sock, contact.phoneNumber, audioUrl);
+            await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, 1, 'audio', audioUrl);
+            log('FOLLOWUP', `✅ Step 1 delivered voice note to ${contact.phoneNumber}`);
+          }
 
           await sleep(Math.floor(Math.random() * 2000) + 2000);
           continue;

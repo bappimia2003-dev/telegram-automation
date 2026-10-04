@@ -188,9 +188,22 @@ async function processCampaignFollowups(campaign) {
                     }
                     catch { }
                     await (0, utils_js_1.sleep)(1500);
-                    await (0, fileSender_js_1.sendTextMessage)(sock, contact.phoneNumber, msg);
-                    await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 1, 'text', '');
-                    (0, utils_js_1.log)('FOLLOWUP', `✅ Step 1 delivered to ${contact.phoneNumber}: "${msg.slice(0, 60)}..."`);
+                    if (imageUrl) {
+                        await (0, fileSender_js_1.sendImageMessage)(sock, contact.phoneNumber, imageUrl, msg);
+                        await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 1, 'image', imageUrl);
+                        (0, utils_js_1.log)('FOLLOWUP', `✅ Step 1 delivered image+AI text to ${contact.phoneNumber}: "${msg.slice(0, 60)}..."`);
+                    }
+                    else {
+                        await (0, fileSender_js_1.sendTextMessage)(sock, contact.phoneNumber, msg);
+                        await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 1, 'text', '');
+                        (0, utils_js_1.log)('FOLLOWUP', `✅ Step 1 delivered AI text to ${contact.phoneNumber}: "${msg.slice(0, 60)}..."`);
+                    }
+                    if (audioUrl) {
+                        await (0, utils_js_1.sleep)(2000);
+                        await (0, fileSender_js_1.sendAudioMessage)(sock, contact.phoneNumber, audioUrl);
+                        await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 1, 'audio', audioUrl);
+                        (0, utils_js_1.log)('FOLLOWUP', `✅ Step 1 delivered voice note to ${contact.phoneNumber}`);
+                    }
                     await (0, utils_js_1.sleep)(Math.floor(Math.random() * 2000) + 2000);
                     continue;
                 }

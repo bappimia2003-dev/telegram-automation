@@ -175,7 +175,7 @@ async function callGemini(apiKey, prompt, preferredModel = 'gemini-flash-latest'
                     contents: [{ parts: [{ text: prompt }] }],
                     generationConfig: {
                         temperature: 0.7,
-                        maxOutputTokens: 250,
+                        maxOutputTokens: 1000,
                     },
                 }),
             });

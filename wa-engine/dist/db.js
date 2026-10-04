@@ -464,14 +464,40 @@ async function getRecentContactedUsers(campaignId) {
             .order('sent_at', { ascending: false });
         if (error) {
             (0, utils_js_1.errLog)('DB', 'Error fetching recent contacted users:', error.message);
-            return [];
         }
-        return (data || []).map((row) => ({
-            id: row.id,
-            phoneNumber: row.phone_number,
-            contactName: row.contact_name,
-            sentAt: row.sent_at,
-        }));
+        const contactMap = new Map();
+        for (const row of (data || [])) {
+            if (!contactMap.has(row.phone_number)) {
+                contactMap.set(row.phone_number, {
+                    id: row.id,
+                    phoneNumber: row.phone_number,
+                    contactName: row.contact_name,
+                    sentAt: row.sent_at,
+                });
+            }
+        }
+        // Safety fallback: also check wa_message_logs for recently delivered campaign triggers
+        // so no contact is ever dropped even if wa_contacted_users table was cleared!
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+        const { data: logsData } = await supabase
+            .from('wa_message_logs')
+            .select('id, phone_number, contact_name, sent_at')
+            .eq('campaign_id', campaignId)
+            .in('message_type', ['text', 'image', 'video', 'audio', 'document'])
+            .eq('status', 'sent')
+            .gte('sent_at', twoHoursAgo)
+            .order('sent_at', { ascending: false });
+        for (const logRow of (logsData || [])) {
+            if (!contactMap.has(logRow.phone_number)) {
+                contactMap.set(logRow.phone_number, {
+                    id: logRow.id,
+                    phoneNumber: logRow.phone_number,
+                    contactName: logRow.contact_name,
+                    sentAt: logRow.sent_at,
+                });
+            }
+        }
+        return Array.from(contactMap.values());
     }
     catch (e) {
         (0, utils_js_1.errLog)('DB', 'Exception fetching recent contacted users:', e.message);
