@@ -47,7 +47,7 @@ function getOrCreateSession(id: string, name?: string): AccountSession {
 
 export function isSessionActive(accountId: string): boolean {
   const s = sessions.get(accountId);
-  return Boolean(s && s.sock && (s.status === 'connected' || s.status === 'connecting' || s.status === 'qr_pending'));
+  return Boolean(s && (s.status === 'connected' || s.status === 'connecting' || s.status === 'qr_pending'));
 }
 
 export function getConnectionInfo(accountId = 'main') {
@@ -88,9 +88,9 @@ export function getSocket(accountId: string): any | null {
 export async function startWhatsApp(accountId = 'main', accountName?: string): Promise<any> {
   const session = getOrCreateSession(accountId, accountName);
 
-  // If already connected or already has an active socket in qr_pending or connecting, reuse it
-  if (session.sock && (session.status === 'connected' || session.status === 'qr_pending' || session.status === 'connecting')) {
-    log('WA', `[${session.name}] Existing active socket in state '${session.status}'. Reusing...`);
+  // If already connected, qr_pending, or in the process of connecting, reuse it!
+  if (session.status === 'connected' || session.status === 'qr_pending' || session.status === 'connecting') {
+    log('WA', `[${session.name}] Socket already in state '${session.status}'. Skipping duplicate start.`);
     return getConnectionInfo(accountId);
   }
 
@@ -99,6 +99,10 @@ export async function startWhatsApp(accountId = 'main', accountName?: string): P
     clearTimeout(session.reconnectTimer);
     session.reconnectTimer = null;
   }
+
+  // Immediately lock session in connecting state to block concurrent starts
+  session.status = 'connecting';
+  await updateWaConnectionState(accountId, { status: 'connecting', qrCode: '', name: session.name });
 
   // Cleanly close previous socket if any exists
   if (session.sock) {
@@ -123,9 +127,6 @@ export async function startWhatsApp(accountId = 'main', accountName?: string): P
   } catch (e: any) {
     errLog('WA', `Error restoring auth for ${accountId}:`, e.message);
   }
-
-  session.status = 'connecting';
-  await updateWaConnectionState(accountId, { status: 'connecting', qrCode: '', name: session.name });
 
   try {
     const { state, saveCreds } = await useMultiFileAuthState(authDir);
@@ -348,10 +349,12 @@ export async function initAllAccounts(): Promise<void> {
     });
   } else {
     for (const acc of dbAccounts) {
-      getOrCreateSession(acc.id, acc.name);
-      startWhatsApp(acc.id, acc.name).catch((e) => {
-        errLog('WA', `Auto-start account ${acc.id} error:`, e.message);
-      });
+      if (acc.status === 'connected' || acc.status === 'connecting') {
+        getOrCreateSession(acc.id, acc.name);
+        startWhatsApp(acc.id, acc.name).catch((e) => {
+          errLog('WA', `Auto-start account ${acc.id} error:`, e.message);
+        });
+      }
     }
   }
 }

@@ -220,7 +220,7 @@ app.listen(PORT, '0.0.0.0', () => {
   // Start the follow-up scheduler (checks every 60s for pending follow-ups)
   startFollowupScheduler();
 
-  // Watcher: Poll DB every 5s for any account marked 'connecting' or 'connected' without an active socket
+  // Watcher: Poll DB every 12s for any account marked 'connecting' or 'connected' without an active socket
   setInterval(async () => {
     try {
       const dbAccounts = await getAllDbAccounts();
@@ -235,6 +235,6 @@ app.listen(PORT, '0.0.0.0', () => {
     } catch (err: any) {
       // transient network error
     }
-  }, 5000);
+  }, 12000);
 });
 
