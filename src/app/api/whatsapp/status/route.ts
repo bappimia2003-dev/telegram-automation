@@ -15,7 +15,7 @@ export async function GET() {
     try {
       const res = await fetch(`${WA_ENGINE_URL}/status`, {
         cache: 'no-store',
-        signal: AbortSignal.timeout(1500),
+        signal: AbortSignal.timeout(200),
       });
       if (res.ok) {
         liveStatus = await res.json();

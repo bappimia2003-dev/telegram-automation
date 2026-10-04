@@ -253,17 +253,33 @@ function rowToConnection(r: any): WaConnection {
 }
 
 // =============================================
-// CAMPAIGNS CRUD
+// CAMPAIGNS CRUD & IN-MEMORY CACHE
 // =============================================
-export async function getAllCampaigns(): Promise<WaCampaign[]> {
+let campaignsCache: WaCampaign[] | null = null;
+let campaignsCacheTime = 0;
+const CAMPAIGNS_CACHE_TTL_MS = 4000; // 4 seconds short-term cache for lightning fast responses
+
+export function invalidateCampaignsCache() {
+  campaignsCache = null;
+  campaignsCacheTime = 0;
+}
+
+export async function getAllCampaigns(forceRefresh = false): Promise<WaCampaign[]> {
+  const now = Date.now();
+  if (!forceRefresh && campaignsCache && (now - campaignsCacheTime < CAMPAIGNS_CACHE_TTL_MS)) {
+    return campaignsCache;
+  }
   const supabase = getSupabase();
   if (!supabase) return waMemory.campaigns;
   const { data, error } = await supabase.from('wa_campaigns').select('*').order('created_at', { ascending: false });
   if (error) {
     console.error('Error fetching wa_campaigns:', error.message);
-    return waMemory.campaigns;
+    return campaignsCache || waMemory.campaigns;
   }
-  return (data || []).filter((r: any) => !r.id?.startsWith('system_')).map(rowToCampaign);
+  const campaigns = (data || []).filter((r: any) => !r.id?.startsWith('system_')).map(rowToCampaign);
+  campaignsCache = campaigns;
+  campaignsCacheTime = now;
+  return campaigns;
 }
 
 export async function getActiveCampaigns(): Promise<WaCampaign[]> {
@@ -272,6 +288,10 @@ export async function getActiveCampaigns(): Promise<WaCampaign[]> {
 }
 
 export async function getCampaignById(id: string): Promise<WaCampaign | null> {
+  if (campaignsCache) {
+    const cached = campaignsCache.find(c => c.id === id);
+    if (cached) return cached;
+  }
   const supabase = getSupabase();
   if (!supabase) return waMemory.campaigns.find(c => c.id === id) || null;
   const { data, error } = await supabase.from('wa_campaigns').select('*').eq('id', id).maybeSingle();
@@ -283,6 +303,7 @@ export async function getCampaignById(id: string): Promise<WaCampaign | null> {
 }
 
 export async function createCampaign(campaign: WaCampaign): Promise<WaCampaign> {
+  invalidateCampaignsCache();
   const supabase = getSupabase();
   if (!supabase) {
     waMemory.campaigns.push(campaign);
@@ -299,6 +320,7 @@ export async function createCampaign(campaign: WaCampaign): Promise<WaCampaign> 
 }
 
 export async function updateCampaign(id: string, updates: Partial<WaCampaign>): Promise<WaCampaign | null> {
+  invalidateCampaignsCache();
   const supabase = getSupabase();
   const existing = await getCampaignById(id);
   const merged: WaCampaign = {
@@ -324,6 +346,7 @@ export async function updateCampaign(id: string, updates: Partial<WaCampaign>): 
 }
 
 export async function deleteCampaign(id: string): Promise<boolean> {
+  invalidateCampaignsCache();
   const supabase = getSupabase();
   if (!supabase) {
     const before = waMemory.campaigns.length;
@@ -558,12 +581,15 @@ export async function deleteWaConnection(id: string): Promise<boolean> {
 // =============================================
 // DASHBOARD STATS
 // =============================================
+let lastCleanupTime = 0;
+const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+
 export async function getWaDashboardStats(): Promise<WaDashboardStats> {
-  // Trigger rolling 30-day cleanup check
-  try {
-    performRolling30DayCleanup(30);
-  } catch {
-    // Non-blocking
+  // Trigger rolling 30-day cleanup check at most once every 6 hours non-blocking
+  const now = Date.now();
+  if (now - lastCleanupTime > SIX_HOURS_MS) {
+    lastCleanupTime = now;
+    performRolling30DayCleanup(30).catch(() => {});
   }
 
   const campaigns = await getAllCampaigns();

@@ -1,6 +1,6 @@
 {
   "settings": {
-    "auto_followup": true,
+    "auto_followup": false,
     "ai_brain": true,
     "antiban": true,
     "auto_cleanup": true,

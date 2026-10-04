@@ -28,23 +28,34 @@ export function BotCard({ bot, onDelete }: BotCardProps) {
   }
 
   return (
-    <Card className="flex flex-col transition-all hover:bg-card/80 hover:shadow-md glass-hover overflow-hidden">
-      <CardHeader className="pb-4">
+    <Card className="flex flex-col rounded-2xl overflow-hidden transition-all shadow-sm bg-[#FBF9F4] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] hover:shadow-md">
+      <CardHeader className="p-5 pb-3">
         <div className="flex items-start justify-between">
-          <div>
-            <h3 className="text-lg font-bold text-foreground">{bot.name}</h3>
-            <div className="mt-2 flex flex-wrap gap-1.5 items-center">
-              <Badge variant={isActive ? "success" : "destructive"}>
+          <div className="space-y-2">
+            <h3 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">{bot.name}</h3>
+            
+            {/* Badges Pill Row */}
+            <div className="flex flex-wrap gap-1.5 items-center">
+              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                isActive 
+                  ? "bg-[#16A34A] text-white" 
+                  : "bg-red-600 text-white"
+              }`}>
                 {isActive ? "Active" : "Inactive"}
-              </Badge>
-              <Badge variant="outline">{model}</Badge>
+              </span>
+
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#EDE8DE] dark:bg-[#242830] text-gray-900 dark:text-gray-200 border border-[#DDD7CB] dark:border-[#323742]">
+                {model}
+              </span>
+
               {bot.enableWelcomeMedia && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-                  Media /start
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#EDE9FE] dark:bg-[#2E284A] text-[#6D28D9] dark:text-[#C4B5FD] border border-[#DDD6FE] dark:border-[#433878]">
+                  Media Alert
                 </span>
               )}
+
               {(bot.workInfo || bot.productFileUrl) && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#DCFCE7] dark:bg-[#143825] text-[#15803D] dark:text-[#86EFAC] border border-[#BBF7D0] dark:border-[#1D5438]">
                   Shop Brain
                 </span>
               )}
@@ -53,37 +64,46 @@ export function BotCard({ bot, onDelete }: BotCardProps) {
         </div>
       </CardHeader>
       
-      <CardContent className="flex-1 pb-4">
-        <div className="flex items-center text-sm text-muted-foreground mb-4">
-          <MessageSquare className="mr-2 h-4 w-4 text-blue-500" />
-          {messageCount} messages
+      <CardContent className="flex-1 p-5 pt-1 pb-4">
+        <div className="flex items-center text-sm font-bold text-gray-800 dark:text-gray-200 mb-3">
+          <MessageSquare className="mr-2 h-4 w-4 text-[#164E43] dark:text-emerald-400" />
+          <span>{messageCount} messages</span>
         </div>
-        <div className="text-sm text-muted-foreground bg-secondary/50 p-3 rounded-md border border-border/50">
+        
+        {/* Inset Personality Box */}
+        <div className="text-xs sm:text-sm font-bold p-3.5 rounded-xl border leading-relaxed bg-[#EDE8DE] dark:bg-[#121418] border-[#DDD7CB] dark:border-[#262930] text-gray-900 dark:text-white">
           {personality.length > 80 
             ? `${personality.substring(0, 80)}...` 
             : personality}
         </div>
       </CardContent>
       
-      <CardFooter className="grid grid-cols-3 gap-2 border-t border-border/50 p-3 bg-secondary/15">
-        <Button variant="outline" size="sm" asChild className="h-8 px-1.5 text-xs w-full">
-          <Link href={`/bots/${bot.id}/settings`}>
-            Settings
-          </Link>
-        </Button>
-        <Button variant="outline" size="sm" asChild className="h-8 px-1.5 text-xs w-full">
-          <Link href={`/bots/${bot.id}`}>
-            <Edit2 className="h-3.5 w-3.5 mr-1 shrink-0" />
-            Manage
-          </Link>
-        </Button>
+      {/* Footer with Orange / Amber Action Buttons */}
+      <CardFooter className="grid grid-cols-3 gap-2 border-t border-[#E6E2D8] dark:border-[#262930] p-3 bg-transparent">
+        {/* Settings button */}
+        <Link 
+          href={`/bots/${bot.id}/settings`}
+          className="h-9 px-2 text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center transition-all shadow-sm bg-[#E06D10] hover:bg-[#C95F0A] text-white dark:bg-[#E5A93C] dark:hover:bg-[#D4992C] dark:text-[#1A1400]"
+        >
+          Settings
+        </Link>
+
+        {/* Manage button */}
+        <Link 
+          href={`/bots/${bot.id}`}
+          className="h-9 px-2 text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm bg-[#E06D10] hover:bg-[#C95F0A] text-white dark:bg-[#E5A93C] dark:hover:bg-[#D4992C] dark:text-[#1A1400]"
+        >
+          <Edit2 className="h-3.5 w-3.5" />
+          <span>Manage</span>
+        </Link>
         
+        {/* Delete Dialog Button */}
         <Dialog>
           <DialogTrigger asChild>
-            <Button variant="destructive" size="sm" className="h-8 px-1.5 text-xs w-full">
-              <Trash2 className="h-3.5 w-3.5 mr-1 shrink-0" />
-              Delete
-            </Button>
+            <button className="h-9 px-2 text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20">
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Delete</span>
+            </button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>

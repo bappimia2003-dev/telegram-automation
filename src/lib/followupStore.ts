@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getAllApiKeys } from './db';
+import { getAllWaConnections } from './whatsappDb';
 import { WaCampaignVariant } from './whatsappTypes';
 
 export interface FollowupSettings {
@@ -217,30 +218,38 @@ export async function getFollowupData() {
     // ignore
   }
 
-  // Fetch registered WhatsApp accounts
+  // Fetch registered WhatsApp accounts directly from DB & live engine
   let accounts: any[] = [];
   try {
-    const accRes = await fetch('http://localhost:3000/api/whatsapp/accounts', {
-      cache: 'no-store',
-      signal: AbortSignal.timeout(1000),
-    });
-    if (accRes.ok) {
-      const accData = await accRes.json();
-      accounts = Array.isArray(accData.accounts) ? accData.accounts : [];
+    const WA_ENGINE_URL = process.env.WA_ENGINE_URL || 'http://localhost:3005';
+    let engineAccounts: any[] = [];
+    try {
+      const res = await fetch(`${WA_ENGINE_URL}/accounts`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(400),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        engineAccounts = data.accounts || [];
+      }
+    } catch {
+      // Engine offline or unreachable
     }
-  } catch {
-    // fallback
-  }
 
-  if (accounts.length === 0) {
-    accounts = [
-      {
-        id: 'acc_4929c1a7',
-        name: 'gemini',
-        phoneNumber: '8801830086837',
-        status: 'connected',
-      },
-    ];
+    const dbConnections = await getAllWaConnections();
+    if (dbConnections && dbConnections.length > 0) {
+      accounts = dbConnections.map((conn) => {
+        const live = engineAccounts.find((a) => a.id === conn.id);
+        return {
+          ...conn,
+          status: live?.status || conn.status,
+          phoneNumber: live?.phoneNumber || conn.phoneNumber,
+          qrCode: live?.qrCode || conn.qrCode,
+        };
+      });
+    }
+  } catch (e) {
+    console.error('Failed to get wa connections in followup:', e);
   }
 
   const store = readStore();

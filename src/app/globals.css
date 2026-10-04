@@ -4,30 +4,53 @@
 
 @layer base {
   :root {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 7%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 7%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 12%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 64%;
-    --accent: 217 91% 60%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 15%;
-    --input: 0 0% 15%;
-    --ring: 217 91% 60%;
-    --radius: 0.75rem;
+    --background: #F4F1EB;
+    --foreground: #1A1A1A;
+    --card: #FBF9F4;
+    --card-foreground: #1A1A1A;
+    --popover: #FBF9F4;
+    --popover-foreground: #1A1A1A;
+    --primary: #164E43;
+    --primary-foreground: #FFFFFF;
+    --secondary: #EDE8DE;
+    --secondary-foreground: #374151;
+    --muted: #E6E2D8;
+    --muted-foreground: #6B7280;
+    --accent: #164E43;
+    --accent-foreground: #FFFFFF;
+    --destructive: #DC2626;
+    --destructive-foreground: #FFFFFF;
+    --border: #E6E2D8;
+    --input: #E6E2D8;
+    --ring: #164E43;
+    --radius: 1rem;
+  }
+
+  .dark {
+    --background: #111215;
+    --foreground: #F3F4F6;
+    --card: #181A1F;
+    --card-foreground: #F3F4F6;
+    --popover: #181A1F;
+    --popover-foreground: #F3F4F6;
+    --primary: #164E43;
+    --primary-foreground: #FFFFFF;
+    --secondary: #1F2228;
+    --secondary-foreground: #E5E7EB;
+    --muted: #262930;
+    --muted-foreground: #9CA3AF;
+    --accent: #164E43;
+    --accent-foreground: #FFFFFF;
+    --destructive: #EF4444;
+    --destructive-foreground: #FFFFFF;
+    --border: #22262C;
+    --input: #262930;
+    --ring: #164E43;
+    --radius: 1rem;
   }
 
   * {
-    @apply border-border;
+    border-color: var(--border);
   }
 
   html {
@@ -40,34 +63,27 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    background-color: var(--background);
+    color: var(--foreground);
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
 }
 
-@layer utilities {
-  .glass {
-    @apply bg-card/50 backdrop-blur-xl border border-border/50;
-  }
-  .glass-hover {
-    @apply hover:bg-card/70 hover:border-border transition-all duration-300;
-  }
-}
-
-/* Scrollbar */
+/* Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: hsl(0 0% 7%);
+  background: var(--background);
 }
 ::-webkit-scrollbar-thumb {
-  background: hsl(0 0% 20%);
+  background: var(--muted);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(0 0% 30%);
+  background: var(--muted-foreground);
 }

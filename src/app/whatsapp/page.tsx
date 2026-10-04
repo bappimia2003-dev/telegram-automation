@@ -20,17 +20,60 @@ import {
 import { WaCampaign, WaDashboardStats, WaConnection } from '@/lib/whatsappTypes';
 
 export default function WhatsAppDashboardPage() {
-  const [campaigns, setCampaigns] = useState<WaCampaign[]>([]);
-  const [accounts, setAccounts] = useState<WaConnection[]>([]);
-  const [selectedFilter, setSelectedFilter] = useState<string>('all');
-  const [stats, setStats] = useState<WaDashboardStats>({
-    totalCampaigns: 0,
-    activeCampaigns: 0,
-    totalSent: 0,
-    uniqueUsers: 0,
-    connectionStatus: 'disconnected',
+  const [campaigns, setCampaigns] = useState<WaCampaign[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('wa_cached_campaigns');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return [];
   });
-  const [loading, setLoading] = useState(true);
+  const [accounts, setAccounts] = useState<WaConnection[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('wa_cached_accounts');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
+  const [selectedFilter, setSelectedFilter] = useState<string>('all');
+  const [stats, setStats] = useState<WaDashboardStats>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('wa_cached_stats');
+        if (cached) {
+          return JSON.parse(cached);
+        }
+      } catch {}
+    }
+    return {
+      totalCampaigns: 0,
+      activeCampaigns: 0,
+      totalSent: 0,
+      uniqueUsers: 0,
+      connectionStatus: 'disconnected',
+    };
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('wa_cached_campaigns');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return false;
+        }
+      } catch {}
+    }
+    return true;
+  });
 
   const fetchDashboardData = async () => {
     try {
@@ -46,20 +89,37 @@ export default function WhatsAppDashboardPage() {
 
       const list: WaCampaign[] = Array.isArray(campData.campaigns) ? campData.campaigns : [];
       setCampaigns(list);
+      if (list.length > 0 && typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('wa_cached_campaigns', JSON.stringify(list));
+        } catch {}
+      }
 
       const accs: WaConnection[] = Array.isArray(accountsData.accounts) ? accountsData.accounts : [];
       setAccounts(accs);
+      if (accs.length > 0 && typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('wa_cached_accounts', JSON.stringify(accs));
+        } catch {}
+      }
 
+      let freshStats: WaDashboardStats;
       if (statusData.ok && statusData.stats) {
-        setStats(statusData.stats);
+        freshStats = statusData.stats;
       } else {
-        setStats({
+        freshStats = {
           totalCampaigns: list.length,
           activeCampaigns: list.filter(c => c.isActive).length,
           totalSent: list.reduce((sum, c) => sum + (c.totalSent || 0), 0),
           uniqueUsers: 0,
           connectionStatus: statusData.connection?.status || 'disconnected',
-        });
+        };
+      }
+      setStats(freshStats);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('wa_cached_stats', JSON.stringify(freshStats));
+        } catch {}
       }
     } catch (err) {
       console.error('Failed to fetch WhatsApp dashboard data:', err);
@@ -97,24 +157,24 @@ export default function WhatsAppDashboardPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-            <span className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-              <Smartphone className="w-6 h-6" />
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2.5">
+            <span className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 flex items-center justify-center text-emerald-700 dark:text-emerald-400">
+              <Smartphone className="w-5 h-5" />
             </span>
             WhatsApp Automation
           </h1>
         </div>
 
         <Link href="/whatsapp/campaigns/new">
-          <Button className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium shadow-lg shadow-emerald-900/30">
-            <Plus className="w-4 h-4 mr-2" />
+          <Button className="bg-[#164E43] hover:bg-[#124238] text-white font-semibold text-xs h-9 px-4 shadow-sm rounded-xl">
+            <Plus className="w-4 h-4 mr-1.5" />
             New Campaign
           </Button>
         </Link>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatsCard
           title="WhatsApp Numbers"
           value={`${connectedAccountsCount} / ${accounts.length || 1} Connected`}
@@ -139,22 +199,23 @@ export default function WhatsAppDashboardPage() {
 
       {/* 1. Connected WhatsApp Numbers Section */}
       <WhatsAppNumbers 
+        accounts={accounts}
         campaigns={campaigns} 
         onDataChange={fetchDashboardData} 
       />
 
       {/* 2. All Running Campaigns Section (Outside window overview) */}
-      <div className="space-y-4 pt-4 border-t border-border/40">
+      <div className="space-y-3 pt-3 border-t border-[#E6E2D8] dark:border-[#262930]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <Layers className="w-5 h-5 text-emerald-400" />
+            <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <Layers className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
               All Running Campaigns
             </h2>
           </div>
 
           <Link href="/whatsapp/campaigns/new">
-            <Button variant="outline" size="sm" className="text-xs border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10">
+            <Button variant="outline" size="sm" className="text-xs border-[#E6E2D8] dark:border-[#262930] text-emerald-700 dark:text-emerald-400 hover:bg-[#EDE8DE] dark:hover:bg-[#1F2228] h-8 px-3 rounded-lg">
               <Plus className="w-3.5 h-3.5 mr-1" />
               Add Campaign
             </Button>
@@ -164,13 +225,13 @@ export default function WhatsAppDashboardPage() {
 
         {/* Filter Tabs by Number */}
         {accounts.length > 0 && (
-          <div className="flex flex-wrap gap-2 pt-1 pb-2">
+          <div className="flex flex-wrap gap-1.5 pt-1 pb-1">
             <button
               onClick={() => setSelectedFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                 selectedFilter === 'all'
-                  ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
-                  : 'bg-secondary/40 border-border/40 text-muted-foreground hover:bg-secondary/70 hover:text-white'
+                  ? 'bg-[#164E43] text-white border-[#164E43] shadow-xs'
+                  : 'bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-800 dark:text-gray-200 hover:bg-[#EDE8DE] dark:hover:bg-[#22262C] hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               🌐 All Numbers ({campaigns.length})
@@ -183,15 +244,15 @@ export default function WhatsAppDashboardPage() {
                 <button
                   key={acc.id}
                   onClick={() => setSelectedFilter(acc.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                     selectedFilter === acc.id
-                      ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
-                      : 'bg-secondary/40 border-border/40 text-muted-foreground hover:bg-secondary/70 hover:text-white'
+                      ? 'bg-[#164E43] text-white border-[#164E43] shadow-xs'
+                      : 'bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-800 dark:text-gray-200 hover:bg-[#EDE8DE] dark:hover:bg-[#22262C] hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
-                  <Phone className="w-3 h-3 shrink-0" />
+                  <Phone className="w-3 h-3 shrink-0 text-emerald-700 dark:text-emerald-400" />
                   <span>{acc.name}{phoneLabel}</span>
-                  <span className="opacity-70">({count})</span>
+                  <span className="opacity-75">({count})</span>
                 </button>
               );
             })}
@@ -202,19 +263,19 @@ export default function WhatsAppDashboardPage() {
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-64 rounded-xl bg-card/40 border border-border/40" />
+              <div key={i} className="h-64 rounded-xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930]" />
             ))}
           </div>
         ) : filteredCampaigns.length === 0 ? (
-          <div className="text-center py-14 px-4 rounded-2xl bg-card/20 border border-dashed border-border/60">
-            <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto mb-3">
+          <div className="text-center py-14 px-4 rounded-2xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-dashed border-[#E6E2D8] dark:border-[#262930]">
+            <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3">
               <Sparkles className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-semibold text-white mb-4">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-4">
               {selectedFilter === 'all' ? 'No campaigns created yet' : 'No campaigns for this number'}
             </h3>
             <Link href={selectedFilter === 'all' ? '/whatsapp/campaigns/new' : `/whatsapp/campaigns/new?accountId=${selectedFilter}`}>
-              <Button className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs px-5">
+              <Button className="bg-[#164E43] hover:bg-[#124238] text-white font-semibold text-xs px-5 shadow-sm">
                 <Plus className="w-4 h-4 mr-1.5" />
                 Create New Campaign
               </Button>
@@ -236,7 +297,7 @@ export default function WhatsAppDashboardPage() {
       </div>
 
       {/* 3. Message Delivery Logs */}
-      <div className="space-y-3 pt-4 border-t border-border/40">
+      <div className="space-y-3 pt-4 border-t border-[#E6E2D8] dark:border-[#262930]">
         <WhatsAppMessageLog />
       </div>
     </div>

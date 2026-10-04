@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: "class",
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -10,30 +11,20 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "hsl(0 0% 4%)",
-        foreground: "hsl(0 0% 98%)",
-        card: "hsl(0 0% 7%)",
-        "card-foreground": "hsl(0 0% 98%)",
-        popover: "hsl(0 0% 7%)",
-        "popover-foreground": "hsl(0 0% 98%)",
-        primary: "hsl(217 91% 60%)",
-        "primary-foreground": "hsl(0 0% 100%)",
-        secondary: "hsl(0 0% 12%)",
-        "secondary-foreground": "hsl(0 0% 98%)",
-        muted: "hsl(0 0% 15%)",
-        "muted-foreground": "hsl(0 0% 64%)",
-        accent: "hsl(217 91% 60%)",
-        "accent-foreground": "hsl(0 0% 100%)",
-        destructive: "hsl(0 84% 60%)",
-        "destructive-foreground": "hsl(0 0% 100%)",
-        border: "hsl(0 0% 15%)",
-        input: "hsl(0 0% 15%)",
-        ring: "hsl(217 91% 60%)",
+        background: "var(--background)",
+        foreground: "var(--foreground)",
+        card: "var(--card)",
+        "card-foreground": "var(--card-foreground)",
+        border: "var(--border)",
+        primary: "#164E43",
+        "primary-foreground": "#FFFFFF",
       },
       borderRadius: {
         lg: "0.75rem",
         md: "0.5rem",
         sm: "0.25rem",
+        xl: "1rem",
+        "2xl": "1.25rem",
       },
       fontFamily: {
         sans: ["Inter", "sans-serif"],

@@ -86,6 +86,293 @@ function analyzeContactFollowupState(logs, initialContactTimeMs) {
     return { hasReplied, highestStep, lastStepTimeMs, promiseTargetDate, promiseAlreadySent };
 }
 /**
+ * Fast variable substitution for follow-up templates:
+ * {name} -> Customer name or polite Bengali greeting (ভাইয়া/আপু)
+ * {product} -> Campaign / Product offer name
+ * {time} -> Current time of day (সকাল, দুপুর, বিকাল, সন্ধ্যা, রাত)
+ * {honorific} -> আপু / ভাইয়া
+ */
+function replaceVariables(template, contactName, campaignName, gender) {
+    if (!template)
+        return '';
+    const cleanName = (contactName || '').trim();
+    const hasValidName = cleanName && cleanName !== 'Customer' && !cleanName.includes('@') && cleanName.length < 25;
+    let nameLabel = 'সম্মানিত কাস্টমার';
+    if (hasValidName) {
+        if (gender === 'apu')
+            nameLabel = `${cleanName} আপু`;
+        else if (gender === 'vai')
+            nameLabel = `${cleanName} ভাইয়া`;
+        else
+            nameLabel = cleanName;
+    }
+    else {
+        if (gender === 'apu')
+            nameLabel = 'আপু';
+        else if (gender === 'vai')
+            nameLabel = 'ভাইয়া';
+        else
+            nameLabel = 'ভাইয়া/আপু';
+    }
+    const hour = new Date().getHours();
+    let timeStr = 'দিন';
+    if (hour >= 5 && hour < 12)
+        timeStr = 'সকাল';
+    else if (hour >= 12 && hour < 16)
+        timeStr = 'দুপুর';
+    else if (hour >= 16 && hour < 18)
+        timeStr = 'বিকাল';
+    else if (hour >= 18 && hour < 20)
+        timeStr = 'সন্ধ্যা';
+    else
+        timeStr = 'রাত';
+    return template
+        .replace(/\{name\}/gi, nameLabel)
+        .replace(/\{product\}/gi, campaignName || 'আমাদের অফারটি')
+        .replace(/\{time\}/gi, timeStr)
+        .replace(/\{honorific\}/gi, gender === 'apu' ? 'আপু' : gender === 'vai' ? 'ভাইয়া' : '');
+}
+/**
+ * Resolve configuration for a specific step (1, 2, or 3) from fup.steps array,
+ * with backwards-compatible fallback to top-level legacy fields.
+ */
+function getStepConfig(fup, stepNumber) {
+    const step = fup.steps?.find((s) => s.stepNumber === stepNumber);
+    if (step) {
+        let img = step.imageUrl || '';
+        let aud = step.audioUrl || '';
+        let vid = step.videoUrl || '';
+        let doc = step.documentUrl || '';
+        let docName = step.documentName || 'Document';
+        const files = step.files || [];
+        for (const f of files) {
+            if (f.type === 'image' && !img)
+                img = f.url;
+            if (f.type === 'audio' && !aud)
+                aud = f.url;
+            if (f.type === 'video' && !vid)
+                vid = f.url;
+            if (f.type === 'document' && !doc) {
+                doc = f.url;
+                docName = f.name;
+            }
+        }
+        return {
+            message: step.message !== undefined ? step.message : (stepNumber === 1 ? (fup.followupMessage || '') : ''),
+            imageUrl: img,
+            audioUrl: aud,
+            videoUrl: vid,
+            documentUrl: doc,
+            documentName: docName,
+            files,
+        };
+    }
+    // Fallback to legacy campaign follow-up media if steps array is not defined
+    let img = fup.followupImageUrl || '';
+    let aud = fup.followupAudioUrl || '';
+    let vid = fup.followupVideoUrl || '';
+    let doc = fup.followupDocumentUrl || '';
+    let docName = fup.followupDocumentName || 'Document';
+    const files = fup.followupFiles || [];
+    for (const f of files) {
+        if (f.type === 'image' && !img)
+            img = f.url;
+        if (f.type === 'audio' && !aud)
+            aud = f.url;
+        if (f.type === 'video' && !vid)
+            vid = f.url;
+        if (f.type === 'document' && !doc) {
+            doc = f.url;
+            docName = f.name;
+        }
+    }
+    return {
+        message: stepNumber === 1 ? (fup.followupMessage || '') : '',
+        imageUrl: stepNumber === 2 || stepNumber === 3 ? img : '',
+        audioUrl: stepNumber === 2 || stepNumber === 3 ? aud : '',
+        videoUrl: stepNumber === 2 || stepNumber === 3 ? vid : '',
+        documentUrl: doc,
+        documentName: docName,
+        files,
+    };
+}
+/**
+ * Dispatches step content respecting user intent:
+ * - ONLY text -> sends text
+ * - ONLY image -> sends image
+ * - ONLY audio -> sends voice note
+ * - ONLY video -> sends video
+ * - ONLY doc -> sends document
+ * - Text + Image -> sends image with text caption
+ * - Text + Audio -> sends text then voice note
+ * - Text + Video -> sends video with text caption
+ */
+async function dispatchStepFollowup(sock, campaign, contact, stepNumber, stepConfig, gender, fup) {
+    const hasText = Boolean(stepConfig.message && stepConfig.message.trim());
+    const hasImage = Boolean(stepConfig.imageUrl);
+    const hasAudio = Boolean(stepConfig.audioUrl);
+    const hasVideo = Boolean(stepConfig.videoUrl);
+    const hasDoc = Boolean(stepConfig.documentUrl);
+    const hasMedia = hasImage || hasAudio || hasVideo || hasDoc;
+    let msg = '';
+    if (hasText) {
+        const substituted = replaceVariables(stepConfig.message, contact.contactName, campaign.name, gender);
+        if (fup.aiEnabled && fup.aiApiKey) {
+            try {
+                msg = await (0, ai_js_1.generateFollowupText)({
+                    step: stepNumber,
+                    contactName: contact.contactName,
+                    gender,
+                    campaignName: campaign.name,
+                    understandingText: fup.understandingText,
+                    baseTemplate: substituted,
+                    apiKeyOrId: fup.aiApiKey,
+                    preferredModel: fup.aiModel,
+                });
+            }
+            catch {
+                msg = substituted;
+            }
+        }
+        else {
+            msg = substituted;
+        }
+    }
+    else if (!hasMedia) {
+        // If no custom text AND no media was provided, generate natural AI step greeting
+        msg = await (0, ai_js_1.generateFollowupText)({
+            step: stepNumber,
+            contactName: contact.contactName,
+            gender,
+            campaignName: campaign.name,
+            understandingText: fup.understandingText,
+            baseTemplate: '',
+            apiKeyOrId: fup.aiApiKey,
+            preferredModel: fup.aiModel,
+        });
+    }
+    // Case 1: ONLY Audio (voice note)
+    if (hasAudio && !hasText && !hasImage && !hasVideo && !hasDoc) {
+        try {
+            await sock.sendPresenceUpdate('recording', contact.phoneNumber);
+            await (0, utils_js_1.sleep)(1500);
+            await (0, fileSender_js_1.sendAudioMessage)(sock, contact.phoneNumber, stepConfig.audioUrl);
+            await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'audio', stepConfig.audioUrl);
+            (0, utils_js_1.log)('FOLLOWUP', `✅ Step ${stepNumber} delivered voice note only to ${contact.phoneNumber}`);
+            return true;
+        }
+        catch (e) {
+            (0, utils_js_1.errLog)('FOLLOWUP', `Step ${stepNumber} audio failed: ${e.message}`);
+            return false;
+        }
+    }
+    // Case 2: ONLY Image
+    if (hasImage && !hasText && !hasAudio && !hasVideo && !hasDoc) {
+        try {
+            await (0, fileSender_js_1.sendImageMessage)(sock, contact.phoneNumber, stepConfig.imageUrl, '');
+            await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'image', stepConfig.imageUrl);
+            (0, utils_js_1.log)('FOLLOWUP', `✅ Step ${stepNumber} delivered image only to ${contact.phoneNumber}`);
+            return true;
+        }
+        catch (e) {
+            (0, utils_js_1.errLog)('FOLLOWUP', `Step ${stepNumber} image failed: ${e.message}`);
+            return false;
+        }
+    }
+    // Case 3: ONLY Video
+    if (hasVideo && !hasText && !hasAudio && !hasImage && !hasDoc) {
+        try {
+            await (0, fileSender_js_1.sendVideoMessage)(sock, contact.phoneNumber, stepConfig.videoUrl, '');
+            await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'video', stepConfig.videoUrl);
+            (0, utils_js_1.log)('FOLLOWUP', `✅ Step ${stepNumber} delivered video only to ${contact.phoneNumber}`);
+            return true;
+        }
+        catch (e) {
+            (0, utils_js_1.errLog)('FOLLOWUP', `Step ${stepNumber} video failed: ${e.message}`);
+            return false;
+        }
+    }
+    // Case 4: ONLY Document
+    if (hasDoc && !hasText && !hasAudio && !hasImage && !hasVideo) {
+        try {
+            await (0, fileSender_js_1.sendDocumentMessage)(sock, contact.phoneNumber, stepConfig.documentUrl, stepConfig.documentName);
+            await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'document', stepConfig.documentUrl);
+            (0, utils_js_1.log)('FOLLOWUP', `✅ Step ${stepNumber} delivered document only to ${contact.phoneNumber}`);
+            return true;
+        }
+        catch (e) {
+            (0, utils_js_1.errLog)('FOLLOWUP', `Step ${stepNumber} document failed: ${e.message}`);
+            return false;
+        }
+    }
+    // Case 5: Image + Text (as caption)
+    if (hasImage && msg) {
+        try {
+            await (0, fileSender_js_1.sendImageMessage)(sock, contact.phoneNumber, stepConfig.imageUrl, msg);
+            await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'image', stepConfig.imageUrl);
+            (0, utils_js_1.log)('FOLLOWUP', `✅ Step ${stepNumber} delivered image with caption to ${contact.phoneNumber}`);
+            return true;
+        }
+        catch (e) {
+            (0, utils_js_1.errLog)('FOLLOWUP', `Step ${stepNumber} image with caption failed: ${e.message}`);
+        }
+    }
+    // Case 6: Video + Text (as caption)
+    if (hasVideo && msg) {
+        try {
+            await (0, fileSender_js_1.sendVideoMessage)(sock, contact.phoneNumber, stepConfig.videoUrl, msg);
+            await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'video', stepConfig.videoUrl);
+            (0, utils_js_1.log)('FOLLOWUP', `✅ Step ${stepNumber} delivered video with caption to ${contact.phoneNumber}`);
+            return true;
+        }
+        catch (e) {
+            (0, utils_js_1.errLog)('FOLLOWUP', `Step ${stepNumber} video with caption failed: ${e.message}`);
+        }
+    }
+    // Case 7: Text + Audio (Voice note)
+    if (hasAudio && msg) {
+        try {
+            try {
+                await sock.sendPresenceUpdate('composing', contact.phoneNumber);
+            }
+            catch { }
+            await (0, utils_js_1.sleep)(1500);
+            await (0, fileSender_js_1.sendTextMessage)(sock, contact.phoneNumber, msg);
+            try {
+                await sock.sendPresenceUpdate('recording', contact.phoneNumber);
+            }
+            catch { }
+            await (0, utils_js_1.sleep)(1500);
+            await (0, fileSender_js_1.sendAudioMessage)(sock, contact.phoneNumber, stepConfig.audioUrl);
+            await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'audio', stepConfig.audioUrl);
+            (0, utils_js_1.log)('FOLLOWUP', `✅ Step ${stepNumber} delivered text + voice note to ${contact.phoneNumber}`);
+            return true;
+        }
+        catch (e) {
+            (0, utils_js_1.errLog)('FOLLOWUP', `Step ${stepNumber} text + audio failed: ${e.message}`);
+        }
+    }
+    // Case 8: Text only (or fallback)
+    if (msg) {
+        try {
+            try {
+                await sock.sendPresenceUpdate('composing', contact.phoneNumber);
+            }
+            catch { }
+            await (0, utils_js_1.sleep)(2000);
+            await (0, fileSender_js_1.sendTextMessage)(sock, contact.phoneNumber, msg);
+            await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'text', '');
+            (0, utils_js_1.log)('FOLLOWUP', `✅ Step ${stepNumber} delivered text to ${contact.phoneNumber}: "${msg.slice(0, 60)}..."`);
+            return true;
+        }
+        catch (e) {
+            (0, utils_js_1.errLog)('FOLLOWUP', `Step ${stepNumber} text failed: ${e.message}`);
+            return false;
+        }
+    }
+    return false;
+}
+/**
  * Process follow-ups for a single campaign.
  */
 async function processCampaignFollowups(campaign) {
@@ -103,27 +390,6 @@ async function processCampaignFollowups(campaign) {
         return;
     const now = Date.now();
     const todayStr = new Date().toISOString().split('T')[0];
-    // CRITICAL: Strictly resolve media ONLY from the campaign's follow-up configuration!
-    // NEVER fall back to campaign.imageUrl, campaign.audioUrl, etc. (those are main campaign assets)
-    let audioUrl = fup.followupAudioUrl || '';
-    let imageUrl = fup.followupImageUrl || '';
-    let videoUrl = fup.followupVideoUrl || '';
-    let documentUrl = fup.followupDocumentUrl || '';
-    let documentName = fup.followupDocumentName || 'Document';
-    if (Array.isArray(fup.followupFiles) && fup.followupFiles.length > 0) {
-        for (const f of fup.followupFiles) {
-            if (f.type === 'audio' && !audioUrl)
-                audioUrl = f.url;
-            if (f.type === 'image' && !imageUrl)
-                imageUrl = f.url;
-            if (f.type === 'video' && !videoUrl)
-                videoUrl = f.url;
-            if (f.type === 'document' && !documentUrl) {
-                documentUrl = f.url;
-                documentName = f.name;
-            }
-        }
-    }
     for (const contact of contacts) {
         try {
             const initialContactMs = new Date(contact.sentAt).getTime();
@@ -163,36 +429,22 @@ async function processCampaignFollowups(campaign) {
                 continue;
             }
             // ─────────────────────────────────────────────────────────────────────────
-            // Step 1: ~2 Minutes after initial contact (AI-optimized friendly check)
+            // Step 1: 3 to 5 Minutes after initial contact (Randomized 3.0 to 5.0 minutes)
             // ─────────────────────────────────────────────────────────────────────────
             if (state.highestStep === 0) {
-                // Must be at least ~1.9 minutes (114 seconds) so with typing latency it delivers at exactly 2 minutes
-                if (ageMinutes >= 1.9) {
+                // Derive stable pseudo-random target minute (3.0 to 5.0 minutes) based on phone digits
+                const phoneDigits = contact.phoneNumber.replace(/\D/g, '');
+                const seed = phoneDigits.length >= 2 ? parseInt(phoneDigits.slice(-2), 10) : 12;
+                const randomTargetMinutes = 3.0 + ((seed % 21) / 10); // 3.0, 3.1, ..., 5.0 minutes
+                if (ageMinutes >= randomTargetMinutes) {
                     // Safety: If contact is older than 60 minutes and step 1 was never sent (e.g. old record),
                     // skip Step 1 to avoid mass-spamming ancient contacts.
                     if (ageMinutes > 60) {
                         continue;
                     }
-                    (0, utils_js_1.log)('FOLLOWUP', `⏳ [Step 1: 2-min check] Sending to ${contact.phoneNumber} (${contact.contactName}) for "${campaign.name}"...`);
-                    const msg = await (0, ai_js_1.generateFollowupText)({
-                        step: 1,
-                        contactName: contact.contactName,
-                        gender,
-                        campaignName: campaign.name,
-                        understandingText: fup.understandingText,
-                        baseTemplate: fup.followupMessage,
-                        apiKeyOrId: fup.aiApiKey,
-                        preferredModel: fup.aiModel,
-                    });
-                    try {
-                        await sock.sendPresenceUpdate('composing', contact.phoneNumber);
-                    }
-                    catch { }
-                    await (0, utils_js_1.sleep)(2000); // Natural 2-second typing delay
-                    // 1. Send ONLY the Gemini AI personalized text message for Step 1
-                    await (0, fileSender_js_1.sendTextMessage)(sock, contact.phoneNumber, msg);
-                    await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 1, 'text', '');
-                    (0, utils_js_1.log)('FOLLOWUP', `✅ Step 1 delivered AI text only to ${contact.phoneNumber}: "${msg.slice(0, 60)}..."`);
+                    (0, utils_js_1.log)('FOLLOWUP', `⏳ [Step 1: ${randomTargetMinutes.toFixed(1)}-min random check] Sending to ${contact.phoneNumber} (${contact.contactName}) for "${campaign.name}"...`);
+                    const step1Config = getStepConfig(fup, 1);
+                    await dispatchStepFollowup(sock, campaign, contact, 1, step1Config, gender, fup);
                     // Always explicitly pause typing presence so "typing..." never stays stuck!
                     try {
                         await sock.sendPresenceUpdate('paused', contact.phoneNumber);
@@ -203,79 +455,15 @@ async function processCampaignFollowups(campaign) {
                 }
             }
             // ─────────────────────────────────────────────────────────────────────────
-            // Step 2: 3 to 4 Hours after Step 1 (Media / Voice Note / Image nudge)
+            // Step 2: 3 to 4 Hours after Step 1
             // ─────────────────────────────────────────────────────────────────────────
             if (state.highestStep === 1) {
                 const hoursSinceStep1 = (now - state.lastStepTimeMs) / (60 * 60 * 1000);
                 // Trigger after 3 hours
                 if (hoursSinceStep1 >= 3) {
                     (0, utils_js_1.log)('FOLLOWUP', `🕒 [Step 2: 3-4h nudge] Sending to ${contact.phoneNumber} (${contact.contactName})...`);
-                    const msg = await (0, ai_js_1.generateFollowupText)({
-                        step: 2,
-                        contactName: contact.contactName,
-                        gender,
-                        campaignName: campaign.name,
-                        understandingText: fup.understandingText,
-                        apiKeyOrId: fup.aiApiKey,
-                        preferredModel: fup.aiModel,
-                    });
-                    try {
-                        await sock.sendPresenceUpdate('composing', contact.phoneNumber);
-                    }
-                    catch { }
-                    await (0, utils_js_1.sleep)(2000);
-                    let step2Delivered = false;
-                    const availableStep2Media = [];
-                    if (audioUrl)
-                        availableStep2Media.push({ type: 'audio', url: audioUrl });
-                    if (imageUrl)
-                        availableStep2Media.push({ type: 'image', url: imageUrl });
-                    if (videoUrl)
-                        availableStep2Media.push({ type: 'video', url: videoUrl });
-                    if (availableStep2Media.length > 0) {
-                        // Randomly pick from whichever media the user selected for follow-up
-                        const picked = availableStep2Media[Math.floor(Math.random() * availableStep2Media.length)];
-                        if (picked.type === 'audio') {
-                            try {
-                                await sock.sendPresenceUpdate('recording', contact.phoneNumber);
-                                await (0, utils_js_1.sleep)(1500);
-                                await (0, fileSender_js_1.sendAudioMessage)(sock, contact.phoneNumber, picked.url);
-                                await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 2, 'audio', picked.url);
-                                step2Delivered = true;
-                                (0, utils_js_1.log)('FOLLOWUP', `✅ Step 2 randomly delivered voice note to ${contact.phoneNumber}`);
-                            }
-                            catch (e) {
-                                (0, utils_js_1.errLog)('FOLLOWUP', `Step 2 audio failed: ${e.message}`);
-                            }
-                        }
-                        else if (picked.type === 'image') {
-                            try {
-                                await (0, fileSender_js_1.sendImageMessage)(sock, contact.phoneNumber, picked.url, msg);
-                                await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 2, 'image', picked.url);
-                                step2Delivered = true;
-                                (0, utils_js_1.log)('FOLLOWUP', `✅ Step 2 randomly delivered image to ${contact.phoneNumber}`);
-                            }
-                            catch (e) {
-                                (0, utils_js_1.errLog)('FOLLOWUP', `Step 2 image failed: ${e.message}`);
-                            }
-                        }
-                        else if (picked.type === 'video') {
-                            try {
-                                await (0, fileSender_js_1.sendVideoMessage)(sock, contact.phoneNumber, picked.url, msg);
-                                await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 2, 'video', picked.url);
-                                step2Delivered = true;
-                                (0, utils_js_1.log)('FOLLOWUP', `✅ Step 2 randomly delivered video to ${contact.phoneNumber}`);
-                            }
-                            catch (e) {
-                                (0, utils_js_1.errLog)('FOLLOWUP', `Step 2 video failed: ${e.message}`);
-                            }
-                        }
-                    }
-                    if (!step2Delivered) {
-                        await (0, fileSender_js_1.sendTextMessage)(sock, contact.phoneNumber, msg);
-                        await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 2, 'text', '');
-                        (0, utils_js_1.log)('FOLLOWUP', `✅ Step 2 delivered AI text to ${contact.phoneNumber}`);
-                    }
+                    const step2Config = getStepConfig(fup, 2);
+                    await dispatchStepFollowup(sock, campaign, contact, 2, step2Config, gender, fup);
                     try {
                         await sock.sendPresenceUpdate('paused', contact.phoneNumber);
                     }
@@ -291,60 +479,8 @@ async function processCampaignFollowups(campaign) {
                 const hoursSinceStep2 = (now - state.lastStepTimeMs) / (60 * 60 * 1000);
                 if (hoursSinceStep2 >= 20) {
                     (0, utils_js_1.log)('FOLLOWUP', `🌅 [Step 3: Next-day value] Sending to ${contact.phoneNumber}...`);
-                    const msg = await (0, ai_js_1.generateFollowupText)({
-                        step: 3,
-                        contactName: contact.contactName,
-                        gender,
-                        campaignName: campaign.name,
-                        understandingText: fup.understandingText,
-                        apiKeyOrId: fup.aiApiKey,
-                        preferredModel: fup.aiModel,
-                    });
-                    try {
-                        await sock.sendPresenceUpdate('composing', contact.phoneNumber);
-                    }
-                    catch { }
-                    await (0, utils_js_1.sleep)(2000);
-                    let step3Delivered = false;
-                    const availableStep3Media = [];
-                    if (imageUrl)
-                        availableStep3Media.push({ type: 'image', url: imageUrl });
-                    if (audioUrl)
-                        availableStep3Media.push({ type: 'audio', url: audioUrl });
-                    if (videoUrl)
-                        availableStep3Media.push({ type: 'video', url: videoUrl });
-                    if (availableStep3Media.length > 0) {
-                        const picked = availableStep3Media[Math.floor(Math.random() * availableStep3Media.length)];
-                        if (picked.type === 'image') {
-                            try {
-                                await (0, fileSender_js_1.sendImageMessage)(sock, contact.phoneNumber, picked.url, msg);
-                                await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 3, 'image', picked.url);
-                                step3Delivered = true;
-                                (0, utils_js_1.log)('FOLLOWUP', `✅ Step 3 delivered follow-up image to ${contact.phoneNumber}`);
-                            }
-                            catch (e) {
-                                (0, utils_js_1.errLog)('FOLLOWUP', `Step 3 image failed: ${e.message}`);
-                            }
-                        }
-                        else if (picked.type === 'audio') {
-                            try {
-                                await sock.sendPresenceUpdate('recording', contact.phoneNumber);
-                                await (0, utils_js_1.sleep)(1500);
-                                await (0, fileSender_js_1.sendAudioMessage)(sock, contact.phoneNumber, picked.url);
-                                await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 3, 'audio', picked.url);
-                                step3Delivered = true;
-                                (0, utils_js_1.log)('FOLLOWUP', `✅ Step 3 delivered follow-up voice note to ${contact.phoneNumber}`);
-                            }
-                            catch (e) {
-                                (0, utils_js_1.errLog)('FOLLOWUP', `Step 3 audio failed: ${e.message}`);
-                            }
-                        }
-                    }
-                    if (!step3Delivered) {
-                        await (0, fileSender_js_1.sendTextMessage)(sock, contact.phoneNumber, msg);
-                        await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 3, 'text', '');
-                        (0, utils_js_1.log)('FOLLOWUP', `✅ Step 3 delivered AI text to ${contact.phoneNumber}`);
-                    }
+                    const step3Config = getStepConfig(fup, 3);
+                    await dispatchStepFollowup(sock, campaign, contact, 3, step3Config, gender, fup);
                     try {
                         await sock.sendPresenceUpdate('paused', contact.phoneNumber);
                     }

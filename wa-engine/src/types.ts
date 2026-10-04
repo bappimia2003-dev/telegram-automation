@@ -10,6 +10,19 @@ export interface WaCampaignVariant {
   documentName: string;
 }
 
+export interface WaFollowupStep {
+  stepNumber: number; // 1, 2, 3
+  title?: string;
+  delayText?: string;
+  message?: string;
+  imageUrl?: string;
+  audioUrl?: string;
+  videoUrl?: string;
+  documentUrl?: string;
+  documentName?: string;
+  files?: Array<{ id: string; name: string; url: string; type: string; size?: number }>;
+}
+
 export interface WaFollowupConfig {
   aiEnabled: boolean;
   aiApiKey?: string;
@@ -21,6 +34,7 @@ export interface WaFollowupConfig {
   followupDelayUnit?: 'minutes' | 'hours' | 'days';
   followupCondition?: 'no_reply' | 'unconfirmed' | 'always';
   antiBanJitter?: boolean;
+  steps?: WaFollowupStep[];
   followupMessage?: string;
   followupImageUrl?: string;
   followupVideoUrl?: string;

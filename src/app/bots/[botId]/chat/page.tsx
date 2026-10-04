@@ -20,7 +20,6 @@ export default function BotChatLogPage() {
   const fetchMessages = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
-      // First get bot details to show name
       const botRes = await fetch(`/api/bots/${botId}`);
       if (botRes.ok) {
         const botData = await botRes.json();
@@ -32,7 +31,6 @@ export default function BotChatLogPage() {
       const msgList = Array.isArray(data) ? data : data.messages || [];
       setMessages(msgList);
       
-      // Calculate basic stats
       const today = new Date().setHours(0,0,0,0);
       const todaysMsgs = msgList.filter((m: any) => new Date(m.timestamp).getTime() >= today).length;
       setStats({ total: msgList.length, today: todaysMsgs });
@@ -48,7 +46,6 @@ export default function BotChatLogPage() {
   useEffect(() => {
     if (botId) {
       fetchMessages();
-      // Auto-refresh every 10 seconds
       const interval = setInterval(() => fetchMessages(true), 10000);
       return () => clearInterval(interval);
     }
@@ -57,27 +54,27 @@ export default function BotChatLogPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12 h-[calc(100vh-8rem)] flex flex-col">
       <div className="space-y-4 shrink-0">
-        <nav className="flex items-center space-x-2 text-sm text-muted-foreground">
-          <Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link>
+        <nav className="flex items-center space-x-2 text-sm text-gray-500">
+          <Link href="/dashboard" className="hover:text-gray-900 transition-colors">Dashboard</Link>
           <ChevronRight size={14} />
-          <Link href={`/bots/${botId}`} className="hover:text-white transition-colors">{botName}</Link>
+          <Link href={`/bots/${botId}`} className="hover:text-gray-900 transition-colors">{botName}</Link>
           <ChevronRight size={14} />
-          <span className="text-foreground">Chat Log</span>
+          <span className="text-gray-900 font-medium">Chat Log</span>
         </nav>
         
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Chat Log - {botName}</h1>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span>Total messages: <strong className="text-white">{stats.total}</strong></span>
-              <span>Today: <strong className="text-white">{stats.today}</strong></span>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Chat Log - {botName}</h1>
+            <div className="flex items-center gap-4 text-sm text-gray-500">
+              <span>Total messages: <strong className="text-gray-900 font-bold">{stats.total}</strong></span>
+              <span>Today: <strong className="text-gray-900 font-bold">{stats.today}</strong></span>
             </div>
           </div>
           
           <button 
             onClick={() => fetchMessages(true)}
             disabled={refreshing}
-            className="flex items-center gap-2 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors text-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-xl hover:bg-gray-50 transition-colors text-sm font-semibold border border-gray-200 shadow-sm"
           >
             <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
             {refreshing ? 'Refreshing...' : 'Refresh'}
@@ -85,10 +82,10 @@ export default function BotChatLogPage() {
         </div>
       </div>
 
-      <div className="bg-card border border-border/50 rounded-xl overflow-hidden flex-1 flex flex-col min-h-0">
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden flex-1 flex flex-col min-h-0 shadow-sm">
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
-            <RefreshCw size={32} className="animate-spin text-muted-foreground opacity-50" />
+            <RefreshCw size={32} className="animate-spin text-green-700 opacity-60" />
           </div>
         ) : (
           <ChatLog messages={messages} botName={botName} />

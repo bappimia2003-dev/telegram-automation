@@ -45,7 +45,6 @@ export default function NewBotPage() {
 
       const newBot = await res.json();
 
-      // If user enabled auto-activate, trigger the webhook registration right away
       if (formData.autoActivate && newBot?.id) {
         try {
           await fetch(`/api/bots/${newBot.id}/webhook`, { method: 'POST' });
@@ -67,29 +66,29 @@ export default function NewBotPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-8 pb-12">
       <div className="space-y-4">
-        <nav className="flex items-center space-x-2 text-sm text-muted-foreground">
-          <Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link>
+        <nav className="flex items-center space-x-2 text-sm text-[#4B5563] dark:text-[#9CA3AF]">
+          <Link href="/dashboard" className="hover:text-gray-900 dark:hover:text-white transition-colors">Dashboard</Link>
           <ChevronRight size={14} />
-          <span className="text-foreground">New Bot</span>
+          <span className="text-gray-900 dark:text-white font-medium">New Bot</span>
         </nav>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Create New Bot</h1>
-          <p className="text-muted-foreground">Configure a new Telegram AI bot for your system.</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white">Create New Bot</h1>
         </div>
       </div>
 
       {errorMsg && (
-        <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+        <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 text-sm font-medium">
           {errorMsg}
         </div>
       )}
 
-      <div className="bg-card/50 border border-border/50 rounded-xl p-6 backdrop-blur-sm">
+      {/* Main Form Board */}
+      <div className="bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] rounded-2xl p-5 sm:p-7 shadow-sm transition-colors">
         {loading ? (
           <div className="h-96 animate-pulse flex flex-col space-y-4">
-            <div className="h-10 bg-muted rounded w-full" />
-            <div className="h-10 bg-muted rounded w-full" />
-            <div className="h-32 bg-muted rounded w-full" />
+            <div className="h-10 bg-gray-200 dark:bg-gray-800 rounded-xl w-full" />
+            <div className="h-10 bg-gray-200 dark:bg-gray-800 rounded-xl w-full" />
+            <div className="h-32 bg-gray-200 dark:bg-gray-800 rounded-xl w-full" />
           </div>
         ) : (
           <BotForm 

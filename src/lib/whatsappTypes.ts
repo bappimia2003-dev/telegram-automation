@@ -75,6 +75,19 @@ export interface WaFollowupMediaFile {
   uploadedAt: string;
 }
 
+export interface WaFollowupStep {
+  stepNumber: number; // 1, 2, 3
+  title?: string;
+  delayText?: string;
+  message?: string;
+  imageUrl?: string;
+  audioUrl?: string;
+  videoUrl?: string;
+  documentUrl?: string;
+  documentName?: string;
+  files?: WaFollowupMediaFile[];
+}
+
 export interface WaFollowupConfig {
   aiEnabled: boolean;
   aiApiKey?: string;
@@ -92,7 +105,10 @@ export interface WaFollowupConfig {
   followupCondition?: 'no_reply' | 'unconfirmed' | 'always';
   antiBanJitter?: boolean;
 
-  // Given follow-up message & multiple files
+  // 3-step follow-up system (Step 1: 3-5 min random, Step 2: 3-4h, Step 3: next day)
+  steps?: WaFollowupStep[];
+
+  // Given follow-up message & multiple files (legacy/fallback)
   followupMessage?: string;
   followupFiles?: WaFollowupMediaFile[];
   followupImageUrl?: string;

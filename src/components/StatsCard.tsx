@@ -13,25 +13,37 @@ interface StatsCardProps {
 
 export function StatsCard({ title, value, icon: Icon, trend, className }: StatsCardProps) {
   return (
-    <Card className={cn("overflow-hidden", className)}>
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground mb-1">{title}</p>
+    <Card className={cn(
+      "overflow-hidden rounded-2xl border transition-all shadow-sm",
+      "bg-[#FBF9F4] border-[#E6E2D8]",
+      "dark:bg-[#0B2820] dark:border-[#13382E]",
+      className
+    )}>
+      <CardContent className="p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 truncate">{title}</p>
             <div className="flex items-baseline gap-2">
-              <h4 className="text-3xl font-bold tracking-tight">{value}</h4>
+              <h4 className={cn(
+                "font-bold tracking-tight text-[#164E43] dark:text-white",
+                String(value).length > 8 ? "text-xl sm:text-2xl" : "text-2xl sm:text-3xl"
+              )}>
+                {value}
+              </h4>
               {trend && (
                 <span className={cn(
-                  "text-xs font-medium",
-                  trend.startsWith("+") ? "text-green-500" : "text-red-500"
+                  "text-xs font-semibold",
+                  trend.startsWith("+") ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
                 )}>
                   {trend}
                 </span>
               )}
             </div>
           </div>
-          <div className="p-3 bg-primary/10 rounded-full">
-            <Icon className="h-6 w-6 text-primary" />
+
+          {/* Icon Box */}
+          <div className="p-2.5 rounded-xl transition-colors shrink-0 bg-[#164E43] text-white dark:bg-[#3D341B] dark:text-[#F59E0B]">
+            <Icon className="h-5 w-5" />
           </div>
         </div>
       </CardContent>

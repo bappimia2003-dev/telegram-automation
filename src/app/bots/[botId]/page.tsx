@@ -82,11 +82,11 @@ export default function BotDetailPage() {
   if (loading) {
     return (
       <div className="animate-pulse space-y-8 max-w-5xl mx-auto">
-        <div className="h-8 w-48 bg-card rounded" />
-        <div className="h-32 bg-card rounded-xl" />
+        <div className="h-8 w-48 bg-white rounded-xl border border-gray-200" />
+        <div className="h-32 bg-white rounded-2xl border border-gray-200" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="h-64 bg-card rounded-xl" />
-          <div className="h-64 bg-card rounded-xl" />
+          <div className="h-64 bg-white rounded-2xl border border-gray-200" />
+          <div className="h-64 bg-white rounded-2xl border border-gray-200" />
         </div>
       </div>
     );
@@ -95,33 +95,33 @@ export default function BotDetailPage() {
   if (!bot) {
     return (
       <div className="text-center py-16">
-        <h2 className="text-xl font-bold">Bot not found</h2>
-        <Link href="/dashboard" className="text-primary hover:underline mt-4 inline-block">Return to Dashboard</Link>
+        <h2 className="text-xl font-bold text-gray-900">Bot not found</h2>
+        <Link href="/dashboard" className="text-green-700 hover:underline mt-4 inline-block font-semibold">Return to Dashboard</Link>
       </div>
     );
   }
 
   return (
     <div className="space-y-8 pb-12 max-w-5xl mx-auto">
-      <nav className="flex items-center space-x-2 text-sm text-muted-foreground">
-        <Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link>
+      <nav className="flex items-center space-x-2 text-sm text-gray-500">
+        <Link href="/dashboard" className="hover:text-gray-900 transition-colors">Dashboard</Link>
         <ChevronRight size={14} />
-        <span className="text-foreground">{bot.name}</span>
+        <span className="text-gray-900 font-medium">{bot.name}</span>
       </nav>
 
       {toggleError && (
-        <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm">
           {toggleError}
         </div>
       )}
 
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white mb-2">{bot.name}</h1>
-          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">{bot.name}</h1>
+          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
             <span className="flex items-center gap-1 font-mono text-xs"><Bot size={16} /> Token: {bot.telegramToken ? `${bot.telegramToken.substring(0, 8)}...` : 'Configured'}</span>
             <span className="flex items-center gap-1"><Calendar size={16} /> Created {new Date(bot.createdAt || Date.now()).toLocaleDateString()}</span>
-            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${isActive ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
+            <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
               {isActive ? 'Active (Live on Telegram)' : 'Inactive (Stopped)'}
             </span>
           </div>
@@ -131,64 +131,65 @@ export default function BotDetailPage() {
           <button 
             onClick={toggleStatus}
             disabled={toggling}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${isActive ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/30' : 'bg-green-500/10 text-green-500 hover:bg-green-500/20 border border-green-500/30'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm transition-all shadow-sm ${isActive ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200' : 'bg-green-700 text-white hover:bg-green-600'}`}
           >
-            <Power size={18} />
+            <Power size={16} />
             {toggling ? 'Connecting...' : isActive ? 'Stop Webhook' : 'Activate Webhook'}
           </button>
-          <Link href={`/bots/${botId}/settings`} className="flex items-center gap-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 px-4 py-2 rounded-lg transition-colors border border-border/50">
-            <Settings size={18} /> Settings
+          <Link href={`/bots/${botId}/settings`} className="flex items-center gap-2 bg-white text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-xl font-semibold text-sm transition-colors border border-gray-200 shadow-sm">
+            <Settings size={16} /> Settings
           </Link>
-          <button onClick={handleDelete} className="flex items-center gap-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 px-4 py-2 rounded-lg transition-colors border border-red-500/20">
-            <Trash2 size={18} /> Delete
+          <button onClick={handleDelete} className="flex items-center gap-2 bg-red-50 text-red-600 hover:bg-red-100 px-4 py-2 rounded-xl font-semibold text-sm transition-colors border border-red-200">
+            <Trash2 size={16} /> Delete
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-card/50 border border-border/50 rounded-xl p-6">
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-2">
-            <MessageSquare className="text-blue-500" />
-            <h3 className="font-medium text-white">Messages Processed</h3>
+            <MessageSquare className="text-green-700" />
+            <h3 className="font-semibold text-gray-700 text-sm">Messages Processed</h3>
           </div>
-          <p className="text-3xl font-bold text-white">{bot.messageCount ?? bot.stats?.messagesProcessed ?? 0}</p>
+          <p className="text-3xl font-bold text-gray-900">{bot.messageCount ?? bot.stats?.messagesProcessed ?? 0}</p>
         </div>
-        <div className="bg-card/50 border border-border/50 rounded-xl p-6">
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-2">
-            <Bot className="text-purple-500" />
-            <h3 className="font-medium text-white">Current AI Model</h3>
+            <Bot className="text-green-700" />
+            <h3 className="font-semibold text-gray-700 text-sm">Current AI Model</h3>
           </div>
-          <p className="text-lg font-medium text-white truncate">{bot.currentModel || bot.model || 'gemini-2.0-flash'}</p>
+          <p className="text-lg font-bold text-gray-900 truncate">{bot.currentModel || bot.model || 'gemini-2.0-flash'}</p>
         </div>
-        <div className="bg-card/50 border border-border/50 rounded-xl p-6">
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-2">
-            <Clock className="text-emerald-500" />
-            <h3 className="font-medium text-white">Webhook Status</h3>
+            <Clock className="text-green-700" />
+            <h3 className="font-semibold text-gray-700 text-sm">Webhook Status</h3>
           </div>
-          <p className="text-sm font-medium text-muted-foreground truncate">{bot.webhookUrl || (isActive ? 'Registered' : 'Not Registered')}</p>
+          <p className="text-sm font-medium text-gray-600 truncate">{bot.webhookUrl || (isActive ? 'Registered' : 'Not Registered')}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-card border border-border/50 rounded-xl overflow-hidden">
-            <div className="border-b border-border/50 px-6 py-4 flex items-center justify-between bg-card/80">
-              <h3 className="font-semibold text-white">Recent Telegram Activity</h3>
-              <Link href={`/bots/${botId}/chat`} className="text-sm text-primary hover:underline flex items-center gap-1">
+          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+            <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between bg-white">
+              <h3 className="font-bold text-gray-900">Recent Telegram Activity</h3>
+              <Link href={`/bots/${botId}/chat`} className="text-sm text-green-700 hover:underline flex items-center gap-1 font-semibold">
                 View full chat log <ArrowRight size={14} />
               </Link>
             </div>
             <div className="p-6">
               {recentMessages.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <MessageSquare className="mx-auto mb-3 opacity-20" size={32} />
-                  <p>No recent messages yet. Send a message to your bot on Telegram!</p>
+                <div className="text-center py-8 text-gray-400">
+                  <MessageSquare className="mx-auto mb-3 opacity-30 text-green-700" size={32} />
+                  <p className="font-medium text-gray-600">No recent messages yet</p>
+                  <p className="text-xs text-gray-400 mt-1">Send a message to your bot on Telegram!</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {recentMessages.slice(-5).map((m: any, idx: number) => (
-                    <div key={m.id || idx} className={`p-3 rounded-lg text-sm flex flex-col ${m.direction === 'incoming' ? 'bg-secondary/60 text-foreground mr-8' : 'bg-primary/10 border border-primary/20 text-blue-200 ml-8'}`}>
-                      <div className="flex justify-between items-center text-xs text-muted-foreground mb-1">
+                    <div key={m.id || idx} className={`p-3.5 rounded-2xl text-sm flex flex-col ${m.direction === 'incoming' ? 'bg-gray-100 text-gray-900 mr-8 border border-gray-200/60' : 'bg-green-700 text-white ml-8 shadow-sm'}`}>
+                      <div className={`flex justify-between items-center text-xs mb-1 ${m.direction === 'incoming' ? 'text-gray-500' : 'text-green-100'}`}>
                         <span className="font-semibold">{m.direction === 'incoming' ? (m.senderName || 'Telegram User') : bot.name}</span>
                         <span>{new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
@@ -202,71 +203,71 @@ export default function BotDetailPage() {
         </div>
 
         <div className="space-y-6">
-          <div className="bg-card border border-border/50 rounded-xl p-6">
-            <h3 className="font-semibold text-white mb-4">AI Configuration</h3>
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+            <h3 className="font-bold text-gray-900 mb-4">AI Configuration</h3>
             <div className="space-y-4">
               <div>
-                <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Personality Prompt</span>
-                <p className="text-sm text-white mt-1 line-clamp-4 bg-secondary/40 p-2.5 rounded border border-border/40">
+                <span className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Personality Prompt</span>
+                <p className="text-sm text-gray-700 mt-1 line-clamp-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
                   {bot.aiPersonality || bot.systemPrompt || 'No specific personality defined.'}
                 </p>
               </div>
-              <div className="pt-3 border-t border-border/50">
-                <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Response Style</span>
-                <p className="text-sm text-white mt-1 capitalize">{bot.responseStyle || 'Friendly'}</p>
+              <div className="pt-3 border-t border-gray-100">
+                <span className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Response Style</span>
+                <p className="text-sm text-gray-900 font-semibold mt-1 capitalize">{bot.responseStyle || 'Friendly'}</p>
               </div>
-              <div className="pt-3 border-t border-border/50">
-                <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Max Tokens</span>
-                <p className="text-sm text-white mt-1">{bot.maxTokens || 500} tokens</p>
+              <div className="pt-3 border-t border-gray-100">
+                <span className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Max Tokens</span>
+                <p className="text-sm text-gray-900 font-semibold mt-1">{bot.maxTokens || 500} tokens</p>
               </div>
             </div>
           </div>
 
           {/* AI Superpowers Status Card */}
-          <div className="bg-card border border-purple-500/20 rounded-xl p-6 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-border/40">
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-purple-400" />
-                <h3 className="font-semibold text-white text-sm">AI Superpowers</h3>
+                <Sparkles className="w-4 h-4 text-green-700" />
+                <h3 className="font-bold text-gray-900 text-sm">AI Superpowers</h3>
               </div>
-              <Link href={`/bots/${botId}/settings`} className="text-xs text-primary hover:underline">
+              <Link href={`/bots/${botId}/settings`} className="text-xs text-green-700 hover:underline font-semibold">
                 Configure
               </Link>
             </div>
             
             <div className="space-y-2.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-2 text-muted-foreground">
-                  <Mic className="w-3.5 h-3.5 text-blue-400" /> Voice & Audio
+                <span className="flex items-center gap-2 text-gray-600">
+                  <Mic className="w-3.5 h-3.5 text-blue-600" /> Voice & Audio
                 </span>
-                <span className={`px-2 py-0.5 rounded-full font-medium ${bot.enableVoice !== false ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-secondary text-muted-foreground'}`}>
+                <span className={`px-2.5 py-0.5 rounded-full font-semibold ${bot.enableVoice !== false ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-500'}`}>
                   {bot.enableVoice !== false ? 'Active' : 'Off'}
                 </span>
               </div>
 
               <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-2 text-muted-foreground">
-                  <ImageIcon className="w-3.5 h-3.5 text-emerald-400" /> Image Vision
+                <span className="flex items-center gap-2 text-gray-600">
+                  <ImageIcon className="w-3.5 h-3.5 text-emerald-600" /> Image Vision
                 </span>
-                <span className={`px-2 py-0.5 rounded-full font-medium ${bot.enableVision !== false ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-secondary text-muted-foreground'}`}>
+                <span className={`px-2.5 py-0.5 rounded-full font-semibold ${bot.enableVision !== false ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-500'}`}>
                   {bot.enableVision !== false ? 'Active' : 'Off'}
                 </span>
               </div>
 
               <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-2 text-muted-foreground">
-                  <FileText className="w-3.5 h-3.5 text-amber-400" /> Document Reader
+                <span className="flex items-center gap-2 text-gray-600">
+                  <FileText className="w-3.5 h-3.5 text-amber-600" /> Document Reader
                 </span>
-                <span className={`px-2 py-0.5 rounded-full font-medium ${bot.enableFiles !== false ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-secondary text-muted-foreground'}`}>
+                <span className={`px-2.5 py-0.5 rounded-full font-semibold ${bot.enableFiles !== false ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-500'}`}>
                   {bot.enableFiles !== false ? 'Active' : 'Off'}
                 </span>
               </div>
 
               <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-2 text-muted-foreground">
-                  <Globe className="w-3.5 h-3.5 text-cyan-400" /> Live Web Search
+                <span className="flex items-center gap-2 text-gray-600">
+                  <Globe className="w-3.5 h-3.5 text-teal-600" /> Live Web Search
                 </span>
-                <span className={`px-2 py-0.5 rounded-full font-medium ${bot.enableWebSearch ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-secondary text-muted-foreground'}`}>
+                <span className={`px-2.5 py-0.5 rounded-full font-semibold ${bot.enableWebSearch ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-500'}`}>
                   {bot.enableWebSearch ? 'Active' : 'Off'}
                 </span>
               </div>
@@ -274,48 +275,48 @@ export default function BotDetailPage() {
           </div>
 
           {/* Welcome Media Automation Card */}
-          <div className="bg-card border border-indigo-500/20 rounded-xl p-6 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-border/40">
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
               <div className="flex items-center gap-2">
-                <Film className="w-4 h-4 text-indigo-400" />
-                <h3 className="font-semibold text-white text-sm">Welcome Media (/start)</h3>
+                <Film className="w-4 h-4 text-green-700" />
+                <h3 className="font-bold text-gray-900 text-sm">Welcome Media (/start)</h3>
               </div>
-              <Link href={`/bots/${botId}/settings`} className="text-xs text-primary hover:underline">
+              <Link href={`/bots/${botId}/settings`} className="text-xs text-green-700 hover:underline font-semibold">
                 Configure
               </Link>
             </div>
 
             <div className="space-y-2.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Status</span>
-                <span className={`px-2 py-0.5 rounded-full font-medium ${bot.enableWelcomeMedia ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-secondary text-muted-foreground'}`}>
+                <span className="text-gray-600">Status</span>
+                <span className={`px-2.5 py-0.5 rounded-full font-semibold ${bot.enableWelcomeMedia ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-500'}`}>
                   {bot.enableWelcomeMedia ? 'Active (ON)' : 'Disabled (OFF)'}
                 </span>
               </div>
 
               <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-2 text-muted-foreground">
-                  <ImageIcon className="w-3.5 h-3.5 text-emerald-400" /> Welcome Image
+                <span className="flex items-center gap-2 text-gray-600">
+                  <ImageIcon className="w-3.5 h-3.5 text-emerald-600" /> Welcome Image
                 </span>
-                <span className="text-muted-foreground font-mono text-[11px]">
+                <span className="text-gray-500 font-mono text-[11px]">
                   {bot.welcomeImageUrl ? 'Configured ✅' : 'None'}
                 </span>
               </div>
 
               <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-2 text-muted-foreground">
-                  <Mic className="w-3.5 h-3.5 text-blue-400" /> Audio / Voice Note
+                <span className="flex items-center gap-2 text-gray-600">
+                  <Mic className="w-3.5 h-3.5 text-blue-600" /> Audio / Voice Note
                 </span>
-                <span className="text-muted-foreground font-mono text-[11px]">
+                <span className="text-gray-500 font-mono text-[11px]">
                   {bot.welcomeAudioUrl ? (bot.welcomeAudioType === 'audio' ? 'MP3 Audio ✅' : 'Voice Note ✅') : 'None'}
                 </span>
               </div>
 
               <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-2 text-muted-foreground">
-                  <Video className="w-3.5 h-3.5 text-purple-400" /> Welcome Video
+                <span className="flex items-center gap-2 text-gray-600">
+                  <Video className="w-3.5 h-3.5 text-purple-600" /> Welcome Video
                 </span>
-                <span className="text-muted-foreground font-mono text-[11px]">
+                <span className="text-gray-500 font-mono text-[11px]">
                   {bot.welcomeVideoUrl ? 'Configured ✅' : 'None'}
                 </span>
               </div>
@@ -323,32 +324,32 @@ export default function BotDetailPage() {
           </div>
 
           {/* Shop Knowledge & Product Training Card */}
-          <div className="bg-card border border-emerald-500/20 rounded-xl p-6 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-border/40">
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
               <div className="flex items-center gap-2">
-                <Store className="w-4 h-4 text-emerald-400" />
-                <h3 className="font-semibold text-white text-sm">Shop & Product Brain</h3>
+                <Store className="w-4 h-4 text-green-700" />
+                <h3 className="font-bold text-gray-900 text-sm">Shop & Product Brain</h3>
               </div>
-              <Link href={`/bots/${botId}/settings`} className="text-xs text-primary hover:underline">
+              <Link href={`/bots/${botId}/settings`} className="text-xs text-green-700 hover:underline font-semibold">
                 Edit Products
               </Link>
             </div>
 
             <div className="space-y-2.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-2 text-muted-foreground">
-                  <FileText className="w-3.5 h-3.5 text-emerald-400" /> Work Info
+                <span className="flex items-center gap-2 text-gray-600">
+                  <FileText className="w-3.5 h-3.5 text-emerald-600" /> Work Info
                 </span>
-                <span className={`px-2 py-0.5 rounded-full font-medium ${bot.workInfo ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-secondary text-muted-foreground'}`}>
+                <span className={`px-2.5 py-0.5 rounded-full font-semibold ${bot.workInfo ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-500'}`}>
                   {bot.workInfo ? 'Loaded ✅' : 'Not Set'}
                 </span>
               </div>
 
               <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-2 text-muted-foreground">
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-teal-400" /> Product Sheet
+                <span className="flex items-center gap-2 text-gray-600">
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-teal-600" /> Product Sheet
                 </span>
-                <span className={`px-2 py-0.5 rounded-full font-medium ${bot.productFileUrl ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-secondary text-muted-foreground'}`}>
+                <span className={`px-2.5 py-0.5 rounded-full font-semibold ${bot.productFileUrl ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-500'}`}>
                   {bot.productFileName || (bot.productFileUrl ? 'Uploaded ✅' : 'None')}
                 </span>
               </div>
@@ -357,6 +358,5 @@ export default function BotDetailPage() {
         </div>
       </div>
     </div>
-
   );
 }

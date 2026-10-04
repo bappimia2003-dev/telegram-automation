@@ -36,7 +36,6 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
       const data = await res.json();
       if (data.ok && Array.isArray(data.accounts)) {
         setAccounts(data.accounts);
-        // If selected account doesn't exist, fallback to first
         if (!data.accounts.some((a: WaConnection) => a.id === selectedAccountId)) {
           setSelectedAccountId(data.accounts[0]?.id || 'main');
         }
@@ -139,15 +138,15 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
   };
 
   return (
-    <Card className="border-border/60 bg-card/60 backdrop-blur-md overflow-hidden relative shadow-lg">
-      <CardHeader className="pb-3 border-b border-border/40">
+    <Card className="border border-gray-200 bg-white rounded-2xl overflow-hidden relative shadow-sm">
+      <CardHeader className="pb-3 border-b border-gray-100">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-1">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2 text-white">
-              <Smartphone className="h-5 w-5 text-emerald-400" />
+            <CardTitle className="text-lg font-bold flex items-center gap-2 text-gray-900">
+              <Smartphone className="h-5 w-5 text-green-700" />
               Connected WhatsApp Numbers
             </CardTitle>
-            <CardDescription className="text-xs text-muted-foreground">
+            <CardDescription className="text-xs text-gray-500">
               Link multiple WhatsApp SIM cards and assign specific numbers to different ad campaigns.
             </CardDescription>
           </div>
@@ -155,7 +154,7 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
           <Button
             size="sm"
             onClick={() => setAddingNew(!addingNew)}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs h-8 shrink-0 shadow-sm"
+            className="bg-green-700 hover:bg-green-600 text-white text-xs h-8 shrink-0 shadow-sm rounded-xl font-semibold"
           >
             <Plus className="w-3.5 h-3.5 mr-1" />
             Add Another Number
@@ -169,13 +168,13 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
               placeholder="e.g. SIM 2 - CapCut Ads or Course Number"
               value={newAccountName}
               onChange={(e) => setNewAccountName(e.target.value)}
-              className="bg-background/80 border-emerald-500/40 text-xs h-8"
+              className="bg-gray-50 border-gray-200 text-xs h-9 rounded-xl"
               autoFocus
             />
-            <Button type="submit" size="sm" disabled={loading || !newAccountName.trim()} className="bg-emerald-600 text-white text-xs h-8 shrink-0">
+            <Button type="submit" size="sm" disabled={loading || !newAccountName.trim()} className="bg-green-700 text-white text-xs h-9 shrink-0 rounded-xl font-semibold">
               Create & Get QR
             </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setAddingNew(false)} className="text-xs h-8 text-muted-foreground">
+            <Button type="button" size="sm" variant="ghost" onClick={() => setAddingNew(false)} className="text-xs h-9 text-gray-500 rounded-xl">
               Cancel
             </Button>
           </form>
@@ -190,24 +189,24 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
                 <button
                   key={acc.id}
                   onClick={() => setSelectedAccountId(acc.id)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
                     isSelected
-                      ? 'bg-emerald-600/20 border-emerald-500/50 text-white shadow-sm'
-                      : 'bg-secondary/40 border-border/40 text-muted-foreground hover:bg-secondary/70'
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold shadow-sm'
+                      : 'bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
                   <span
                     className={`w-2 h-2 rounded-full ${
                       acc.status === 'connected'
-                        ? 'bg-emerald-400'
+                        ? 'bg-emerald-500'
                         : acc.status === 'qr_pending'
-                        ? 'bg-amber-400 animate-ping'
-                        : 'bg-muted-foreground'
+                        ? 'bg-amber-400 animate-pulse'
+                        : 'bg-gray-400'
                     }`}
                   />
                   <span>{acc.name || (acc.id === 'main' ? 'Primary WhatsApp' : `SIM ${acc.id.slice(-4)}`)}</span>
                   {acc.phoneNumber && (
-                    <span className="font-mono text-[10px] text-emerald-300">+{acc.phoneNumber}</span>
+                    <span className="font-mono text-[10px] text-emerald-700 font-semibold">+{acc.phoneNumber}</span>
                   )}
                 </button>
               );
@@ -218,18 +217,18 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
 
       <CardContent className="pt-4">
         {selectedAccount.status === 'connected' ? (
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-emerald-950/20 border border-emerald-800/30">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-inner">
+              <div className="w-12 h-12 rounded-xl bg-white border border-emerald-200 flex items-center justify-center text-emerald-600 shadow-sm">
                 <CheckCircle2 className="h-6 w-6" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white flex items-center gap-2">
+                <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
                   <span>{selectedAccount.name || 'WhatsApp Number'}:</span>
-                  <span className="font-mono text-emerald-300">+{selectedAccount.phoneNumber || 'Linked Device'}</span>
+                  <span className="font-mono text-emerald-700">+{selectedAccount.phoneNumber || 'Linked Device'}</span>
                 </p>
-                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                   Auto-responder active & ready for incoming ad quick replies
                 </p>
               </div>
@@ -241,7 +240,7 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
                 size="sm"
                 onClick={() => handleDisconnect(selectedAccount.id)}
                 disabled={loading}
-                className="border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs h-8"
+                className="border-red-200 text-red-600 hover:bg-red-50 text-xs h-8 rounded-xl"
               >
                 <Power className="h-3.5 w-3.5 mr-1" />
                 Disconnect
@@ -253,7 +252,7 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
                   size="sm"
                   onClick={() => handleDeleteAccount(selectedAccount.id)}
                   disabled={loading}
-                  className="text-muted-foreground hover:text-destructive text-xs h-8 px-2"
+                  className="text-gray-400 hover:text-red-600 text-xs h-8 px-2 rounded-xl hover:bg-red-50"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -261,36 +260,36 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
             </div>
           </div>
         ) : selectedAccount.status === 'qr_pending' && selectedAccount.qrCode ? (
-          <div className="flex flex-col md:flex-row items-center gap-6 p-4 rounded-xl bg-secondary/30 border border-border/60">
-            <div className="bg-white p-3 rounded-xl shadow-2xl border-4 border-emerald-500/40 shrink-0">
+          <div className="flex flex-col md:flex-row items-center gap-6 p-4 rounded-xl bg-gray-50 border border-gray-200">
+            <div className="bg-white p-3 rounded-2xl shadow-lg border-2 border-emerald-400 shrink-0">
               <img src={selectedAccount.qrCode} alt="WhatsApp QR Code" className="w-48 h-48 sm:w-56 sm:h-56" />
             </div>
 
             <div className="space-y-3">
               <div>
-                <h4 className="text-sm font-semibold text-white flex items-center gap-2">
-                  <QrCode className="h-4 w-4 text-emerald-400" />
+                <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  <QrCode className="h-4 w-4 text-emerald-600" />
                   {selectedAccount.name || 'এই নম্বরটির'} WhatsApp দিয়ে স্ক্যান করুন
                 </h4>
-                <p className="text-xs text-emerald-400/90 mt-0.5">
+                <p className="text-xs text-emerald-700 mt-0.5 font-medium">
                   এই নম্বরের সাথে যুক্ত ক্যাম্পেইনগুলোর মেসেজ আসলেই অটো ফাইল সেন্ড হবে।
                 </p>
               </div>
 
-              <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
+              <ol className="text-xs text-gray-600 space-y-1.5 list-decimal list-inside">
                 <li>আপনার ফোনের WhatsApp খুলুন</li>
-                <li><strong className="text-foreground">Settings</strong> বা 3-dots মেনুতে যান</li>
-                <li><strong className="text-foreground">Linked Devices</strong> সিলেক্ট করুন</li>
-                <li><strong className="text-foreground">Link a Device</strong> এ চাপ দিয়ে এই QR কোডটি স্ক্যান করুন</li>
+                <li><strong className="text-gray-900">Settings</strong> বা 3-dots মেনুতে যান</li>
+                <li><strong className="text-gray-900">Linked Devices</strong> সিলেক্ট করুন</li>
+                <li><strong className="text-gray-900">Link a Device</strong> এ চাপ দিয়ে এই QR কোডটি স্ক্যান করুন</li>
               </ol>
 
               <div className="pt-2 flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => handleConnect(selectedAccount.id)} disabled={loading} className="text-xs h-8">
+                <Button size="sm" variant="outline" onClick={() => handleConnect(selectedAccount.id)} disabled={loading} className="text-xs h-8 rounded-xl border-gray-200">
                   <RefreshCw className="h-3.5 w-3.5 mr-1" />
                   Refresh QR
                 </Button>
                 {selectedAccount.id !== 'main' && (
-                  <Button size="sm" variant="ghost" onClick={() => handleDeleteAccount(selectedAccount.id)} className="text-xs text-destructive h-8">
+                  <Button size="sm" variant="ghost" onClick={() => handleDeleteAccount(selectedAccount.id)} className="text-xs text-red-600 h-8 rounded-xl hover:bg-red-50">
                     Delete Number Slot
                   </Button>
                 )}
@@ -298,14 +297,14 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
             </div>
           </div>
         ) : (
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-secondary/20 border border-border/40">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-gray-50 border border-gray-200">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground">
+              <div className="w-10 h-10 rounded-xl bg-gray-200 flex items-center justify-center text-gray-500">
                 <Wifi className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-sm font-medium text-white">{selectedAccount.name || 'WhatsApp'} Offline</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm font-semibold text-gray-900">{selectedAccount.name || 'WhatsApp'} Offline</p>
+                <p className="text-xs text-gray-500">
                   Click connect to generate a QR code and link this WhatsApp number.
                 </p>
               </div>
@@ -315,7 +314,7 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
               <Button
                 onClick={() => handleConnect(selectedAccount.id)}
                 disabled={loading}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs px-4 h-8"
+                className="bg-green-700 hover:bg-green-600 text-white font-semibold text-xs px-4 h-9 rounded-xl shadow-sm"
               >
                 {loading ? (
                   <>
@@ -336,7 +335,7 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
                   size="sm"
                   onClick={() => handleDeleteAccount(selectedAccount.id)}
                   disabled={loading}
-                  className="text-muted-foreground hover:text-destructive text-xs h-8 px-2"
+                  className="text-gray-400 hover:text-red-600 text-xs h-9 px-2 rounded-xl hover:bg-red-50"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>

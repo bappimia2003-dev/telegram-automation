@@ -73,23 +73,30 @@ export default function DashboardPage() {
     return (
       <div className="space-y-8 animate-pulse">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map(i => <div key={i} className="h-32 bg-card/50 rounded-xl border border-border/50" />)}
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="h-32 rounded-2xl bg-[#FBF9F4] dark:bg-[#0B2820] border border-[#E6E2D8] dark:border-[#13382E]" />
+          ))}
         </div>
-        <div className="flex justify-between items-center"><div className="h-8 w-32 bg-card/50 rounded" /><div className="h-10 w-32 bg-card/50 rounded" /></div>
+        <div className="flex justify-between items-center">
+          <div className="h-8 w-32 bg-gray-200 dark:bg-gray-800 rounded" />
+          <div className="h-10 w-32 bg-gray-200 dark:bg-gray-800 rounded" />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map(i => <div key={i} className="h-64 bg-card/50 rounded-xl border border-border/50" />)}
+          {[1, 2, 3].map(i => (
+            <div key={i} className="h-64 rounded-2xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930]" />
+          ))}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-12">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Dashboard</h1>
-        <p className="text-muted-foreground">Overview of your automation system</p>
+        <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white">Dashboard</h1>
       </div>
 
+      {/* KPI Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
         <StatsCard title="Total Bots" value={stats.totalBots.toString()} icon={Bot} />
         <StatsCard title="Active Bots" value={stats.activeBots.toString()} icon={Activity} />
@@ -97,12 +104,13 @@ export default function DashboardPage() {
         <StatsCard title="API Keys" value={stats.apiKeys.toString()} icon={Key} />
       </div>
 
-      <div className="space-y-6">
+      {/* Bots Section */}
+      <div className="space-y-5">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-white">Your Bots</h2>
+          <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900 dark:text-white">Your Bots</h2>
           <Link 
             href="/bots/new"
-            className="flex items-center space-x-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors"
+            className="flex items-center space-x-2 bg-[#164E43] hover:bg-[#124238] text-white px-5 py-2.5 rounded-xl transition-all shadow-sm font-bold text-sm"
           >
             <Plus size={18} />
             <span>Add New Bot</span>
@@ -110,15 +118,15 @@ export default function DashboardPage() {
         </div>
 
         {bots.length === 0 ? (
-          <div className="text-center py-12 bg-card/30 rounded-xl border border-dashed border-border">
-            <Bot size={48} className="mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h3 className="text-lg font-medium text-white mb-2">No bots created yet</h3>
-            <p className="text-muted-foreground mb-6">Create your first bot to get started!</p>
+          <div className="text-center py-14 bg-[#FBF9F4] dark:bg-[#181A1F] rounded-2xl border border-dashed border-[#E6E2D8] dark:border-[#262930] shadow-sm">
+            <Bot size={44} className="mx-auto mb-3 text-gray-400 dark:text-gray-600" />
+            <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">No bots created yet</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-5">Create your first bot to get started!</p>
             <Link 
               href="/bots/new"
-              className="inline-flex items-center space-x-2 bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:bg-primary/90 transition-colors"
+              className="inline-flex items-center space-x-1.5 bg-[#164E43] hover:bg-[#124238] text-white px-5 py-2.5 rounded-xl transition-all shadow-sm font-semibold text-xs"
             >
-              <Plus size={18} />
+              <Plus size={16} />
               <span>Create First Bot</span>
             </Link>
           </div>

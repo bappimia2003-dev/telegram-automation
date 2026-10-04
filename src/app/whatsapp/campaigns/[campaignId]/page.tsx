@@ -37,7 +37,7 @@ export default function CampaignDetailPage() {
 
   if (loading) {
     return (
-      <div className="py-20 text-center animate-pulse text-muted-foreground text-sm">
+      <div className="py-20 text-center animate-pulse text-gray-500 text-sm">
         Loading campaign details...
       </div>
     );
@@ -45,7 +45,7 @@ export default function CampaignDetailPage() {
 
   if (!campaign) {
     return (
-      <div className="py-20 text-center text-muted-foreground text-sm">
+      <div className="py-20 text-center text-gray-500 text-sm">
         Campaign not found or has been deleted.
       </div>
     );
@@ -54,22 +54,22 @@ export default function CampaignDetailPage() {
   return (
     <div className="space-y-8 pb-16">
       {/* Campaign Summary Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl bg-card/60 border border-border/60 backdrop-blur-md">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-6 rounded-2xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] shadow-sm">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold text-white tracking-tight">{campaign.name}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">{campaign.name}</h1>
             {campaign.isActive ? (
-              <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs">
+              <Badge className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 text-xs font-semibold">
                 Active
               </Badge>
             ) : (
-              <Badge variant="outline" className="text-muted-foreground text-xs">
+              <Badge variant="outline" className="text-gray-500 border-[#E6E2D8] dark:border-[#262930] text-xs">
                 Paused
               </Badge>
             )}
             {campaign.isDefault && (
-              <Badge variant="outline" className="text-amber-400 border-amber-500/30 text-xs flex items-center gap-1">
-                <Sparkles className="w-3 h-3" />
+              <Badge variant="outline" className="text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-xs flex items-center gap-1 font-semibold">
+                <Sparkles className="w-3 h-3 text-amber-600" />
                 Default Fallback
               </Badge>
             )}
@@ -85,33 +85,33 @@ export default function CampaignDetailPage() {
                 ? 'Primary WhatsApp'
                 : campaign.accountId;
               return (
-                <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-300 border-emerald-500/30 flex items-center gap-1 font-medium">
-                  {isAll ? <Globe className="w-3 h-3 text-emerald-400" /> : <Phone className="w-3 h-3 text-emerald-400" />}
+                <Badge variant="outline" className="text-xs bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 flex items-center gap-1 font-medium">
+                  {isAll ? <Globe className="w-3 h-3 text-emerald-600" /> : <Phone className="w-3 h-3 text-emerald-600" />}
                   {label}
                 </Badge>
               );
             })()}
           </div>
-          <p className="text-xs text-muted-foreground">{campaign.description || 'No description provided'}</p>
+          <p className="text-sm text-gray-500">{campaign.description || 'No description provided'}</p>
         </div>
 
-        <div className="flex items-center gap-6 text-xs text-muted-foreground">
+        <div className="flex items-center gap-6 text-xs text-gray-500">
           <div className="flex items-center gap-1.5">
-            <Send className="w-4 h-4 text-emerald-400" />
+            <Send className="w-4 h-4 text-emerald-600" />
             <span>Delivered:</span>
-            <strong className="text-white font-mono text-base">{campaign.totalSent || 0}</strong>
+            <strong className="text-gray-900 dark:text-white font-mono text-base font-bold">{campaign.totalSent || 0}</strong>
           </div>
           <div className="flex items-center gap-1.5">
-            <Clock className="w-4 h-4 text-emerald-400" />
+            <Clock className="w-4 h-4 text-emerald-600" />
             <span>Delay:</span>
-            <strong className="text-white">Auto (Randomized)</strong>
+            <strong className="text-gray-900 dark:text-white font-semibold">Auto (Randomized)</strong>
           </div>
         </div>
       </div>
 
       {/* Campaign Edit Form */}
       <div>
-        <h2 className="text-lg font-semibold text-white mb-4">Edit Campaign Assets & Rules</h2>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Edit Campaign Assets & Rules</h2>
         <CampaignForm 
           initialData={campaign} 
           isEditing={true} 
@@ -120,7 +120,7 @@ export default function CampaignDetailPage() {
       </div>
 
       {/* Delivery Logs Specific to this campaign */}
-      <div className="pt-6 border-t border-border/40">
+      <div className="pt-6 border-t border-[#E6E2D8] dark:border-[#262930]">
         <WhatsAppMessageLog campaignId={campaign.id} />
       </div>
     </div>

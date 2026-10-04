@@ -86,8 +86,8 @@ export default function BotSettingsPage() {
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto space-y-8 animate-pulse">
-        <div className="h-8 w-48 bg-card rounded" />
-        <div className="h-96 bg-card rounded-xl" />
+        <div className="h-8 w-48 bg-white rounded-xl border border-gray-200" />
+        <div className="h-96 bg-white rounded-2xl border border-gray-200" />
       </div>
     );
   }
@@ -95,32 +95,32 @@ export default function BotSettingsPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-8 pb-12">
       <div className="space-y-4">
-        <nav className="flex items-center space-x-2 text-sm text-muted-foreground">
-          <Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link>
+        <nav className="flex items-center space-x-2 text-sm text-gray-500">
+          <Link href="/dashboard" className="hover:text-gray-900 transition-colors">Dashboard</Link>
           <ChevronRight size={14} />
-          <Link href={`/bots/${botId}`} className="hover:text-white transition-colors">{bot?.name || 'Bot'}</Link>
+          <Link href={`/bots/${botId}`} className="hover:text-gray-900 transition-colors">{bot?.name || 'Bot'}</Link>
           <ChevronRight size={14} />
-          <span className="text-foreground">Settings</span>
+          <span className="text-gray-900 font-medium">Settings</span>
         </nav>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Edit Bot Settings</h1>
-          <p className="text-muted-foreground">Update configuration for {bot?.name}</p>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Edit Bot Settings</h1>
+          <p className="text-gray-500">Update configuration for {bot?.name}</p>
         </div>
       </div>
 
       {errorMsg && (
-        <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm">
           {errorMsg}
         </div>
       )}
 
       {successMsg && (
-        <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-sm font-medium animate-in fade-in">
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold animate-in fade-in">
           {successMsg}
         </div>
       )}
 
-      <div className="bg-card/50 border border-border/50 rounded-xl p-6 backdrop-blur-sm">
+      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
         <BotForm 
           bot={bot}
           apiKeys={apiKeys} 

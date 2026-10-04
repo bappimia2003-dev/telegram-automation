@@ -17,10 +17,10 @@ export default function WhatsAppSettingsPage() {
   return (
     <div className="space-y-6 max-w-4xl pb-16">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-white mb-1">
+        <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">
           WhatsApp Settings & Engine Configuration
         </h1>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-gray-500">
           Manage your WhatsApp session, Railway engine connection, and delivery security rules.
         </p>
       </div>
@@ -29,26 +29,26 @@ export default function WhatsAppSettingsPage() {
       <WhatsAppStatus />
 
       {/* Architecture Guide */}
-      <Card className="border-border/60 bg-card/60 backdrop-blur-md">
+      <Card className="border border-gray-200 bg-white rounded-2xl shadow-sm">
         <CardHeader>
-          <CardTitle className="text-base font-semibold text-white flex items-center gap-2">
-            <Server className="w-5 h-5 text-emerald-400" />
+          <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <Server className="w-5 h-5 text-green-700" />
             Deployment & Engine Information
           </CardTitle>
-          <CardDescription className="text-xs">
+          <CardDescription className="text-xs text-gray-500">
             How the WhatsApp Baileys Engine works with Vercel and Railway.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4 text-xs text-muted-foreground">
-          <div className="p-4 rounded-xl bg-secondary/30 border border-border/50 space-y-2">
-            <h4 className="font-semibold text-white flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-emerald-400" />
+        <CardContent className="space-y-4 text-xs text-gray-600">
+          <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-2">
+            <h4 className="font-bold text-gray-900 flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-emerald-600" />
               Local Testing (Now Active)
             </h4>
             <p>
               আপনি এখন লোকালহোস্টে টেস্ট করতে পারবেন। লোকালহোস্টে ইঞ্জিন চালু করতে নিচের কমান্ডটি দিন:
             </p>
-            <pre className="p-2.5 rounded-lg bg-black/60 text-emerald-400 font-mono text-[11px] overflow-x-auto">
+            <pre className="p-2.5 rounded-lg bg-gray-900 text-emerald-400 font-mono text-[11px] overflow-x-auto">
               cd "wa-engine" &amp;&amp; npm run dev
             </pre>
             <p>
@@ -56,9 +56,9 @@ export default function WhatsAppSettingsPage() {
             </p>
           </div>
 
-          <div className="p-4 rounded-xl bg-secondary/30 border border-border/50 space-y-2">
-            <h4 className="font-semibold text-white flex items-center gap-2">
-              <ExternalLink className="w-4 h-4 text-blue-400" />
+          <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-2">
+            <h4 className="font-bold text-gray-900 flex items-center gap-2">
+              <ExternalLink className="w-4 h-4 text-blue-600" />
               Railway Production Deployment (Later)
             </h4>
             <p>
@@ -66,9 +66,9 @@ export default function WhatsAppSettingsPage() {
             </p>
           </div>
 
-          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200/90 space-y-1.5">
-            <h4 className="font-semibold text-amber-300 flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-amber-400" />
+          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 space-y-1.5">
+            <h4 className="font-bold text-amber-900 flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-600" />
               Safety & Anti-Ban Best Practices
             </h4>
             <ul className="list-disc list-inside space-y-1 text-[11px]">

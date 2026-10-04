@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Edit2, Trash2, Key, Bot, Activity, CheckCircle2, PauseCircle, Power } from "lucide-react"
+import { Edit2, Trash2, Key, Bot, Power } from "lucide-react"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 
@@ -29,12 +29,12 @@ interface ApiKeyListProps {
 export function ApiKeyList({ apiKeys, onDelete, onEdit, onToggleStatus }: ApiKeyListProps) {
   if (!apiKeys || apiKeys.length === 0) {
     return (
-      <div className="text-center p-8 sm:p-12 border border-dashed border-border rounded-xl bg-card/30">
-        <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-3 text-amber-500">
+      <div className="text-center p-8 sm:p-12 border border-dashed border-[#E6E2D8] dark:border-[#262930] rounded-2xl bg-transparent">
+        <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 flex items-center justify-center mx-auto mb-3 text-amber-600 dark:text-amber-400">
           <Key size={24} />
         </div>
-        <h4 className="text-base font-semibold text-foreground">No API Keys Connected</h4>
-        <p className="text-xs sm:text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
+        <h4 className="text-base font-bold text-gray-900 dark:text-white">No API Keys Connected</h4>
+        <p className="text-xs sm:text-sm text-[#4B5563] dark:text-[#9CA3AF] mt-1 max-w-sm mx-auto">
           Add your Google AI Studio (Gemini) API key here or directly when creating a New Bot.
         </p>
       </div>
@@ -43,7 +43,6 @@ export function ApiKeyList({ apiKeys, onDelete, onEdit, onToggleStatus }: ApiKey
 
   return (
     <div className="space-y-4">
-      {/* Mobile Card View (< sm) and Desktop Table View (>= sm) */}
       <div className="grid grid-cols-1 gap-4">
         {apiKeys.map((k) => {
           const isActive = (k.status || 'active').toLowerCase() === 'active';
@@ -54,45 +53,53 @@ export function ApiKeyList({ apiKeys, onDelete, onEdit, onToggleStatus }: ApiKey
           return (
             <div 
               key={k.id} 
-              className="p-4 sm:p-5 rounded-xl border border-border/60 bg-card hover:border-border transition-all shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4"
+              className="p-4 sm:p-5 rounded-2xl border transition-all shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#FBF9F4] dark:bg-[#15171C] border-[#E6E2D8] dark:border-[#22252C] hover:border-gray-400 dark:hover:border-[#323640]"
             >
               {/* Left Column: Account Details & Bots */}
               <div className="space-y-2 flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shrink-0">
-                    <Key size={14} />
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                    <Key size={16} />
                   </div>
-                  <h3 className="font-semibold text-foreground text-sm sm:text-base truncate">
+                  <h3 className="font-black text-gray-900 dark:text-white text-base sm:text-lg">
                     {k.label || "Gemini Account"}
                   </h3>
-                  <Badge variant={isActive ? "success" : "destructive"} className="text-[11px] py-0">
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                    isActive 
+                      ? "bg-[#16A34A] text-white" 
+                      : "bg-amber-600 text-white"
+                  }`}>
                     {isActive ? "Active" : "Paused"}
-                  </Badge>
+                  </span>
                 </div>
 
                 {/* Gmail & Key */}
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground/80">{k.gmail}</span>
-                  <span className="font-mono bg-secondary/80 px-2 py-0.5 rounded text-[11px] border border-border/50">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-gray-800 dark:text-gray-200">
+                  <span className="font-bold text-gray-900 dark:text-gray-100">{k.gmail}</span>
+                  <span className="font-mono font-bold bg-[#E8E4DA] dark:bg-[#121418] text-gray-900 dark:text-gray-100 px-3 py-1 rounded-lg text-xs border border-[#DDD7CB] dark:border-[#262930] tracking-wider">
                     {displayKey}
                   </span>
                 </div>
 
                 {/* Bots running on this key */}
-                <div className="pt-1 flex flex-wrap items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Bot size={13} className="text-primary" />
-                    AI Bots Running: <strong className="text-foreground">{activeBotsCount} active</strong> / {botsCount} total
+                <div className="pt-1.5 flex flex-wrap items-center gap-2">
+                  <span className="text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                    <Bot size={15} className="text-[#164E43] dark:text-emerald-400" />
+                    AI Bots Running: <strong className="text-gray-900 dark:text-white font-extrabold">{activeBotsCount} active</strong> / {botsCount} total
                   </span>
                   
                   {k.botNames && k.botNames.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1 sm:mt-0">
+                    <div className="flex flex-wrap gap-1.5 mt-1 sm:mt-0">
                       {k.botNames.map(b => (
                         <span 
                           key={b.id} 
-                          className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${b.isActive ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-secondary text-muted-foreground border-border/40'}`}
+                          className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border ${
+                            b.isActive 
+                              ? 'bg-[#DCFCE7] dark:bg-[#143825] text-[#15803D] dark:text-[#86EFAC] border-[#BBF7D0] dark:border-[#1D5438]' 
+                              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+                          }`}
                         >
-                          <span className={`w-1.5 h-1.5 rounded-full ${b.isActive ? 'bg-green-500' : 'bg-muted-foreground'}`} />
+                          <span className={`w-2 h-2 rounded-full ${b.isActive ? 'bg-[#15803D] dark:bg-[#86EFAC]' : 'bg-gray-400'}`} />
                           {b.name}
                         </span>
                       ))}
@@ -102,14 +109,14 @@ export function ApiKeyList({ apiKeys, onDelete, onEdit, onToggleStatus }: ApiKey
               </div>
 
               {/* Middle Column: Activity Stats */}
-              <div className="flex items-center gap-6 py-2 md:py-0 border-y md:border-y-0 border-border/40 text-xs shrink-0">
+              <div className="flex items-center gap-6 py-2 md:py-0 border-y md:border-y-0 border-[#E6E2D8] dark:border-[#22252C] shrink-0">
                 <div>
-                  <p className="text-muted-foreground text-[11px]">Today's Requests</p>
-                  <p className="font-bold text-foreground text-sm">{k.requestsToday ?? 0}</p>
+                  <p className="text-gray-700 dark:text-gray-400 text-xs font-bold">Today's Requests</p>
+                  <p className="font-black text-gray-900 dark:text-white text-base sm:text-lg">{k.requestsToday ?? 0}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground text-[11px]">Last Activity</p>
-                  <p className="font-medium text-foreground">
+                  <p className="text-gray-700 dark:text-gray-400 text-xs font-bold">Last Activity</p>
+                  <p className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">
                     {k.lastUsed ? new Date(k.lastUsed).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}
                   </p>
                 </div>
@@ -118,37 +125,35 @@ export function ApiKeyList({ apiKeys, onDelete, onEdit, onToggleStatus }: ApiKey
               {/* Right Column: Actions */}
               <div className="flex items-center justify-end gap-2 shrink-0">
                 {onToggleStatus && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={`h-9 px-3 text-xs gap-1.5 ${isActive ? 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/10' : 'text-green-400 hover:text-green-300 hover:bg-green-500/10'}`}
+                  <button
                     onClick={() => onToggleStatus(k.id, isActive ? 'paused' : 'active')}
+                    className={`h-9 px-4 text-xs sm:text-sm font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-sm ${
+                      isActive 
+                        ? 'bg-[#FEEBC8] text-[#975A16] hover:bg-[#FBD38D] dark:bg-[#E5A93C] dark:hover:bg-[#D4992C] dark:text-[#1A1400]' 
+                        : 'bg-[#164E43] text-white hover:bg-[#124238]'
+                    }`}
                     title={isActive ? "Pause Key" : "Activate Key"}
                   >
-                    <Power size={13} />
+                    <Power size={14} />
                     <span>{isActive ? "Pause" : "Activate"}</span>
-                  </Button>
+                  </button>
                 )}
                 
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="h-9 px-2.5" 
+                <button 
+                  className="h-9 px-3.5 rounded-xl border border-[#E6E2D8] dark:border-[#262930] bg-[#FAF8F5] dark:bg-[#181A1F] text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex items-center justify-center cursor-pointer shadow-sm" 
                   onClick={() => onEdit(k)} 
                   title="Edit Key & Gmail"
                 >
-                  <Edit2 className="h-3.5 w-3.5" />
-                </Button>
+                  <Edit2 className="h-4 w-4" />
+                </button>
 
-                <Button 
-                  variant="destructive" 
-                  size="sm" 
-                  className="h-9 px-2.5" 
+                <button 
+                  className="h-9 px-3.5 rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex items-center justify-center cursor-pointer shadow-sm" 
                   onClick={() => onDelete(k.id)} 
                   title="Delete Key"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
             </div>
           );

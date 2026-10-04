@@ -36,23 +36,23 @@ export function ChatLog({ messages, botName }: ChatLogProps) {
   }, [messages])
 
   return (
-    <div className="flex flex-col h-full bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+    <div className="flex flex-col h-full bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
       {/* Header with Search */}
-      <div className="p-3.5 sm:p-4 border-b border-border/60 bg-card/90 backdrop-blur flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="p-3.5 sm:p-4 border-b border-gray-100 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Bot size={18} className="text-primary shrink-0" />
-          <h3 className="font-semibold text-foreground text-sm sm:text-base truncate">
+          <Bot size={18} className="text-green-700 shrink-0" />
+          <h3 className="font-bold text-gray-900 text-sm sm:text-base truncate">
             {botName} Conversations
           </h3>
-          <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full border border-border/40">
+          <span className="text-xs text-gray-600 bg-gray-100 px-2.5 py-0.5 rounded-full border border-gray-200 font-medium">
             {messages.length} msgs
           </span>
         </div>
 
         <div className="relative w-full sm:w-64">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
           <Input 
-            className="pl-9 h-9 text-xs sm:text-sm bg-secondary/50 border-border/60" 
+            className="pl-9 h-9 text-xs sm:text-sm bg-gray-50 border-gray-200 rounded-xl" 
             placeholder="Search in chat..." 
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
@@ -61,12 +61,12 @@ export function ChatLog({ messages, botName }: ChatLogProps) {
       </div>
 
       {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3.5 min-h-[300px]">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3.5 min-h-[300px] bg-[#FBF9F5]">
         {filteredMessages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-muted-foreground py-16">
-            <Bot size={36} className="mb-2 opacity-30 text-primary" />
-            <p className="text-sm font-medium">No messages found</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Send a message to your bot on Telegram to see it here live.</p>
+          <div className="h-full flex flex-col items-center justify-center text-gray-400 py-16">
+            <Bot size={36} className="mb-2 opacity-30 text-green-700" />
+            <p className="text-sm font-semibold text-gray-600">No messages found</p>
+            <p className="text-xs text-gray-400 mt-0.5">Send a message to your bot on Telegram to see it here live.</p>
           </div>
         ) : (
           filteredMessages.map((msg) => {
@@ -87,24 +87,24 @@ export function ChatLog({ messages, botName }: ChatLogProps) {
               >
                 <div className="flex items-center gap-1.5 mb-1 px-1">
                   {isIncoming ? (
-                    <User size={12} className="text-muted-foreground" />
+                    <User size={12} className="text-gray-400" />
                   ) : (
-                    <Bot size={12} className="text-primary" />
+                    <Bot size={12} className="text-green-700" />
                   )}
-                  <span className="text-[11px] font-medium text-muted-foreground">
+                  <span className="text-[11px] font-medium text-gray-500">
                     {sender}
                   </span>
-                  <span className="text-[10px] text-muted-foreground/60">
+                  <span className="text-[10px] text-gray-400">
                     {timeStr}
                   </span>
                 </div>
 
                 <div 
                   className={cn(
-                    "px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm",
+                    "px-4 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm",
                     isIncoming 
-                      ? "bg-secondary text-secondary-foreground rounded-tl-sm border border-border/40" 
-                      : "bg-primary text-primary-foreground rounded-tr-sm"
+                      ? "bg-white text-gray-900 rounded-tl-sm border border-gray-200" 
+                      : "bg-green-700 text-white rounded-tr-sm"
                   )}
                 >
                   {msg.text}
@@ -112,7 +112,7 @@ export function ChatLog({ messages, botName }: ChatLogProps) {
 
                 {!isIncoming && modelUsed && (
                   <div className="mt-1 px-1">
-                    <span className="inline-block text-[10px] font-mono px-1.5 py-0.5 rounded bg-secondary/80 text-muted-foreground border border-border/40">
+                    <span className="inline-block text-[10px] font-mono px-2 py-0.5 rounded-md bg-gray-100 text-gray-500 border border-gray-200">
                       {modelUsed}
                     </span>
                   </div>

@@ -394,7 +394,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Bot Name */}
       <div className="space-y-2">
-        <label className="text-sm font-medium text-foreground">Bot Name</label>
+        <label className="text-sm font-medium text-gray-900 dark:text-white">Bot Name</label>
         <Input 
           required 
           value={name} 
@@ -406,7 +406,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
 
       {/* Telegram Token */}
       <div className="space-y-2">
-        <label className="text-sm font-medium text-foreground flex items-center justify-between">
+        <label className="text-sm font-medium text-gray-900 dark:text-white flex items-center justify-between">
           <span>Telegram Bot Token</span>
           <span className="text-xs text-primary font-normal">From @BotFather</span>
         </label>
@@ -417,9 +417,6 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
           onChange={e => setToken(e.target.value)} 
           placeholder="" 
         />
-        <p className="text-xs text-muted-foreground">
-          Create a bot on Telegram with <code className="text-primary">@BotFather</code> and paste the HTTP API token here.
-        </p>
       </div>
 
       {/* API Key Section */}
@@ -427,22 +424,22 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Key className="w-4 h-4 text-primary shrink-0" />
-            <h4 className="text-sm font-semibold text-foreground">Google AI Studio (Gemini) API Key</h4>
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Google AI Studio (Gemini) API Key</h4>
           </div>
 
           {hasExistingKeys && (
-            <div className="flex items-center gap-1 bg-secondary/80 p-1 rounded-lg border border-border/60 text-xs self-start sm:self-auto">
+            <div className="flex items-center gap-1 bg-[#EDE8DE] dark:bg-[#181A1F] p-1 rounded-xl border border-[#E6E2D8] dark:border-[#262930] text-xs self-start sm:self-auto">
               <button
                 type="button"
                 onClick={() => setKeyMode('existing')}
-                className={`px-3 py-1 rounded-md transition-all ${keyMode === 'existing' ? 'bg-primary text-primary-foreground font-medium shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`px-3 py-1 rounded-md transition-all ${keyMode === 'existing' ? 'bg-[#164E43] text-white font-semibold shadow-sm' : 'text-[#4B5563] dark:text-[#9CA3AF] hover:text-gray-900 dark:text-white'}`}
               >
                 Use Saved Key
               </button>
               <button
                 type="button"
                 onClick={() => setKeyMode('new')}
-                className={`px-3 py-1 rounded-md transition-all flex items-center gap-1 ${keyMode === 'new' ? 'bg-primary text-primary-foreground font-medium shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`px-3 py-1 rounded-md transition-all flex items-center gap-1 ${keyMode === 'new' ? 'bg-[#164E43] text-white font-semibold shadow-sm' : 'text-[#4B5563] dark:text-[#9CA3AF] hover:text-gray-900 dark:text-white'}`}
               >
                 <Plus size={12} /> Add New Key
               </button>
@@ -452,7 +449,6 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
 
         {keyMode === 'existing' && hasExistingKeys ? (
           <div className="space-y-2">
-            <label className="text-xs text-muted-foreground">Select one of your saved Gmail accounts:</label>
             <Select 
               options={existingKeyOptions} 
               value={selectedKeyId} 
@@ -464,7 +460,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
         ) : (
           <div className="space-y-3 pt-1">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-foreground">Gemini API Key (free from AI Studio)</label>
+              <label className="text-xs font-medium text-gray-900 dark:text-white">Gemini API Key (free from AI Studio)</label>
               <Input 
                 required={keyMode === 'new'} 
                 type="text"
@@ -477,8 +473,8 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-foreground flex items-center gap-1">
-                  <Mail size={12} className="text-muted-foreground" />
+                <label className="text-xs font-medium text-gray-900 dark:text-white flex items-center gap-1">
+                  <Mail size={12} className="text-[#4B5563] dark:text-[#9CA3AF]" />
                   Gmail Account (remembers where key came from)
                 </label>
                 <Input 
@@ -492,7 +488,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-foreground">Account Label (optional)</label>
+                <label className="text-xs font-medium text-gray-900 dark:text-white">Account Label (optional)</label>
                 <Input 
                   className="text-base sm:text-sm h-11"
                   value={newLabel} 
@@ -501,7 +497,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                 />
               </div>
             </div>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-[11px] text-[#4B5563] dark:text-[#9CA3AF]">
               This API key will be saved securely and tracked in your API Key Management center.
             </p>
           </div>
@@ -510,7 +506,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
 
       {/* AI Personality */}
       <div className="space-y-2">
-        <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+        <label className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-1.5">
           <Sparkles className="w-4 h-4 text-purple-400" />
           AI Personality (How the AI talks)
         </label>
@@ -526,7 +522,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
 
       {/* AI Details / Context */}
       <div className="space-y-2">
-        <label className="text-sm font-medium text-foreground">Extra Knowledge & Rules (Optional)</label>
+        <label className="text-sm font-medium text-gray-900 dark:text-white">Extra Knowledge & Rules (Optional)</label>
         <Textarea 
           rows={3}
           value={details} 
@@ -538,18 +534,15 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
 
       {/* 🏪 Shop Knowledge & Product Training (Work Info & Excel/Word File) */}
       <div className="p-4 sm:p-5 border border-emerald-500/30 bg-emerald-950/10 rounded-2xl space-y-4">
-        <div className="flex items-center justify-between pb-2 border-b border-border/40">
+        <div className="flex items-center justify-between pb-2 border-b border-[#E6E2D8] dark:border-[#262930]">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
               <Store className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-semibold text-sm sm:text-base text-foreground">
+              <h3 className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white">
                 Shop Knowledge & Product Training (দোকানের তথ্য ও প্রোডাক্ট)
               </h3>
-              <p className="text-xs text-muted-foreground">
-                আপনার দোকানের পণ্য, দাম ও নিয়ম দিয়ে বটকে ট্রেইন করুন
-              </p>
             </div>
           </div>
           <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -560,7 +553,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
         {/* 1. Work Info Text Box */}
         <div className="space-y-2">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-            <label className="text-xs sm:text-sm font-medium text-foreground flex items-center gap-1.5">
+            <label className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white flex items-center gap-1.5">
               <FileText className="w-4 h-4 text-emerald-400" />
               Work Info (দোকান ও প্রোডাক্টের বিস্তারিত তথ্য)
             </label>
@@ -576,7 +569,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                 <button
                   type="button"
                   onClick={() => setWorkInfo("")}
-                  className="text-[11px] text-muted-foreground hover:text-red-400 transition-colors"
+                  className="text-[11px] text-[#4B5563] dark:text-[#9CA3AF] hover:text-red-400 transition-colors"
                 >
                   Clear
                 </button>
@@ -590,29 +583,26 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
             placeholder="" 
             className="text-base sm:text-sm font-mono text-xs leading-relaxed"
           />
-          <p className="text-[11px] text-muted-foreground">
-            💡 কাস্টমার যেকোনো পণ্যের দাম বা তথ্য জানতে চাইলে বট এই তথ্য দেখে শতভাগ সঠিক উত্তর দেবে।
-          </p>
         </div>
 
         {/* 2. Product Sheet (Excel / Word Document) */}
-        <div className="space-y-2 pt-2 border-t border-border/40">
+        <div className="space-y-2 pt-2 border-t border-[#E6E2D8] dark:border-[#262930]">
           <div className="flex items-center justify-between">
-            <label className="text-xs sm:text-sm font-medium text-foreground flex items-center gap-1.5">
+            <label className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white flex items-center gap-1.5">
               <FileSpreadsheet className="w-4 h-4 text-teal-400" />
               Product Sheet (Excel / Word Document)
             </label>
-            <span className="text-[11px] text-muted-foreground">.xlsx, .csv, .docx, .txt</span>
+            <span className="text-[11px] text-[#4B5563] dark:text-[#9CA3AF]">.xlsx, .csv, .docx, .txt</span>
           </div>
 
           {productFileUrl ? (
-            <div className="p-3.5 rounded-xl border border-emerald-500/40 bg-card/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="p-3.5 rounded-xl border border-emerald-500/40 bg-[#FAF8F5] dark:bg-[#121418] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-lg bg-emerald-500/15 text-emerald-400 shrink-0">
+                <div className="p-2.5 rounded-xl bg-emerald-500/15 text-emerald-400 shrink-0">
                   <FileSpreadsheet className="w-5 h-5" />
                 </div>
                 <div className="space-y-0.5 min-w-0">
-                  <p className="text-xs sm:text-sm font-semibold text-foreground truncate">
+                  <p className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white truncate">
                     {productFileName || 'Uploaded Product Document'}
                   </p>
                   <div className="flex items-center gap-2">
@@ -620,7 +610,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                       <CheckCircle2 size={12} /> Loaded into AI Knowledge Base
                     </span>
                     {productFileContent && (
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-[10px] text-[#4B5563] dark:text-[#9CA3AF]">
                         ({productFileContent.length} characters parsed)
                       </span>
                     )}
@@ -632,14 +622,14 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                 <button
                   type="button"
                   onClick={handleRemoveDocument}
-                  className="px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs font-medium flex items-center gap-1.5 transition-colors"
+                  className="px-3 py-1.5 rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs font-medium flex items-center gap-1.5 transition-colors"
                 >
                   <Trash2 size={12} /> Remove File
                 </button>
               </div>
             </div>
           ) : (
-            <label className={`border border-dashed border-border/80 hover:border-emerald-500/50 hover:bg-emerald-500/5 rounded-xl p-4 sm:p-5 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${uploadingDoc ? 'opacity-70 pointer-events-none' : ''}`}>
+            <label className={`border border-dashed border-[#E6E2D8] dark:border-[#262930] hover:border-emerald-500/50 hover:bg-emerald-500/5 rounded-xl p-4 sm:p-5 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${uploadingDoc ? 'opacity-70 pointer-events-none' : ''}`}>
               <input
                 type="file"
                 accept=".xlsx,.xls,.csv,.docx,.doc,.txt,.json"
@@ -654,12 +644,12 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
               {uploadingDoc ? (
                 <RefreshCw className="w-5 h-5 text-emerald-400 animate-spin" />
               ) : (
-                <Upload className="w-5 h-5 text-muted-foreground" />
+                <Upload className="w-5 h-5 text-[#4B5563] dark:text-[#9CA3AF]" />
               )}
-              <span className="text-xs sm:text-sm text-foreground font-medium text-center">
+              <span className="text-xs sm:text-sm text-gray-900 dark:text-white font-medium text-center">
                 {uploadingDoc ? 'ডকুমেন্ট আপলোড ও প্রসেসিং হচ্ছে... অপেক্ষা করুন' : 'Click to Upload Excel (.xlsx, .csv) or Word (.docx)'}
               </span>
-              <span className="text-[11px] text-muted-foreground text-center">
+              <span className="text-[11px] text-[#4B5563] dark:text-[#9CA3AF] text-center">
                 এক্সেল বা ওয়ার্ড ফাইল আপলোড করলে বট স্বয়ংক্রিয়ভাবে সব পণ্য ও দাম পড়ে মুখস্থ করে নেবে
               </span>
             </label>
@@ -670,7 +660,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
       {/* Response Style & Max Tokens */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
         <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">Response Style</label>
+          <label className="text-sm font-medium text-gray-900 dark:text-white">Response Style</label>
           <Select 
             options={styleOptions} 
             value={style} 
@@ -679,21 +669,20 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">Max Response Length ({maxLength} tokens)</label>
+          <label className="text-sm font-medium text-gray-900 dark:text-white">Max Response Length ({maxLength} tokens)</label>
           <Slider min={50} max={2000} step={50} value={maxLength} onChange={setMaxLength} />
         </div>
       </div>
 
       {/* AI Superpowers & Multimodal Capabilities */}
       <div className="p-4 sm:p-5 border border-purple-500/30 bg-purple-950/15 rounded-2xl space-y-4">
-        <div className="flex items-center justify-between pb-2 border-b border-border/40">
+        <div className="flex items-center justify-between pb-2 border-b border-[#E6E2D8] dark:border-[#262930]">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
+            <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-semibold text-sm sm:text-base text-foreground">AI Superpowers & Capabilities (ফিচারসমূহ)</h3>
-              <p className="text-xs text-muted-foreground">Turn features ON or OFF for this bot</p>
+              <h3 className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white">AI Superpowers & Capabilities (ফিচারসমূহ)</h3>
             </div>
           </div>
           <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
@@ -703,56 +692,52 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-1">
           {/* 1. Voice & Audio */}
-          <div className="flex items-center justify-between p-3.5 rounded-xl border border-border/60 bg-card/60 hover:border-blue-500/40 transition-colors">
+          <div className="flex items-center justify-between p-3.5 rounded-xl border border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#15171C] hover:border-blue-500/40 transition-colors">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
+              <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400">
                 <Mic className="w-4 h-4" />
               </div>
               <div className="space-y-0.5">
-                <p className="text-sm font-medium text-foreground">Voice & Audio Messages</p>
-                <p className="text-[11px] text-muted-foreground">ভয়েস ও অডিও শুনে উত্তর দেবে</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">Voice & Audio Messages</p>
               </div>
             </div>
             <Switch checked={enableVoice} onCheckedChange={setEnableVoice} />
           </div>
 
           {/* 2. Image Vision */}
-          <div className="flex items-center justify-between p-3.5 rounded-xl border border-border/60 bg-card/60 hover:border-emerald-500/40 transition-colors">
+          <div className="flex items-center justify-between p-3.5 rounded-xl border border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#15171C] hover:border-emerald-500/40 transition-colors">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
                 <ImageIcon className="w-4 h-4" />
               </div>
               <div className="space-y-0.5">
-                <p className="text-sm font-medium text-foreground">Image Vision & Reading</p>
-                <p className="text-[11px] text-muted-foreground">ছবি ও ফটো দেখে বুঝতে পারবে</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">Image Vision & Reading</p>
               </div>
             </div>
             <Switch checked={enableVision} onCheckedChange={setEnableVision} />
           </div>
 
           {/* 3. Document & File Reading */}
-          <div className="flex items-center justify-between p-3.5 rounded-xl border border-border/60 bg-card/60 hover:border-amber-500/40 transition-colors">
+          <div className="flex items-center justify-between p-3.5 rounded-xl border border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#15171C] hover:border-amber-500/40 transition-colors">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
                 <FileText className="w-4 h-4" />
               </div>
               <div className="space-y-0.5">
-                <p className="text-sm font-medium text-foreground">Document & File Reading</p>
-                <p className="text-[11px] text-muted-foreground">PDF ও টেক্সট ফাইল পড়ে বিশ্লেষণ করবে</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">Document & File Reading</p>
               </div>
             </div>
             <Switch checked={enableFiles} onCheckedChange={setEnableFiles} />
           </div>
 
           {/* 4. Live Web Search */}
-          <div className="flex items-center justify-between p-3.5 rounded-xl border border-border/60 bg-card/60 hover:border-cyan-500/40 transition-colors">
+          <div className="flex items-center justify-between p-3.5 rounded-xl border border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#15171C] hover:border-cyan-500/40 transition-colors">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400">
+              <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400">
                 <Globe className="w-4 h-4" />
               </div>
               <div className="space-y-0.5">
-                <p className="text-sm font-medium text-foreground">Live Web Search</p>
-                <p className="text-[11px] text-muted-foreground">গুগল লাইভ সার্চ করে সাম্প্রতিক তথ্য দেবে</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">Live Web Search</p>
               </div>
             </div>
             <Switch checked={enableWebSearch} onCheckedChange={setEnableWebSearch} />
@@ -764,29 +749,29 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
       <div className={`p-4 sm:p-5 border rounded-2xl transition-all duration-300 space-y-5 ${
         enableWelcomeMedia 
           ? 'border-indigo-500/40 bg-gradient-to-br from-indigo-950/20 via-background to-purple-950/15 shadow-lg shadow-indigo-500/5' 
-          : 'border-border/60 bg-card/40'
+          : 'border-[#E6E2D8] dark:border-[#262930] bg-[#FAF8F5] dark:bg-[#121418]'
       }`}>
-        <div className="flex items-center justify-between pb-3 border-b border-border/40">
+        <div className="flex items-center justify-between pb-3 border-b border-[#E6E2D8] dark:border-[#262930]">
           <div className="flex items-center gap-3">
             <div className={`p-2.5 rounded-xl transition-colors ${
-              enableWelcomeMedia ? 'bg-indigo-500/20 text-indigo-400' : 'bg-muted text-muted-foreground'
+              enableWelcomeMedia ? 'bg-indigo-500/20 text-indigo-400' : 'bg-muted text-[#4B5563] dark:text-[#9CA3AF]'
             }`}>
               <Film className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-sm sm:text-base text-foreground">
+                <h3 className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white">
                   Welcome Media Automation (স্বাগতম মিডিয়া)
                 </h3>
                 <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${
                   enableWelcomeMedia 
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                    : 'bg-muted/40 text-muted-foreground border-border/40'
+                    : 'bg-muted/40 text-[#4B5563] dark:text-[#9CA3AF] border-[#E6E2D8] dark:border-[#262930]'
                 }`}>
                   {enableWelcomeMedia ? 'Active (সক্রিয়)' : 'Disabled (বন্ধ)'}
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-[#4B5563] dark:text-[#9CA3AF]">
                 টেলিগ্রামে কেউ বটটি <code className="text-primary font-mono text-[11px]">/start</code> করলে স্বয়ংক্রিয়ভাবে ছবি, অডিও/ভয়েস ও ভিডিও চলে যাবে
               </p>
             </div>
@@ -803,14 +788,14 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
             <div className="p-3.5 rounded-xl border border-sky-500/30 bg-sky-950/20 space-y-2.5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-sky-500/20 text-sky-400">
+                  <div className="p-1.5 rounded-xl bg-sky-500/20 text-sky-400">
                     <Cloud className="w-4 h-4" />
                   </div>
                   <div>
-                    <span className="text-xs sm:text-sm font-semibold text-foreground">
+                    <span className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">
                       Telegram Cloud Storage Chat ID (টেলিগ্রাম ক্লাউড সংযোগ)
                     </span>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-[11px] text-[#4B5563] dark:text-[#9CA3AF]">
                       মিডিয়া সরাসরি টেলিগ্রাম ক্লাউডে সেভ হবে (জিরো সার্ভার স্টোরেজ)
                     </p>
                   </div>
@@ -830,19 +815,19 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                   placeholder=""
                   value={chatId}
                   onChange={(e) => setChatId(e.target.value)}
-                  className="text-xs font-mono h-9 bg-background/80"
+                  className="text-xs font-mono h-9 bg-[#FAF8F5] dark:bg-[#121418]/80"
                 />
               </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
+              <p className="text-[11px] text-[#4B5563] dark:text-[#9CA3AF] leading-relaxed">
                 💡 <strong>নোট:</strong> এখানে আপনার <strong>ব্যক্তিগত Telegram User ID</strong> থাকবে। কখনো বটের নিজের আইডি বা ইউজারনেম দিবেন না, কারণ টেলিগ্রাম বট নিজের কাছে মেসেজ পাঠাতে পারে না।
               </p>
             </div>
 
             {/* Welcome Caption / Message */}
             <div className="space-y-1.5">
-              <label className="text-xs sm:text-sm font-medium text-foreground flex items-center justify-between">
+              <label className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white flex items-center justify-between">
                 <span>Welcome Text / Caption (স্বাগতম বার্তা বা ক্যাপশন)</span>
-                <span className="text-[11px] text-muted-foreground">ছবির সাথে বা শুরুতে যাবে</span>
+                <span className="text-[11px] text-[#4B5563] dark:text-[#9CA3AF]">ছবির সাথে বা শুরুতে যাবে</span>
               </label>
               <Textarea
                 rows={2}
@@ -857,10 +842,10 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               
               {/* 1. Welcome Image */}
-              <div className="p-4 rounded-xl border border-border/70 bg-card/70 space-y-3 flex flex-col justify-between">
+              <div className="p-4 rounded-xl border border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#15171C] space-y-3 flex flex-col justify-between">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                    <span className="text-xs font-semibold flex items-center gap-1.5 text-gray-900 dark:text-white">
                       <ImageIcon className="w-4 h-4 text-emerald-400" />
                       1. Welcome Image (ছবি)
                     </span>
@@ -878,7 +863,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                   {welcomeImageUrl ? (
                     <div className="space-y-2">
                       {welcomeImageUrl.startsWith('http') || welcomeImageUrl.startsWith('/') ? (
-                        <div className="relative group rounded-lg overflow-hidden border border-border/80 bg-black/40 aspect-video flex items-center justify-center">
+                        <div className="relative group rounded-xl overflow-hidden border border-[#E6E2D8] dark:border-[#262930] bg-black/40 aspect-video flex items-center justify-center">
                           <img 
                             src={welcomeImageUrl} 
                             alt="Welcome Preview" 
@@ -891,25 +876,25 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                             <button
                               type="button"
                               onClick={() => setWelcomeImageUrl("")}
-                              className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium flex items-center gap-1 shadow"
+                              className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-medium flex items-center gap-1 shadow"
                             >
                               <Trash2 size={12} /> Delete Image
                             </button>
                           </div>
                         </div>
                       ) : (
-                        <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-500/30 flex items-center gap-2.5">
+                        <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/30 flex items-center gap-2.5">
                           <ImageIcon className="w-5 h-5 text-emerald-400 shrink-0" />
                           <div className="min-w-0 flex-1">
                             <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
                               ☁️ Telegram Cloud Image
                             </span>
-                            <p className="text-[10px] text-muted-foreground font-mono truncate">{welcomeImageUrl}</p>
+                            <p className="text-[10px] text-[#4B5563] dark:text-[#9CA3AF] font-mono truncate">{welcomeImageUrl}</p>
                           </div>
                         </div>
                       )}
                       <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-muted-foreground font-mono truncate max-w-[200px]">
+                        <span className="text-[#4B5563] dark:text-[#9CA3AF] font-mono truncate max-w-[200px]">
                           {welcomeImageUrl}
                         </span>
                         <button
@@ -923,12 +908,12 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <div className="flex items-center gap-1 text-[11px] bg-secondary/60 p-0.5 rounded-lg border border-border/40">
+                      <div className="flex items-center gap-1 text-[11px] bg-[#EDE8DE] dark:bg-[#181A1F] p-0.5 rounded-xl border border-[#E6E2D8] dark:border-[#262930]">
                         <button
                           type="button"
                           onClick={() => setImageTab('upload')}
                           className={`flex-1 py-1 rounded-md transition-all text-center ${
-                            imageTab === 'upload' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground'
+                            imageTab === 'upload' ? 'bg-[#164E43] text-white font-semibold shadow-sm' : 'text-[#4B5563] dark:text-[#9CA3AF]'
                           }`}
                         >
                           Upload File
@@ -937,7 +922,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                           type="button"
                           onClick={() => setImageTab('url')}
                           className={`flex-1 py-1 rounded-md transition-all text-center ${
-                            imageTab === 'url' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground'
+                            imageTab === 'url' ? 'bg-[#164E43] text-white font-semibold shadow-sm' : 'text-[#4B5563] dark:text-[#9CA3AF]'
                           }`}
                         >
                           Paste URL / ID
@@ -945,7 +930,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                       </div>
 
                       {imageTab === 'upload' ? (
-                        <label className={`border border-dashed border-border/80 hover:border-emerald-500/50 hover:bg-emerald-500/5 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${uploadingImage ? 'opacity-70 pointer-events-none' : ''}`}>
+                        <label className={`border border-dashed border-[#E6E2D8] dark:border-[#262930] hover:border-emerald-500/50 hover:bg-emerald-500/5 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${uploadingImage ? 'opacity-70 pointer-events-none' : ''}`}>
                           <input
                             type="file"
                             accept="image/*"
@@ -960,12 +945,12 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                           {uploadingImage ? (
                             <RefreshCw className="w-5 h-5 text-emerald-400 animate-spin" />
                           ) : (
-                            <Upload className="w-5 h-5 text-muted-foreground" />
+                            <Upload className="w-5 h-5 text-[#4B5563] dark:text-[#9CA3AF]" />
                           )}
-                          <span className="text-xs text-foreground font-medium">
+                          <span className="text-xs text-gray-900 dark:text-white font-medium">
                             {uploadingImage ? 'ছবি আপলোড হচ্ছে...' : 'Click to Upload Image'}
                           </span>
-                          <span className="text-[10px] text-muted-foreground">PNG, JPG, WEBP, GIF</span>
+                          <span className="text-[10px] text-[#4B5563] dark:text-[#9CA3AF]">PNG, JPG, WEBP, GIF</span>
                         </label>
                       ) : (
                         <Input
@@ -981,10 +966,10 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
               </div>
 
               {/* 2. Welcome Audio & Live Voice Recording */}
-              <div className="p-4 rounded-xl border border-border/70 bg-card/70 space-y-3 flex flex-col justify-between">
+              <div className="p-4 rounded-xl border border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#15171C] space-y-3 flex flex-col justify-between">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                    <span className="text-xs font-semibold flex items-center gap-1.5 text-gray-900 dark:text-white">
                       <Mic className="w-4 h-4 text-blue-400" />
                       2. Audio / Voice (অডিও/ভয়েস)
                     </span>
@@ -1004,7 +989,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
 
                   {welcomeAudioUrl ? (
                     <div className="space-y-2.5">
-                      <div className="p-2.5 rounded-lg bg-black/40 border border-border/70 space-y-2">
+                      <div className="p-2.5 rounded-xl bg-black/40 border border-[#E6E2D8] dark:border-[#262930] space-y-2">
                         {welcomeAudioUrl.startsWith('http') || welcomeAudioUrl.startsWith('/') ? (
                           <audio 
                             controls 
@@ -1012,20 +997,20 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                             className="w-full h-8" 
                           />
                         ) : (
-                          <div className="p-2 rounded-lg bg-blue-950/30 border border-blue-500/30 flex items-center gap-2">
+                          <div className="p-2 rounded-xl bg-blue-950/30 border border-blue-500/30 flex items-center gap-2">
                             <Music className="w-4 h-4 text-blue-400 shrink-0" />
                             <div className="min-w-0 flex-1">
                               <span className="text-[11px] font-semibold text-blue-400">☁️ Telegram Cloud Audio</span>
-                              <p className="text-[10px] text-muted-foreground font-mono truncate">{welcomeAudioUrl}</p>
+                              <p className="text-[10px] text-[#4B5563] dark:text-[#9CA3AF] font-mono truncate">{welcomeAudioUrl}</p>
                             </div>
                           </div>
                         )}
                         <div className="flex items-center justify-between pt-1 text-[11px]">
-                          <span className="text-muted-foreground">Telegram Format:</span>
+                          <span className="text-[#4B5563] dark:text-[#9CA3AF]">Telegram Format:</span>
                           <button
                             type="button"
                             onClick={() => setWelcomeAudioType(prev => prev === 'voice' ? 'audio' : 'voice')}
-                            className="px-2 py-0.5 rounded bg-secondary text-primary font-medium text-[11px] border border-border/60 hover:bg-primary/20 transition-colors"
+                            className="px-2 py-0.5 rounded bg-[#EDE8DE] dark:bg-[#181A1F] text-primary font-medium text-[11px] border border-[#E6E2D8] dark:border-[#262930] hover:bg-primary/20 transition-colors"
                           >
                             {welcomeAudioType === 'voice' ? '🎙️ Voice Note (Waveform)' : '🎵 Music Audio (MP3)'}
                           </button>
@@ -1038,19 +1023,19 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                           setWelcomeAudioUrl("");
                           stopVoiceRecording();
                         }}
-                        className="w-full py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+                        className="w-full py-1.5 rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
                       >
                         <Trash2 size={12} /> Remove / Re-record
                       </button>
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <div className="flex items-center gap-1 text-[11px] bg-secondary/60 p-0.5 rounded-lg border border-border/40">
+                      <div className="flex items-center gap-1 text-[11px] bg-[#EDE8DE] dark:bg-[#181A1F] p-0.5 rounded-xl border border-[#E6E2D8] dark:border-[#262930]">
                         <button
                           type="button"
                           onClick={() => setAudioTab('record')}
                           className={`flex-1 py-1 rounded-md transition-all text-center ${
-                            audioTab === 'record' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground'
+                            audioTab === 'record' ? 'bg-[#164E43] text-white font-semibold shadow-sm' : 'text-[#4B5563] dark:text-[#9CA3AF]'
                           }`}
                         >
                           🎙️ Live Record
@@ -1059,7 +1044,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                           type="button"
                           onClick={() => setAudioTab('upload')}
                           className={`flex-1 py-1 rounded-md transition-all text-center ${
-                            audioTab === 'upload' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground'
+                            audioTab === 'upload' ? 'bg-[#164E43] text-white font-semibold shadow-sm' : 'text-[#4B5563] dark:text-[#9CA3AF]'
                           }`}
                         >
                           📁 Upload Audio
@@ -1068,7 +1053,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                           type="button"
                           onClick={() => setAudioTab('url')}
                           className={`flex-1 py-1 rounded-md transition-all text-center ${
-                            audioTab === 'url' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground'
+                            audioTab === 'url' ? 'bg-[#164E43] text-white font-semibold shadow-sm' : 'text-[#4B5563] dark:text-[#9CA3AF]'
                           }`}
                         >
                           🔗 URL / ID
@@ -1076,7 +1061,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                       </div>
 
                       {audioTab === 'record' && (
-                        <div className="p-3 border border-border/80 rounded-xl bg-secondary/30 flex flex-col items-center justify-center gap-2">
+                        <div className="p-3 border border-[#E6E2D8] dark:border-[#262930] rounded-xl bg-[#EDE8DE] dark:bg-[#181A1F] flex flex-col items-center justify-center gap-2">
                           {isRecording ? (
                             <div className="flex flex-col items-center gap-2">
                               <div className="flex items-center gap-2 text-red-400 animate-pulse text-xs font-semibold">
@@ -1086,7 +1071,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                               <button
                                 type="button"
                                 onClick={stopVoiceRecording}
-                                className="px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow"
+                                className="px-4 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow"
                               >
                                 <Square size={13} /> Stop & Save Voice
                               </button>
@@ -1102,14 +1087,14 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                               {uploadingAudio ? 'Saving Voice...' : 'Click to Record Voice (কথা বলুন)'}
                             </button>
                           )}
-                          <p className="text-[10px] text-muted-foreground text-center">
+                          <p className="text-[10px] text-[#4B5563] dark:text-[#9CA3AF] text-center">
                             টেলিগ্রামে আসল ভয়েস নোট বাবলের মতো যাবে
                           </p>
                         </div>
                       )}
 
                       {audioTab === 'upload' && (
-                        <label className={`border border-dashed border-border/80 hover:border-blue-500/50 hover:bg-blue-500/5 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${uploadingAudio ? 'opacity-70 pointer-events-none' : ''}`}>
+                        <label className={`border border-dashed border-[#E6E2D8] dark:border-[#262930] hover:border-blue-500/50 hover:bg-blue-500/5 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${uploadingAudio ? 'opacity-70 pointer-events-none' : ''}`}>
                           <input
                             type="file"
                             accept="audio/*,.mp3,.wav,.ogg,.m4a"
@@ -1124,12 +1109,12 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                           {uploadingAudio ? (
                             <RefreshCw className="w-5 h-5 text-blue-400 animate-spin" />
                           ) : (
-                            <Music className="w-5 h-5 text-muted-foreground" />
+                            <Music className="w-5 h-5 text-[#4B5563] dark:text-[#9CA3AF]" />
                           )}
-                          <span className="text-xs text-foreground font-medium">
+                          <span className="text-xs text-gray-900 dark:text-white font-medium">
                             {uploadingAudio ? 'অডিও আপলোড হচ্ছে...' : 'Choose Downloaded Audio'}
                           </span>
-                          <span className="text-[10px] text-muted-foreground">MP3, WAV, OGG, M4A</span>
+                          <span className="text-[10px] text-[#4B5563] dark:text-[#9CA3AF]">MP3, WAV, OGG, M4A</span>
                         </label>
                       )}
 
@@ -1147,10 +1132,10 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
               </div>
 
               {/* 3. Welcome Video */}
-              <div className="p-4 rounded-xl border border-border/70 bg-card/70 space-y-3 flex flex-col justify-between">
+              <div className="p-4 rounded-xl border border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#15171C] space-y-3 flex flex-col justify-between">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                    <span className="text-xs font-semibold flex items-center gap-1.5 text-gray-900 dark:text-white">
                       <Video className="w-4 h-4 text-purple-400" />
                       3. Welcome Video (ভিডিও)
                     </span>
@@ -1168,7 +1153,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                   {welcomeVideoUrl ? (
                     <div className="space-y-2">
                       {welcomeVideoUrl.startsWith('http') || welcomeVideoUrl.startsWith('/') ? (
-                        <div className="rounded-lg overflow-hidden border border-border/80 bg-black/40 aspect-video flex items-center justify-center">
+                        <div className="rounded-xl overflow-hidden border border-[#E6E2D8] dark:border-[#262930] bg-black/40 aspect-video flex items-center justify-center">
                           <video 
                             controls 
                             src={welcomeVideoUrl} 
@@ -1176,18 +1161,18 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                           />
                         </div>
                       ) : (
-                        <div className="p-3 rounded-lg bg-purple-950/30 border border-purple-500/30 flex items-center gap-2.5">
+                        <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/30 flex items-center gap-2.5">
                           <Video className="w-5 h-5 text-purple-400 shrink-0" />
                           <div className="min-w-0 flex-1">
                             <span className="text-[11px] font-semibold text-purple-400 flex items-center gap-1">
                               ☁️ Telegram Cloud Video
                             </span>
-                            <p className="text-[10px] text-muted-foreground font-mono truncate">{welcomeVideoUrl}</p>
+                            <p className="text-[10px] text-[#4B5563] dark:text-[#9CA3AF] font-mono truncate">{welcomeVideoUrl}</p>
                           </div>
                         </div>
                       )}
                       <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-muted-foreground font-mono truncate max-w-[200px]">
+                        <span className="text-[#4B5563] dark:text-[#9CA3AF] font-mono truncate max-w-[200px]">
                           {welcomeVideoUrl}
                         </span>
                         <button
@@ -1201,12 +1186,12 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <div className="flex items-center gap-1 text-[11px] bg-secondary/60 p-0.5 rounded-lg border border-border/40">
+                      <div className="flex items-center gap-1 text-[11px] bg-[#EDE8DE] dark:bg-[#181A1F] p-0.5 rounded-xl border border-[#E6E2D8] dark:border-[#262930]">
                         <button
                           type="button"
                           onClick={() => setVideoTab('upload')}
                           className={`flex-1 py-1 rounded-md transition-all text-center ${
-                            videoTab === 'upload' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground'
+                            videoTab === 'upload' ? 'bg-[#164E43] text-white font-semibold shadow-sm' : 'text-[#4B5563] dark:text-[#9CA3AF]'
                           }`}
                         >
                           Upload Video
@@ -1215,7 +1200,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                           type="button"
                           onClick={() => setVideoTab('url')}
                           className={`flex-1 py-1 rounded-md transition-all text-center ${
-                            videoTab === 'url' ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground'
+                            videoTab === 'url' ? 'bg-[#164E43] text-white font-semibold shadow-sm' : 'text-[#4B5563] dark:text-[#9CA3AF]'
                           }`}
                         >
                           Paste URL / ID
@@ -1223,7 +1208,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                       </div>
 
                       {videoTab === 'upload' ? (
-                        <label className={`border border-dashed border-border/80 hover:border-purple-500/50 hover:bg-purple-500/5 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${uploadingVideo ? 'opacity-70 pointer-events-none' : ''}`}>
+                        <label className={`border border-dashed border-[#E6E2D8] dark:border-[#262930] hover:border-purple-500/50 hover:bg-purple-500/5 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${uploadingVideo ? 'opacity-70 pointer-events-none' : ''}`}>
                           <input
                             type="file"
                             accept="video/*,.mp4,.webm,.mov,.mkv"
@@ -1238,12 +1223,12 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
                           {uploadingVideo ? (
                             <RefreshCw className="w-5 h-5 text-purple-400 animate-spin" />
                           ) : (
-                            <Upload className="w-5 h-5 text-muted-foreground" />
+                            <Upload className="w-5 h-5 text-[#4B5563] dark:text-[#9CA3AF]" />
                           )}
-                          <span className="text-xs text-foreground font-medium text-center">
+                          <span className="text-xs text-gray-900 dark:text-white font-medium text-center">
                             {uploadingVideo ? 'ভিডিও আপলোড হচ্ছে... (দয়া করে অপেক্ষা করুন)' : 'Click to Upload Video (ভিডিও আপলোড করুন)'}
                           </span>
-                          <span className="text-[10px] text-muted-foreground text-center">
+                          <span className="text-[10px] text-[#4B5563] dark:text-[#9CA3AF] text-center">
                             MP4, WEBM, MOV (সর্বোচ্চ ৫০ MB পর্যন্ত)
                           </span>
                         </label>
@@ -1266,10 +1251,9 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
       </div>
 
       {/* Auto-Activate Switch */}
-      <div className="flex items-center justify-between p-4 border border-border rounded-xl bg-secondary/40">
+      <div className="flex items-center justify-between p-4 border border-[#E6E2D8] dark:border-[#262930] rounded-xl bg-[#EDE8DE] dark:bg-[#181A1F]">
         <div>
-          <p className="font-medium text-sm text-foreground">Auto-Activate on Telegram</p>
-          <p className="text-xs text-muted-foreground">Register webhook with Telegram and make bot live immediately</p>
+          <p className="font-medium text-sm text-gray-900 dark:text-white">Auto-Activate on Telegram</p>
         </div>
         <Switch checked={autoActivate} onCheckedChange={setAutoActivate} />
       </div>
@@ -1278,7 +1262,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
       {/* Submit Button */}
       <Button 
         type="submit" 
-        className="w-full h-11 text-base font-medium shadow-md" 
+        className="w-full h-11 text-base font-semibold shadow-sm bg-[#164E43] hover:bg-[#124238] text-white shadow-sm font-semibold rounded-xl" 
         disabled={loading || (keyMode === 'existing' && !selectedKeyId)}
       >
         {loading ? "Saving & Connecting..." : (bot ? "Save Changes" : "Create Bot")}
