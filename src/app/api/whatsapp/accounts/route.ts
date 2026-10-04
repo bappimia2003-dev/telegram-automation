@@ -7,16 +7,8 @@ export const revalidate = 0;
 
 const WA_ENGINE_URL = process.env.WA_ENGINE_URL || 'http://localhost:3005';
 
-let cachedAccountsResult: any = null;
-let lastCacheTime = 0;
-const CACHE_TTL_MS = 2500;
-
 export async function GET() {
   try {
-    const now = Date.now();
-    if (cachedAccountsResult && now - lastCacheTime < CACHE_TTL_MS) {
-      return NextResponse.json(cachedAccountsResult);
-    }
 
     let engineAccounts: any[] = [];
     try {
@@ -66,10 +58,7 @@ export async function GET() {
       ? accounts.filter((a) => !(a.id === 'main' && !a.phoneNumber && a.status === 'disconnected'))
       : accounts;
 
-    cachedAccountsResult = { ok: true, accounts: filteredAccounts };
-    lastCacheTime = now;
-
-    return NextResponse.json(cachedAccountsResult);
+    return NextResponse.json({ ok: true, accounts: filteredAccounts });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
@@ -77,7 +66,6 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    lastCacheTime = 0; // invalidate cache
     const body = await request.json().catch(() => ({}));
     const name = (body.name || '').trim() || `SIM ${Date.now().toString().slice(-4)}`;
     const phoneNumber = (body.phoneNumber || '').trim();

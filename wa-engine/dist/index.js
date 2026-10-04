@@ -170,6 +170,11 @@ app.put('/accounts/:id', (req, res) => {
         res.status(500).json({ ok: false, error: err.message });
     }
 });
+// 8. Follow-up: Sync settings and variations
+app.post('/followup/sync', (_req, res) => {
+    (0, utils_js_1.log)('FOLLOWUP', '🔄 Follow-up configuration sync received from web dashboard.');
+    res.json({ ok: true });
+});
 // --- Legacy / Default routes for 'main' account ---
 app.get('/status', (req, res) => {
     const accountId = req.query?.accountId || 'main';

@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { getAllApiKeys } from './db';
-import { getAllWaConnections } from './whatsappDb';
+import { getAllWaConnections, getAllCampaigns, updateCampaign } from './whatsappDb';
 import { WaCampaignVariant } from './whatsappTypes';
 
 export interface FollowupSettings {
@@ -295,6 +295,18 @@ export async function getFollowupData() {
     }
   }
 
+  // If local store has no variants (e.g. after fresh deploy), restore from Supabase campaigns
+  if (!store.variants || store.variants.length === 0) {
+    try {
+      const allCamps = await getAllCampaigns();
+      const campWithVars = allCamps.find((c) => c.variants && c.variants.length > 0);
+      if (campWithVars && campWithVars.variants && campWithVars.variants.length > 0) {
+        store.variants = campWithVars.variants;
+        writeStore(store);
+      }
+    } catch {}
+  }
+
   return {
     isEngineRunning: true,
     whatsapp: {
@@ -333,9 +345,26 @@ export async function updateFollowupSetting(key: string, value: any) {
   const store = readStore();
   (store.settings as any)[key] = value;
 
-  if (key === 'auto_followup' && value === true) {
-    if (!store.settings.started_date) {
+  if (key === 'auto_followup') {
+    if (value === true && !store.settings.started_date) {
       store.settings.started_date = new Date().toISOString().split('T')[0];
+    }
+    // Sync toggle directly to Supabase campaigns so Railway engine immediately starts/stops follow-up
+    try {
+      const campaigns = await getAllCampaigns();
+      for (const c of campaigns) {
+        if (c.followupConfig) {
+          await updateCampaign(c.id, {
+            followupConfig: {
+              ...c.followupConfig,
+              followupEnabled: Boolean(value),
+              aiEnabled: false,
+            },
+          });
+        }
+      }
+    } catch (e: any) {
+      console.error('Failed syncing auto_followup toggle to Supabase:', e.message);
     }
   }
 
@@ -350,12 +379,12 @@ export async function updateFollowupSetting(key: string, value: any) {
 
   // Sync to background WhatsApp Engine if reachable
   try {
-    const engineUrl = process.env.WA_ENGINE_URL || 'http://localhost:3006';
-    fetch(`${engineUrl}/api/settings/toggle`, {
+    const engineUrl = process.env.WA_ENGINE_URL || 'http://localhost:3005';
+    fetch(`${engineUrl}/followup/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key, value }),
-      signal: AbortSignal.timeout(1500),
+      signal: AbortSignal.timeout(2000),
     }).catch(() => {});
   } catch {}
 
@@ -382,14 +411,59 @@ export async function saveFollowupAll(payload: { variants?: WaCampaignVariant[];
   }
   writeStore(store);
 
+  // Sync variations & settings to Supabase wa_campaigns table so Railway engine receives exact text & image!
+  try {
+    const isAutoFollowup = Boolean(store.settings.auto_followup);
+    const primaryVar = store.variants[0];
+    const campaigns = await getAllCampaigns();
+
+    for (const c of campaigns) {
+      const isTarget =
+        store.settings.assigned_account_id === 'all' ||
+        !store.settings.assigned_account_id ||
+        c.accountId === store.settings.assigned_account_id ||
+        (!c.accountId && store.settings.assigned_account_id === 'main');
+
+      if (isTarget) {
+        await updateCampaign(c.id, {
+          variants: store.variants,
+          followupConfig: {
+            ...(c.followupConfig || {}),
+            followupEnabled: isAutoFollowup,
+            aiEnabled: false, // User requested 100% exact text, strictly NO AI rewriting!
+            minDelayMinutes: Number(store.settings.min_delay_minutes) || 3,
+            maxDelayMinutes: Number(store.settings.max_delay_minutes) || 5,
+            followupMessage: primaryVar?.welcomeMessage || '',
+            followupImageUrl: primaryVar?.imageUrl || '',
+            followupAudioUrl: primaryVar?.audioUrl || '',
+            followupVideoUrl: primaryVar?.videoUrl || '',
+            followupDocumentUrl: primaryVar?.documentUrl || '',
+            steps: store.variants.map((v, idx) => ({
+              stepNumber: idx + 1,
+              title: v.name,
+              message: v.welcomeMessage || '',
+              imageUrl: v.imageUrl || '',
+              audioUrl: v.audioUrl || '',
+              videoUrl: v.videoUrl || '',
+              documentUrl: v.documentUrl || '',
+              documentName: v.documentName || '',
+            })),
+          },
+        });
+      }
+    }
+  } catch (err: any) {
+    console.error('Failed syncing followup to Supabase campaigns:', err.message);
+  }
+
   // Sync to background WhatsApp Engine if reachable
   try {
-    const engineUrl = process.env.WA_ENGINE_URL || 'http://localhost:3006';
-    fetch(`${engineUrl}/api/settings/bulk`, {
+    const engineUrl = process.env.WA_ENGINE_URL || 'http://localhost:3005';
+    fetch(`${engineUrl}/followup/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ settings: store.settings, variants: store.variants }),
-      signal: AbortSignal.timeout(1500),
+      signal: AbortSignal.timeout(2000),
     }).catch(() => {});
   } catch {}
 

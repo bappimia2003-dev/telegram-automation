@@ -242,7 +242,16 @@ export async function updateWaConnectionState(accountId: string, updates: Partia
       existingPhone = parts.slice(1).join('|');
     }
 
-    const finalName = updates.name !== undefined ? updates.name : existingName;
+    let finalName = existingName;
+    if (updates.name !== undefined && updates.name.trim() !== '') {
+      // Do not overwrite an existing custom name with a generic 'SIM xxxx' or 'Primary WhatsApp'
+      const isUpdatesGeneric = updates.name.startsWith('SIM ') || updates.name === 'Primary WhatsApp';
+      const isExistingGeneric = existingName.startsWith('SIM ') || existingName === 'Primary WhatsApp';
+      if (!isUpdatesGeneric || isExistingGeneric) {
+        finalName = updates.name;
+      }
+    }
+
     const finalPhone = (updates.phoneNumber !== undefined && updates.phoneNumber !== '') ? updates.phoneNumber : existingPhone;
     row.phone_number = `${finalName}|${finalPhone}`;
 

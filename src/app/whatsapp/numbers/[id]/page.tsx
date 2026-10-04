@@ -59,8 +59,6 @@ export default function WhatsAppNumberDetailPage() {
 
       if (accData.ok && accData.account) {
         setAccount(accData.account);
-        setEditName(accData.account.name || '');
-        setEditPhone(accData.account.phoneNumber || '');
       }
 
       const allCamps: WaCampaign[] = Array.isArray(campData.campaigns) ? campData.campaigns : [];
@@ -185,7 +183,11 @@ export default function WhatsAppNumberDetailPage() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setShowEdit(true)}
+            onClick={() => {
+              setEditName(account?.name || '');
+              setEditPhone(account?.phoneNumber || '');
+              setShowEdit(true);
+            }}
             className="text-xs border-gray-200 text-gray-500 hover:text-gray-900 rounded-xl font-semibold shadow-sm"
           >
             <Edit3 className="w-3.5 h-3.5 mr-1" />

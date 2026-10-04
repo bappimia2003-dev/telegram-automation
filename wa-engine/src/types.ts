@@ -34,6 +34,8 @@ export interface WaFollowupConfig {
   followupDelayUnit?: 'minutes' | 'hours' | 'days';
   followupCondition?: 'no_reply' | 'unconfirmed' | 'always';
   antiBanJitter?: boolean;
+  minDelayMinutes?: number;
+  maxDelayMinutes?: number;
   steps?: WaFollowupStep[];
   followupMessage?: string;
   followupImageUrl?: string;
