@@ -188,28 +188,34 @@ async function processCampaignFollowups(campaign) {
                     }
                     catch { }
                     await (0, utils_js_1.sleep)(2000); // Natural 2-second typing delay
-                    let imageSent = false;
-                    if (imageUrl) {
-                        try {
-                            await (0, fileSender_js_1.sendImageMessage)(sock, contact.phoneNumber, imageUrl, msg);
-                            await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 1, 'image', imageUrl);
-                            imageSent = true;
-                            (0, utils_js_1.log)('FOLLOWUP', `✅ Step 1 delivered image+AI text to ${contact.phoneNumber}: "${msg.slice(0, 60)}..."`);
-                        }
-                        catch (imgErr) {
-                            (0, utils_js_1.errLog)('FOLLOWUP', `Step 1 image delivery failed (${imgErr.message}), falling back to direct text.`);
-                        }
-                    }
-                    if (!imageSent) {
-                        await (0, fileSender_js_1.sendTextMessage)(sock, contact.phoneNumber, msg);
-                        await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 1, 'text', '');
-                        (0, utils_js_1.log)('FOLLOWUP', `✅ Step 1 delivered AI text to ${contact.phoneNumber}: "${msg.slice(0, 60)}..."`);
-                    }
+                    // 1. Send the Gemini AI personalized text message first
+                    await (0, fileSender_js_1.sendTextMessage)(sock, contact.phoneNumber, msg);
+                    await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 1, 'text', '');
+                    (0, utils_js_1.log)('FOLLOWUP', `✅ Step 1 delivered AI text to ${contact.phoneNumber}: "${msg.slice(0, 60)}..."`);
                     // Always explicitly pause typing presence so "typing..." never stays stuck!
                     try {
                         await sock.sendPresenceUpdate('paused', contact.phoneNumber);
                     }
                     catch { }
+                    // 2. If a follow-up image is configured, send it 2 to 3 seconds later
+                    if (imageUrl) {
+                        try {
+                            await (0, utils_js_1.sleep)(2500); // 2-3 seconds natural gap between messages
+                            await sock.sendPresenceUpdate('composing', contact.phoneNumber);
+                            await (0, utils_js_1.sleep)(1000);
+                            await (0, fileSender_js_1.sendImageMessage)(sock, contact.phoneNumber, imageUrl);
+                            await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 1, 'image', imageUrl);
+                            try {
+                                await sock.sendPresenceUpdate('paused', contact.phoneNumber);
+                            }
+                            catch { }
+                            (0, utils_js_1.log)('FOLLOWUP', `✅ Step 1 delivered follow-up image to ${contact.phoneNumber}`);
+                        }
+                        catch (imgErr) {
+                            (0, utils_js_1.errLog)('FOLLOWUP', `Step 1 image error: ${imgErr.message}`);
+                        }
+                    }
+                    // 3. If an audio voice note is configured, send it 2 to 3 seconds later
                     if (audioUrl) {
                         try {
                             await (0, utils_js_1.sleep)(2500); // 2-3 seconds natural gap between messages

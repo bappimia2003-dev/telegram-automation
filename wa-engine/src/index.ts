@@ -14,7 +14,7 @@ import {
   isSessionActive,
 } from './whatsapp.js';
 import { getAllDbAccounts, saveMediaBackup, restoreMediaBackup } from './db.js';
-import { log, errLog } from './utils.js';
+import { log, errLog, getInMemoryLogs } from './utils.js';
 import { startFollowupScheduler } from './followupScheduler.js';
 
 dotenv.config();
@@ -106,6 +106,10 @@ app.get('/version', (_req, res) => {
     features: ['random-ms-delay-3-4s', 'variation-rotation-ab', 'intelligent-multistep-followup', 'promise-date-scheduler', 'trigger-followup-on-reply-off', 'persistent-cloud-media'],
     uptime: Math.floor(process.uptime()),
   });
+});
+
+app.get('/debug-logs', (_req, res) => {
+  res.type('text/plain').send(getInMemoryLogs().join('\n'));
 });
 
 // 2. Multi-Account: Get all accounts info

@@ -90,6 +90,9 @@ app.get('/version', (_req, res) => {
         uptime: Math.floor(process.uptime()),
     });
 });
+app.get('/debug-logs', (_req, res) => {
+    res.type('text/plain').send((0, utils_js_1.getInMemoryLogs)().join('\n'));
+});
 // 2. Multi-Account: Get all accounts info
 app.get('/accounts', (_req, res) => {
     const accounts = (0, whatsapp_js_1.getAllAccountsInfo)();
