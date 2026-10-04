@@ -282,7 +282,7 @@ async function getAllDbAccounts() {
     try {
         const { data } = await supabase.from('wa_connection').select('*').order('created_at', { ascending: true });
         return (data || [])
-            .filter((r) => !r.id.startsWith('auth_') && !r.id.startsWith('test_'))
+            .filter((r) => !r.id.startsWith('auth_') && !r.id.startsWith('test_') && !r.id.startsWith('file_'))
             .map((r) => {
             let name = r.id === 'main' ? 'Primary WhatsApp' : `SIM ${r.id.slice(-4)}`;
             let phoneNumber = r.phone_number || '';

@@ -489,7 +489,7 @@ export async function getAllWaConnections(): Promise<WaConnection[]> {
     return [];
   }
   return data
-    .filter((r: any) => !r.id.startsWith('auth_') && !r.id.startsWith('test_'))
+    .filter((r: any) => !r.id.startsWith('auth_') && !r.id.startsWith('test_') && !r.id.startsWith('file_'))
     .map(rowToConnection);
 }
 

@@ -261,7 +261,7 @@ export async function getAllDbAccounts(): Promise<WaConnection[]> {
   try {
     const { data } = await supabase.from('wa_connection').select('*').order('created_at', { ascending: true });
     return (data || [])
-      .filter((r: any) => !r.id.startsWith('auth_') && !r.id.startsWith('test_'))
+      .filter((r: any) => !r.id.startsWith('auth_') && !r.id.startsWith('test_') && !r.id.startsWith('file_'))
       .map((r: any) => {
         let name = r.id === 'main' ? 'Primary WhatsApp' : `SIM ${r.id.slice(-4)}`;
         let phoneNumber = r.phone_number || '';
