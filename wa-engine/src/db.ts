@@ -382,6 +382,16 @@ export async function restoreAuthSession(accountId: string, authDir: string): Pr
   }
 }
 
+export async function deleteAuthBackup(accountId: string): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.from('wa_connection').delete().eq('id', `auth_${accountId}`);
+    log('AUTH_SYNC', `Purged expired auth backup for ${accountId} from Cloud DB.`);
+  } catch (err: any) {
+    errLog('AUTH_SYNC', `Error deleting auth backup for ${accountId}:`, err.message);
+  }
+}
+
 /**
  * Persist uploaded media permanently to Supabase Cloud DB so it survives Railway restarts.
  */

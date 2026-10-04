@@ -136,8 +136,20 @@ app.post('/accounts/:id/connect', async (req, res) => {
   try {
     const accountId = req.params.id;
     const name = req.body?.name;
-    const info = await startWhatsApp(accountId, name);
-    res.json({ ok: true, account: info });
+    await startWhatsApp(accountId, name);
+
+    // Wait up to 3 seconds for initial QR code or connection
+    const start = Date.now();
+    while (Date.now() - start < 3000) {
+      const info = getConnectionInfo(accountId);
+      if (info.qrCode || info.status === 'connected') {
+        return res.json({ ok: true, account: info });
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
+    const finalInfo = getConnectionInfo(accountId);
+    res.json({ ok: true, account: finalInfo });
   } catch (err: any) {
     errLog('API', 'Account connect error:', err.message);
     res.status(500).json({ ok: false, error: err.message });

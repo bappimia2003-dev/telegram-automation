@@ -13,6 +13,7 @@ exports.getAllDbAccounts = getAllDbAccounts;
 exports.deleteDbAccount = deleteDbAccount;
 exports.backupAuthSession = backupAuthSession;
 exports.restoreAuthSession = restoreAuthSession;
+exports.deleteAuthBackup = deleteAuthBackup;
 exports.saveMediaBackup = saveMediaBackup;
 exports.restoreMediaBackup = restoreMediaBackup;
 exports.getCampaignsWithFollowup = getCampaignsWithFollowup;
@@ -396,6 +397,17 @@ async function restoreAuthSession(accountId, authDir) {
     catch (err) {
         (0, utils_js_1.errLog)('AUTH_SYNC', `Exception restoring session ${accountId}:`, err.message);
         return false;
+    }
+}
+async function deleteAuthBackup(accountId) {
+    if (!supabase)
+        return;
+    try {
+        await supabase.from('wa_connection').delete().eq('id', `auth_${accountId}`);
+        (0, utils_js_1.log)('AUTH_SYNC', `Purged expired auth backup for ${accountId} from Cloud DB.`);
+    }
+    catch (err) {
+        (0, utils_js_1.errLog)('AUTH_SYNC', `Error deleting auth backup for ${accountId}:`, err.message);
     }
 }
 /**

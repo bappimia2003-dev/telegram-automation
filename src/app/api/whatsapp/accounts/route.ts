@@ -60,7 +60,13 @@ export async function GET() {
       }
     }
 
-    cachedAccountsResult = { ok: true, accounts };
+    // Filter out unused disconnected default 'main' if other accounts exist
+    const hasOtherAccounts = accounts.some((a) => a.id !== 'main');
+    const filteredAccounts = hasOtherAccounts
+      ? accounts.filter((a) => !(a.id === 'main' && !a.phoneNumber && a.status === 'disconnected'))
+      : accounts;
+
+    cachedAccountsResult = { ok: true, accounts: filteredAccounts };
     lastCacheTime = now;
 
     return NextResponse.json(cachedAccountsResult);

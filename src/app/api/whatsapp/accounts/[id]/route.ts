@@ -89,7 +89,7 @@ export async function POST(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: body.name }),
-        signal: AbortSignal.timeout(3000),
+        signal: AbortSignal.timeout(6000),
       });
       if (res.ok) {
         const data = await res.json();

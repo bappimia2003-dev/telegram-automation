@@ -95,13 +95,24 @@ export function WhatsAppNumbers({ campaigns = [], accounts: propAccounts, initia
 
   useEffect(() => {
     fetchAccounts();
-    // Only poll aggressively (3s) when QR code modal is open and awaiting scanning.
-    // Otherwise poll gently (25s) to keep UI fresh without lag or high network traffic.
-    const pollInterval = qrModalAccount && qrModalAccount.status !== 'connected' ? 3000 : 25000;
     const interval = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-      fetchAccounts();
-    }, pollInterval);
+      if (qrModalAccountRef.current && qrModalAccountRef.current.status !== 'connected') {
+        fetch(`/api/whatsapp/accounts/${qrModalAccountRef.current.id}?t=${Date.now()}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.ok && data.account) {
+              setQrModalAccount((prev) => ({ ...(prev || {}), ...data.account }));
+              if (data.account.status === 'connected') {
+                fetchAccounts();
+              }
+            }
+          })
+          .catch(() => {});
+      } else {
+        fetchAccounts();
+      }
+    }, qrModalAccount && qrModalAccount.status !== 'connected' ? 2000 : 25000);
     return () => clearInterval(interval);
   }, [qrModalAccount?.id, qrModalAccount?.status]);
 
@@ -168,6 +179,17 @@ export function WhatsAppNumbers({ campaigns = [], accounts: propAccounts, initia
   // Connect / Refresh QR
   const handleConnect = async (accountId: string) => {
     setLoading(true);
+    const targetAcc = accounts.find((a) => a.id === accountId);
+    setQrModalAccount({
+      id: accountId,
+      name: targetAcc?.name || 'WhatsApp',
+      phoneNumber: targetAcc?.phoneNumber || '',
+      status: 'qr_pending',
+      qrCode: targetAcc?.qrCode || '',
+      lastConnected: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    });
+
     try {
       const res = await fetch(`/api/whatsapp/accounts/${accountId}`, {
         method: 'POST',
@@ -175,23 +197,19 @@ export function WhatsAppNumbers({ campaigns = [], accounts: propAccounts, initia
         body: JSON.stringify({ action: 'connect' }),
       });
       const data = await res.json();
-      if (data && data.qrCode) {
+      if (data && (data.qrCode || data.status)) {
         setQrModalAccount((prev) => ({
           ...(prev || {}),
           id: accountId,
-          name: data.name || prev?.name || 'WhatsApp',
-          qrCode: data.qrCode,
+          name: data.name || prev?.name || targetAcc?.name || 'WhatsApp',
+          qrCode: data.qrCode || prev?.qrCode || '',
           status: data.status || 'qr_pending',
-          phoneNumber: data.phoneNumber || prev?.phoneNumber || '',
+          phoneNumber: data.phoneNumber || prev?.phoneNumber || targetAcc?.phoneNumber || '',
           lastConnected: new Date().toISOString(),
           createdAt: prev?.createdAt || new Date().toISOString(),
         }));
       }
       await fetchAccounts();
-      const acc = accounts.find(a => a.id === accountId);
-      if (acc && !data?.qrCode) {
-        setQrModalAccount({ ...acc, qrCode: acc.qrCode, status: 'qr_pending' });
-      }
       if (onDataChange) onDataChange();
     } catch (err) {
       console.error('Failed to trigger connect:', err);
@@ -227,6 +245,7 @@ export function WhatsAppNumbers({ campaigns = [], accounts: propAccounts, initia
     try {
       await fetch(`/api/whatsapp/accounts/${accountId}`, { method: 'DELETE' });
       if (qrModalAccount?.id === accountId) setQrModalAccount(null);
+      setAccounts((prev) => prev.filter((a) => a.id !== accountId));
       await fetchAccounts();
       if (onDataChange) onDataChange();
     } catch (err) {
@@ -278,7 +297,7 @@ export function WhatsAppNumbers({ campaigns = [], accounts: propAccounts, initia
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {accounts.map((acc) => {
+        {accounts.filter(acc => !(acc.id === 'main' && !acc.phoneNumber && acc.status === 'disconnected' && accounts.length > 1)).map((acc) => {
           const campCount = getAccountCampaignCount(acc.id);
           const isConnected = acc.status === 'connected';
           const isPending = acc.status === 'qr_pending' || acc.status === 'connecting';

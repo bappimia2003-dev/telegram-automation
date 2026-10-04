@@ -8,6 +8,7 @@ import {
   deleteDbAccount,
   backupAuthSession,
   restoreAuthSession,
+  deleteAuthBackup,
   findContactCampaign,
   logInboundMessage,
   schedulePromiseFollowup,
@@ -65,6 +66,9 @@ export function getAllAccountsInfo() {
   const list: any[] = [];
   for (const session of sessions.values()) {
     if (session.id.startsWith('file_') || session.id.startsWith('auth_') || session.id.startsWith('test_')) continue;
+    if (session.id === 'main' && !session.phoneNumber && session.status === 'disconnected' && sessions.size > 1) {
+      continue;
+    }
     list.push({
       id: session.id,
       name: session.name,
@@ -221,6 +225,7 @@ export async function startWhatsApp(accountId = 'main', accountName?: string): P
           } catch (e: any) {
             errLog('WA', `Error clearing auth for ${accountId}:`, e.message);
           }
+          deleteAuthBackup(accountId).catch(() => {});
         }
       }
     });

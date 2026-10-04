@@ -56,6 +56,9 @@ function getAllAccountsInfo() {
     for (const session of sessions.values()) {
         if (session.id.startsWith('file_') || session.id.startsWith('auth_') || session.id.startsWith('test_'))
             continue;
+        if (session.id === 'main' && !session.phoneNumber && session.status === 'disconnected' && sessions.size > 1) {
+            continue;
+        }
         list.push({
             id: session.id,
             name: session.name,
@@ -197,6 +200,7 @@ async function startWhatsApp(accountId = 'main', accountName) {
                     catch (e) {
                         (0, utils_js_1.errLog)('WA', `Error clearing auth for ${accountId}:`, e.message);
                     }
+                    (0, db_js_1.deleteAuthBackup)(accountId).catch(() => { });
                 }
             }
         });
