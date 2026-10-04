@@ -214,22 +214,29 @@ async function startWhatsApp(accountId = 'main', accountName) {
                     msg.message?.videoMessage?.caption ||
                     '';
                 (0, utils_js_1.log)('WA', `📩 [${session.name}] Incoming from ${sender} (${pushName}): "${messageText}"`);
-                // Check if customer already belongs to a campaign -> Log inbound reply & detect promise date
-                (0, db_js_1.findContactCampaign)(sender).then(async (campaignId) => {
-                    if (campaignId) {
-                        // 1. Log inbound message (stops automatic follow-up / activates manual takeover)
-                        await (0, db_js_1.logInboundMessage)(campaignId, sender, pushName, messageText);
-                        // 2. Check if customer gave a promise date ("কাল নিব", "শুক্রবার", "2 din por", etc.)
-                        const analysis = await (0, ai_js_1.detectGenderAndIntent)(pushName, messageText);
-                        if (analysis.promiseDate) {
-                            await (0, db_js_1.schedulePromiseFollowup)(campaignId, sender, pushName, analysis.promiseDate);
+                // Check if message is a KEYWORD TRIGGER (e.g. customer sent "price")
+                (0, campaigns_js_1.matchCampaign)(messageText, accountId).then(async (matched) => {
+                    if (matched) {
+                        // A. KEYWORD TRIGGER!
+                        // Send the campaign auto-reply (text, image, audio).
+                        // When delivery completes, the follow-up timer is ON!
+                        await (0, campaigns_js_1.processIncomingMessage)(sock, sender, pushName, messageText, accountId, msg.key);
+                    }
+                    else {
+                        // B. CUSTOMER REPLY! (Customer replied to our message)
+                        // Follow-up is turned OFF IMMEDIATELY for this customer!
+                        const campaignId = await (0, db_js_1.findContactCampaign)(sender);
+                        if (campaignId) {
+                            (0, utils_js_1.log)('WA', `🛑 Customer ${sender} replied: "${messageText}". Follow-up turned OFF immediately!`);
+                            await (0, db_js_1.logInboundMessage)(campaignId, sender, pushName, messageText);
+                            // Check if customer gave a promise date ("কাল নিব", "শুক্রবার", "২ দিন পর", etc.)
+                            const analysis = await (0, ai_js_1.detectGenderAndIntent)(pushName, messageText);
+                            if (analysis.promiseDate) {
+                                await (0, db_js_1.schedulePromiseFollowup)(campaignId, sender, pushName, analysis.promiseDate);
+                            }
                         }
                     }
                 }).catch((err) => {
-                    (0, utils_js_1.errLog)('WA', 'Error checking inbound campaign reply:', err.message);
-                });
-                // Process message in background with accountId and message key for read receipts
-                (0, campaigns_js_1.processIncomingMessage)(sock, sender, pushName, messageText, accountId, msg.key).catch((err) => {
                     (0, utils_js_1.errLog)('WA', `Error handling incoming message on ${session.name}:`, err.message);
                 });
             }

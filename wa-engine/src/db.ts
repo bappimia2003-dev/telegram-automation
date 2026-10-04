@@ -486,6 +486,24 @@ export async function logInboundMessage(
 }
 
 /**
+ * Clear previous inbound replies & follow-up steps when a campaign is freshly triggered.
+ * This guarantees the 2-minute follow-up timer starts clean from the moment the auto-campaign is sent!
+ */
+export async function clearContactInboundReplies(campaignId: string, phoneNumber: string): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase
+      .from('wa_message_logs')
+      .delete()
+      .eq('campaign_id', campaignId)
+      .eq('phone_number', phoneNumber)
+      .in('message_type', ['incoming', 'followup_step1', 'followup_step2', 'followup_step3', 'followup']);
+  } catch (err: any) {
+    // non-fatal
+  }
+}
+
+/**
  * Find the most recent campaign for a phone number.
  */
 export async function findContactCampaign(phoneNumber: string): Promise<string | null> {

@@ -264,7 +264,9 @@ async function processIncomingMessage(sock, sender, pushName, messageText, accou
                 });
             }
         }
-        // Mark user as contacted
+        // Reset any old inbound replies so the follow-up timer starts clean from this auto-campaign
+        await (0, db_js_1.clearContactInboundReplies)(campaign.id, sender);
+        // Mark user as contacted (records sentAt = now)
         await (0, db_js_1.markAsContacted)({
             id: (0, uuid_1.v4)(),
             campaignId: campaign.id,
@@ -275,7 +277,7 @@ async function processIncomingMessage(sock, sender, pushName, messageText, accou
         });
         // Increment sent count
         await (0, db_js_1.incrementCampaignSentCount)(campaign.id);
-        (0, utils_js_1.log)('CAMPAIGN', `✅ Delivery completed for ${sender}. Marked as contacted.`);
+        (0, utils_js_1.log)('CAMPAIGN', `✅ Delivery completed for ${sender}. Follow-up timer is now ON (Step 1 in 2 mins if no reply).`);
     }
     catch (err) {
         (0, utils_js_1.errLog)('CAMPAIGN', 'Exception in processIncomingMessage:', err.message);

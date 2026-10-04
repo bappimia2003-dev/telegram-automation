@@ -68,8 +68,8 @@ function analyzeContactFollowupState(logs: any[], initialContactTimeMs: number) 
   for (const l of logs) {
     const logTimeMs = new Date(l.sentAt).getTime();
 
-    // Inbound reply from customer after initial contact
-    if (l.messageType === 'incoming' && logTimeMs >= initialContactTimeMs - 5000) {
+    // Inbound reply from customer AFTER the auto-campaign message was delivered
+    if (l.messageType === 'incoming' && logTimeMs > initialContactTimeMs + 2000) {
       hasReplied = true;
     }
 

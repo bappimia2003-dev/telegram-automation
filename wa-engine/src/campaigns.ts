@@ -5,6 +5,7 @@ import {
   markAsContacted,
   addMessageLog,
   incrementCampaignSentCount,
+  clearContactInboundReplies,
 } from './db.js';
 import {
   sendTextMessage,
@@ -299,7 +300,10 @@ export async function processIncomingMessage(
       }
     }
 
-    // Mark user as contacted
+    // Reset any old inbound replies so the follow-up timer starts clean from this auto-campaign
+    await clearContactInboundReplies(campaign.id, sender);
+
+    // Mark user as contacted (records sentAt = now)
     await markAsContacted({
       id: uuidv4(),
       campaignId: campaign.id,
@@ -312,7 +316,7 @@ export async function processIncomingMessage(
     // Increment sent count
     await incrementCampaignSentCount(campaign.id);
 
-    log('CAMPAIGN', `✅ Delivery completed for ${sender}. Marked as contacted.`);
+    log('CAMPAIGN', `✅ Delivery completed for ${sender}. Follow-up timer is now ON (Step 1 in 2 mins if no reply).`);
   } catch (err: any) {
     errLog('CAMPAIGN', 'Exception in processIncomingMessage:', err.message);
   }
