@@ -14,8 +14,13 @@ exports.deleteDbAccount = deleteDbAccount;
 exports.backupAuthSession = backupAuthSession;
 exports.restoreAuthSession = restoreAuthSession;
 exports.getCampaignsWithFollowup = getCampaignsWithFollowup;
-exports.getPendingFollowupContacts = getPendingFollowupContacts;
-exports.markFollowupSent = markFollowupSent;
+exports.getRecentContactedUsers = getRecentContactedUsers;
+exports.getContactLogs = getContactLogs;
+exports.logInboundMessage = logInboundMessage;
+exports.findContactCampaign = findContactCampaign;
+exports.logFollowupStep = logFollowupStep;
+exports.schedulePromiseFollowup = schedulePromiseFollowup;
+exports.markPromiseSent = markPromiseSent;
 const supabase_js_1 = require("@supabase/supabase-js");
 const dotenv_1 = __importDefault(require("dotenv"));
 const fs_1 = __importDefault(require("fs"));
@@ -381,59 +386,43 @@ async function restoreAuthSession(accountId, authDir) {
         return false;
     }
 }
-// ─── Follow-up Scheduler DB helpers ──────────────────────────────────────────
-// We track follow-up sends using the EXISTING wa_message_logs table with
-// message_type = 'followup'. No schema changes required.
+// ─── Intelligent Multi-Step Follow-up DB Helpers ─────────────────────────────
+// No schema changes required: uses wa_message_logs with specific message_type values:
+//   'incoming'       -> customer replied (stops auto follow-up / activates manual takeover)
+//   'followup_step1' -> Step 1 sent (2 min soft check with AI)
+//   'followup_step2' -> Step 2 sent (3-4 hours later with audio/image)
+//   'followup_step3' -> Step 3 sent (next day value reminder)
+//   'promise_sched'  -> Customer gave a promise date (e.g. "shukrobar nibo")
+//   'promise_sent'   -> Promise reminder sent on that date
 /**
- * Get all active campaigns that have followupEnabled=true in their [fup:] config.
+ * Get active campaigns that have followupEnabled=true.
+ * When a campaign has follow-up disabled, it is strictly omitted here.
  */
 async function getCampaignsWithFollowup() {
     const all = await getActiveCampaigns();
-    return all.filter((c) => c.followupConfig?.followupEnabled === true);
+    return all.filter((c) => c.isActive && c.followupConfig?.followupEnabled === true);
 }
 /**
- * Get wa_contacted_users rows for a campaign that:
- *  - have status='sent' (initial message was delivered)
- *  - do NOT already have a 'followup' entry in wa_message_logs
- *  - were contacted at least `delayMs` milliseconds ago
+ * Get contacts for a campaign from the last 7 days.
+ * Ancient contacts from weeks ago are ignored to prevent accidental mass-blasting.
  */
-async function getPendingFollowupContacts(campaignId, delayMs) {
+async function getRecentContactedUsers(campaignId) {
     if (!supabase)
         return [];
     try {
-        // 1. Fetch all contacts for this campaign that had their initial message sent
-        const { data: contacted, error: cErr } = await supabase
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const { data, error } = await supabase
             .from('wa_contacted_users')
             .select('id, phone_number, contact_name, sent_at')
             .eq('campaign_id', campaignId)
-            .eq('status', 'sent');
-        if (cErr) {
-            (0, utils_js_1.errLog)('DB', 'Error fetching contacted users for followup:', cErr.message);
+            .eq('status', 'sent')
+            .gte('sent_at', sevenDaysAgo)
+            .order('sent_at', { ascending: false });
+        if (error) {
+            (0, utils_js_1.errLog)('DB', 'Error fetching recent contacted users:', error.message);
             return [];
         }
-        if (!contacted || contacted.length === 0)
-            return [];
-        // 2. Fetch phone numbers that already received a follow-up for this campaign
-        const { data: alreadySent, error: lErr } = await supabase
-            .from('wa_message_logs')
-            .select('phone_number')
-            .eq('campaign_id', campaignId)
-            .eq('message_type', 'followup');
-        if (lErr) {
-            (0, utils_js_1.errLog)('DB', 'Error fetching followup logs:', lErr.message);
-            // Still proceed — just won't filter already-sent
-        }
-        const alreadySentPhones = new Set((alreadySent || []).map((r) => r.phone_number));
-        // 3. Filter: delay elapsed + not already sent follow-up
-        const now = Date.now();
-        return contacted
-            .filter((row) => {
-            if (alreadySentPhones.has(row.phone_number))
-                return false;
-            const sentAt = new Date(row.sent_at).getTime();
-            return (now - sentAt) >= delayMs;
-        })
-            .map((row) => ({
+        return (data || []).map((row) => ({
             id: row.id,
             phoneNumber: row.phone_number,
             contactName: row.contact_name,
@@ -441,34 +430,160 @@ async function getPendingFollowupContacts(campaignId, delayMs) {
         }));
     }
     catch (e) {
-        (0, utils_js_1.errLog)('DB', 'Exception fetching pending followup contacts:', e.message);
+        (0, utils_js_1.errLog)('DB', 'Exception fetching recent contacted users:', e.message);
         return [];
     }
 }
 /**
- * Mark a follow-up as sent by inserting a 'followup' log entry in wa_message_logs.
- * Uses the existing table — no schema changes needed.
+ * Get all message logs for a specific contact on a campaign.
  */
-async function markFollowupSent(campaignId, phoneNumber, contactName) {
+async function getContactLogs(campaignId, phoneNumber) {
+    if (!supabase)
+        return [];
+    try {
+        const { data, error } = await supabase
+            .from('wa_message_logs')
+            .select('*')
+            .eq('campaign_id', campaignId)
+            .eq('phone_number', phoneNumber)
+            .order('sent_at', { ascending: true });
+        if (error)
+            return [];
+        return (data || []).map((r) => ({
+            id: r.id,
+            campaignId: r.campaign_id,
+            phoneNumber: r.phone_number,
+            contactName: r.contact_name,
+            messageType: r.message_type,
+            fileUrl: r.file_url || '',
+            status: r.status,
+            errorMessage: r.error_message || '',
+            sentAt: r.sent_at,
+        }));
+    }
+    catch {
+        return [];
+    }
+}
+/**
+ * Log an incoming customer message for reply detection & manual takeover.
+ */
+async function logInboundMessage(campaignId, phoneNumber, contactName, messageText) {
     if (!supabase)
         return;
     try {
-        const { error } = await supabase.from('wa_message_logs').insert({
-            id: `fup_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        await supabase.from('wa_message_logs').insert({
+            id: `in_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
             campaign_id: campaignId,
             phone_number: phoneNumber,
             contact_name: contactName,
-            message_type: 'followup',
+            message_type: 'incoming',
+            file_url: '',
+            status: 'sent',
+            error_message: messageText.slice(0, 500),
+            sent_at: new Date().toISOString(),
+        });
+        (0, utils_js_1.log)('DB', `Logged inbound message from ${phoneNumber} for campaign ${campaignId}`);
+    }
+    catch (err) {
+        (0, utils_js_1.errLog)('DB', 'Error logging inbound message:', err.message);
+    }
+}
+/**
+ * Find the most recent campaign for a phone number.
+ */
+async function findContactCampaign(phoneNumber) {
+    if (!supabase)
+        return null;
+    try {
+        const { data } = await supabase
+            .from('wa_contacted_users')
+            .select('campaign_id')
+            .eq('phone_number', phoneNumber)
+            .order('sent_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        return data?.campaign_id || null;
+    }
+    catch {
+        return null;
+    }
+}
+/**
+ * Record that a follow-up step was sent.
+ */
+async function logFollowupStep(campaignId, phoneNumber, contactName, step, messageType, fileUrl = '') {
+    if (!supabase)
+        return;
+    try {
+        await supabase.from('wa_message_logs').insert({
+            id: `fup${step}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            campaign_id: campaignId,
+            phone_number: phoneNumber,
+            contact_name: contactName,
+            message_type: `followup_step${step}`,
+            file_url: fileUrl,
+            status: 'sent',
+            error_message: '',
+            sent_at: new Date().toISOString(),
+        });
+    }
+    catch (err) {
+        (0, utils_js_1.errLog)('DB', `Error logging followup step ${step}:`, err.message);
+    }
+}
+/**
+ * Schedule a promise-date reminder (e.g. customer said "shukrobar nibo").
+ * Stored in file_url as the target date string "YYYY-MM-DD".
+ */
+async function schedulePromiseFollowup(campaignId, phoneNumber, contactName, promisedDate) {
+    if (!supabase)
+        return;
+    try {
+        // Delete any previous promise_sched for this contact
+        await supabase
+            .from('wa_message_logs')
+            .delete()
+            .eq('campaign_id', campaignId)
+            .eq('phone_number', phoneNumber)
+            .eq('message_type', 'promise_sched');
+        await supabase.from('wa_message_logs').insert({
+            id: `prm_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            campaign_id: campaignId,
+            phone_number: phoneNumber,
+            contact_name: contactName,
+            message_type: 'promise_sched',
+            file_url: promisedDate,
+            status: 'sent',
+            error_message: '',
+            sent_at: new Date().toISOString(),
+        });
+        (0, utils_js_1.log)('DB', `📅 Scheduled promise reminder for ${phoneNumber} on ${promisedDate}`);
+    }
+    catch (err) {
+        (0, utils_js_1.errLog)('DB', 'Error scheduling promise reminder:', err.message);
+    }
+}
+/**
+ * Mark that a promise reminder has been sent.
+ */
+async function markPromiseSent(campaignId, phoneNumber, contactName) {
+    if (!supabase)
+        return;
+    try {
+        await supabase.from('wa_message_logs').insert({
+            id: `prms_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            campaign_id: campaignId,
+            phone_number: phoneNumber,
+            contact_name: contactName,
+            message_type: 'promise_sent',
             file_url: '',
             status: 'sent',
             error_message: '',
             sent_at: new Date().toISOString(),
         });
-        if (error) {
-            (0, utils_js_1.errLog)('DB', 'Error marking followup sent in logs:', error.message);
-        }
     }
-    catch (e) {
-        (0, utils_js_1.errLog)('DB', 'Exception marking followup sent:', e.message);
+    catch (err) {
+        (0, utils_js_1.errLog)('DB', 'Error marking promise sent:', err.message);
     }
 }

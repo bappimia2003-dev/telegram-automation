@@ -2,8 +2,18 @@ import fs from 'fs';
 import path from 'path';
 import QRCode from 'qrcode';
 import pino from 'pino';
-import { updateWaConnectionState, getAllDbAccounts, deleteDbAccount, backupAuthSession, restoreAuthSession } from './db.js';
+import {
+  updateWaConnectionState,
+  getAllDbAccounts,
+  deleteDbAccount,
+  backupAuthSession,
+  restoreAuthSession,
+  findContactCampaign,
+  logInboundMessage,
+  schedulePromiseFollowup,
+} from './db.js';
 import { processIncomingMessage } from './campaigns.js';
+import { detectGenderAndIntent } from './ai.js';
 import { log, errLog } from './utils.js';
 
 interface AccountSession {
@@ -231,6 +241,22 @@ export async function startWhatsApp(accountId = 'main', accountName?: string): P
           '';
 
         log('WA', `📩 [${session.name}] Incoming from ${sender} (${pushName}): "${messageText}"`);
+
+        // Check if customer already belongs to a campaign -> Log inbound reply & detect promise date
+        findContactCampaign(sender).then(async (campaignId) => {
+          if (campaignId) {
+            // 1. Log inbound message (stops automatic follow-up / activates manual takeover)
+            await logInboundMessage(campaignId, sender, pushName, messageText);
+
+            // 2. Check if customer gave a promise date ("কাল নিব", "শুক্রবার", "2 din por", etc.)
+            const analysis = await detectGenderAndIntent(pushName, messageText);
+            if (analysis.promiseDate) {
+              await schedulePromiseFollowup(campaignId, sender, pushName, analysis.promiseDate);
+            }
+          }
+        }).catch((err) => {
+          errLog('WA', 'Error checking inbound campaign reply:', err.message);
+        });
 
         // Process message in background with accountId and message key for read receipts
         processIncomingMessage(sock, sender, pushName, messageText, accountId, msg.key).catch((err) => {

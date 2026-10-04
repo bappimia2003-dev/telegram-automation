@@ -17,6 +17,7 @@ const qrcode_1 = __importDefault(require("qrcode"));
 const pino_1 = __importDefault(require("pino"));
 const db_js_1 = require("./db.js");
 const campaigns_js_1 = require("./campaigns.js");
+const ai_js_1 = require("./ai.js");
 const utils_js_1 = require("./utils.js");
 const sessions = new Map();
 const AUTH_BASE_DIR = path_1.default.resolve(process.cwd(), 'whatsapp-auth');
@@ -213,6 +214,20 @@ async function startWhatsApp(accountId = 'main', accountName) {
                     msg.message?.videoMessage?.caption ||
                     '';
                 (0, utils_js_1.log)('WA', `📩 [${session.name}] Incoming from ${sender} (${pushName}): "${messageText}"`);
+                // Check if customer already belongs to a campaign -> Log inbound reply & detect promise date
+                (0, db_js_1.findContactCampaign)(sender).then(async (campaignId) => {
+                    if (campaignId) {
+                        // 1. Log inbound message (stops automatic follow-up / activates manual takeover)
+                        await (0, db_js_1.logInboundMessage)(campaignId, sender, pushName, messageText);
+                        // 2. Check if customer gave a promise date ("কাল নিব", "শুক্রবার", "2 din por", etc.)
+                        const analysis = await (0, ai_js_1.detectGenderAndIntent)(pushName, messageText);
+                        if (analysis.promiseDate) {
+                            await (0, db_js_1.schedulePromiseFollowup)(campaignId, sender, pushName, analysis.promiseDate);
+                        }
+                    }
+                }).catch((err) => {
+                    (0, utils_js_1.errLog)('WA', 'Error checking inbound campaign reply:', err.message);
+                });
                 // Process message in background with accountId and message key for read receipts
                 (0, campaigns_js_1.processIncomingMessage)(sock, sender, pushName, messageText, accountId, msg.key).catch((err) => {
                     (0, utils_js_1.errLog)('WA', `Error handling incoming message on ${session.name}:`, err.message);
