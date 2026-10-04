@@ -63,6 +63,9 @@ export function WhatsAppNumbers({ campaigns = [], accounts: propAccounts, initia
   const [newAccountPhone, setNewAccountPhone] = useState('');
 
   const [qrModalAccount, setQrModalAccount] = useState<WaConnection | null>(null);
+  const qrModalAccountRef = React.useRef<WaConnection | null>(null);
+  qrModalAccountRef.current = qrModalAccount;
+
   const [editModalAccount, setEditModalAccount] = useState<WaConnection | null>(null);
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
@@ -78,8 +81,8 @@ export function WhatsAppNumbers({ campaigns = [], accounts: propAccounts, initia
         } catch {}
 
         // If QR modal is open, keep its QR data in sync
-        if (qrModalAccount) {
-          const fresh = data.accounts.find((a: WaConnection) => a.id === qrModalAccount.id);
+        if (qrModalAccountRef.current) {
+          const fresh = data.accounts.find((a: WaConnection) => a.id === qrModalAccountRef.current?.id);
           if (fresh) {
             setQrModalAccount(fresh);
           }
@@ -169,10 +172,22 @@ export function WhatsAppNumbers({ campaigns = [], accounts: propAccounts, initia
         body: JSON.stringify({ action: 'connect' }),
       });
       const data = await res.json();
+      if (data && data.qrCode) {
+        setQrModalAccount((prev) => ({
+          ...(prev || {}),
+          id: accountId,
+          name: data.name || prev?.name || 'WhatsApp',
+          qrCode: data.qrCode,
+          status: data.status || 'qr_pending',
+          phoneNumber: data.phoneNumber || prev?.phoneNumber || '',
+          lastConnected: new Date().toISOString(),
+          createdAt: prev?.createdAt || new Date().toISOString(),
+        }));
+      }
       await fetchAccounts();
       const acc = accounts.find(a => a.id === accountId);
-      if (acc) {
-        setQrModalAccount({ ...acc, qrCode: data.qrCode || acc.qrCode, status: 'qr_pending' });
+      if (acc && !data?.qrCode) {
+        setQrModalAccount({ ...acc, qrCode: acc.qrCode, status: 'qr_pending' });
       }
       if (onDataChange) onDataChange();
     } catch (err) {

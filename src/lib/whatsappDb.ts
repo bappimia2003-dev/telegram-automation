@@ -503,9 +503,27 @@ export async function getAllWaConnections(): Promise<WaConnection[]> {
   const supabase = getSupabase();
   if (!supabase) return waMemory.connection ? [waMemory.connection] : [];
 
-  const { data, error } = await supabase.from('wa_connection').select('*').order('created_at', { ascending: true });
+  const { data, error } = await supabase
+    .from('wa_connection')
+    .select('id, phone_number, status, qr_code, last_connected, created_at')
+    .not('id', 'like', 'auth_%')
+    .not('id', 'like', 'file_%')
+    .not('id', 'like', 'test_%')
+    .order('created_at', { ascending: true });
+
   if (error) {
     console.error('Error fetching wa_connection:', error.message);
+    // Fallback: minimal query
+    try {
+      const fallback = await supabase
+        .from('wa_connection')
+        .select('id, phone_number, status, last_connected, created_at')
+        .not('id', 'like', 'auth_%')
+        .not('id', 'like', 'file_%');
+      if (!fallback.error && fallback.data) {
+        return fallback.data.map(rowToConnection);
+      }
+    } catch {}
     return [];
   }
   if (!data || data.length === 0) {
@@ -517,11 +535,16 @@ export async function getAllWaConnections(): Promise<WaConnection[]> {
 }
 
 export async function getWaConnection(id = 'main'): Promise<WaConnection | null> {
-  if (id.startsWith('auth_')) return null;
+  if (id.startsWith('auth_') || id.startsWith('file_') || id.startsWith('test_')) return null;
   const supabase = getSupabase();
   if (!supabase) return waMemory.connection;
 
-  const { data, error } = await supabase.from('wa_connection').select('*').eq('id', id).maybeSingle();
+  const { data, error } = await supabase
+    .from('wa_connection')
+    .select('id, phone_number, status, qr_code, last_connected, created_at')
+    .eq('id', id)
+    .maybeSingle();
+
   if (error || !data) {
     if (error) console.error('Error fetching wa_connection:', error.message);
     return id === 'main' ? waMemory.connection : null;

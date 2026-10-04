@@ -13,7 +13,7 @@ export async function GET() {
     try {
       const res = await fetch(`${WA_ENGINE_URL}/accounts`, {
         cache: 'no-store',
-        signal: AbortSignal.timeout(200),
+        signal: AbortSignal.timeout(4000),
       });
       if (res.ok) {
         const data = await res.json();
@@ -25,7 +25,7 @@ export async function GET() {
 
     const dbConnections = await getAllWaConnections();
 
-    // Merge DB connections with live engine info
+    // Map all DB connections and enrich with live engine info
     const accounts = dbConnections.map((conn) => {
       const live = engineAccounts.find((a) => a.id === conn.id);
       return {
@@ -35,6 +35,21 @@ export async function GET() {
         qrCode: live?.qrCode || conn.qrCode,
       };
     });
+
+    // If engine has active sessions not yet stored in DB, include them
+    for (const live of engineAccounts) {
+      if (!accounts.some((a) => a.id === live.id)) {
+        accounts.push({
+          id: live.id,
+          name: live.name || (live.id === 'main' ? 'Primary WhatsApp' : `SIM ${live.id.slice(-4)}`),
+          phoneNumber: live.phoneNumber || '',
+          status: live.status || 'disconnected',
+          qrCode: live.qrCode || '',
+          lastConnected: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
 
     return NextResponse.json({ ok: true, accounts });
   } catch (error: any) {

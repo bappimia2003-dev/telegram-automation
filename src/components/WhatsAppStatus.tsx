@@ -90,11 +90,17 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
   const handleConnect = async (accountId: string) => {
     setLoading(true);
     try {
-      await fetch(`/api/whatsapp/accounts/${accountId}`, {
+      const res = await fetch(`/api/whatsapp/accounts/${accountId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'connect' }),
       });
+      const data = await res.json();
+      if (data && data.qrCode) {
+        setAccounts((prev) =>
+          prev.map((a) => (a.id === accountId ? { ...a, qrCode: data.qrCode, status: 'qr_pending' } : a))
+        );
+      }
       await fetchAccounts();
       if (onStatusChange) onStatusChange();
     } catch (err) {
@@ -259,10 +265,17 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
               )}
             </div>
           </div>
-        ) : selectedAccount.status === 'qr_pending' && selectedAccount.qrCode ? (
+        ) : selectedAccount.status === 'qr_pending' ? (
           <div className="flex flex-col md:flex-row items-center gap-6 p-4 rounded-xl bg-gray-50 border border-gray-200">
-            <div className="bg-white p-3 rounded-2xl shadow-lg border-2 border-emerald-400 shrink-0">
-              <img src={selectedAccount.qrCode} alt="WhatsApp QR Code" className="w-48 h-48 sm:w-56 sm:h-56" />
+            <div className="bg-white p-3 rounded-2xl shadow-lg border-2 border-emerald-400 shrink-0 flex items-center justify-center">
+              {selectedAccount.qrCode ? (
+                <img src={selectedAccount.qrCode} alt="WhatsApp QR Code" className="w-48 h-48 sm:w-56 sm:h-56 object-contain" />
+              ) : (
+                <div className="w-48 h-48 sm:w-56 sm:h-56 flex flex-col items-center justify-center text-gray-500 text-xs gap-2">
+                  <RefreshCw className="w-6 h-6 animate-spin text-green-700" />
+                  <span>Generating QR code...</span>
+                </div>
+              )}
             </div>
 
             <div className="space-y-3">
