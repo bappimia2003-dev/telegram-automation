@@ -64,6 +64,7 @@ export function getConnectionInfo(accountId = 'main') {
 export function getAllAccountsInfo() {
   const list: any[] = [];
   for (const session of sessions.values()) {
+    if (session.id.startsWith('file_') || session.id.startsWith('auth_') || session.id.startsWith('test_')) continue;
     list.push({
       id: session.id,
       name: session.name,
