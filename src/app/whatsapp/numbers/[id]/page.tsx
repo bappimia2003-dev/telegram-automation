@@ -347,7 +347,7 @@ export default function WhatsAppNumberDetailPage() {
             </p>
           </div>
 
-          <Link href={`/whatsapp/campaigns/new?accountId=${accountId}`}>
+          <Link href={`/whatsapp/campaigns/new?accountId=${accountId}&returnTo=/whatsapp/numbers/${accountId}`}>
             <Button className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs h-9 px-4 shadow-md shadow-emerald-900/30">
               <Plus className="w-4 h-4 mr-1.5" />
               Add Campaign for this Number
@@ -365,7 +365,7 @@ export default function WhatsAppNumberDetailPage() {
               Create a campaign for this number with Facebook Ad quick-reply keywords, audio voice notes, and video/images.
             </p>
             <div className="pt-2">
-              <Link href={`/whatsapp/campaigns/new?accountId=${accountId}`}>
+              <Link href={`/whatsapp/campaigns/new?accountId=${accountId}&returnTo=/whatsapp/numbers/${accountId}`}>
                 <Button className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs px-5">
                   <Plus className="w-4 h-4 mr-1.5" />
                   Create Campaign for this Number
@@ -379,6 +379,8 @@ export default function WhatsAppNumberDetailPage() {
               <CampaignCard
                 key={camp.id}
                 campaign={camp}
+                account={account || undefined}
+                accounts={account ? [account] : []}
                 onToggleActive={fetchNumberData}
                 onDelete={handleDeleteCampaign}
               />

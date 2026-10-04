@@ -7,8 +7,9 @@ import { CampaignForm } from '@/components/CampaignForm';
 function NewCampaignContent() {
   const searchParams = useSearchParams();
   const accountId = searchParams.get('accountId') || 'all';
+  const returnTo = searchParams.get('returnTo') || '';
 
-  return <CampaignForm isEditing={false} initialData={{ accountId }} />;
+  return <CampaignForm isEditing={false} initialData={{ accountId }} returnTo={returnTo} />;
 }
 
 export default function NewCampaignPage() {

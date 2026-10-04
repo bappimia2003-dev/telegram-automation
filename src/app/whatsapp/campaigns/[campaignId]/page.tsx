@@ -4,25 +4,31 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { CampaignForm } from '@/components/CampaignForm';
 import { WhatsAppMessageLog } from '@/components/WhatsAppMessageLog';
-import { WaCampaign } from '@/lib/whatsappTypes';
+import { WaCampaign, WaConnection } from '@/lib/whatsappTypes';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, Send, Clock } from 'lucide-react';
+import { Sparkles, Send, Clock, Phone, Globe } from 'lucide-react';
 
 export default function CampaignDetailPage() {
   const params = useParams();
   const campaignId = params.campaignId as string;
 
   const [campaign, setCampaign] = useState<WaCampaign | null>(null);
+  const [accounts, setAccounts] = useState<WaConnection[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!campaignId) return;
 
-    fetch(`/api/whatsapp/campaigns/${campaignId}?t=${Date.now()}`, { cache: 'no-store' })
-      .then(res => res.json())
-      .then(data => {
-        if (data.ok && data.campaign) {
-          setCampaign(data.campaign);
+    Promise.all([
+      fetch(`/api/whatsapp/campaigns/${campaignId}?t=${Date.now()}`, { cache: 'no-store' }).then(r => r.json()),
+      fetch(`/api/whatsapp/accounts?t=${Date.now()}`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ accounts: [] }))
+    ])
+      .then(([campData, accData]) => {
+        if (campData.ok && campData.campaign) {
+          setCampaign(campData.campaign);
+        }
+        if (accData.ok && Array.isArray(accData.accounts)) {
+          setAccounts(accData.accounts);
         }
       })
       .catch(err => console.error('Failed fetching campaign:', err))
@@ -50,7 +56,7 @@ export default function CampaignDetailPage() {
       {/* Campaign Summary Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl bg-card/60 border border-border/60 backdrop-blur-md">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-bold text-white tracking-tight">{campaign.name}</h1>
             {campaign.isActive ? (
               <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs">
@@ -67,6 +73,24 @@ export default function CampaignDetailPage() {
                 Default Fallback
               </Badge>
             )}
+            {(() => {
+              const acc = accounts.find(a => a.id === campaign.accountId);
+              const isAll = !campaign.accountId || campaign.accountId === 'all';
+              const cleanPhone = acc?.phoneNumber ? `(+${acc.phoneNumber.replace(/^\+/, '')})` : '';
+              const label = isAll
+                ? 'All Numbers'
+                : acc
+                ? `${acc.name || 'Account'} ${cleanPhone}`.trim()
+                : campaign.accountId === 'main'
+                ? 'Primary WhatsApp'
+                : campaign.accountId;
+              return (
+                <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-300 border-emerald-500/30 flex items-center gap-1 font-medium">
+                  {isAll ? <Globe className="w-3 h-3 text-emerald-400" /> : <Phone className="w-3 h-3 text-emerald-400" />}
+                  {label}
+                </Badge>
+              );
+            })()}
           </div>
           <p className="text-xs text-muted-foreground">{campaign.description || 'No description provided'}</p>
         </div>
@@ -88,7 +112,11 @@ export default function CampaignDetailPage() {
       {/* Campaign Edit Form */}
       <div>
         <h2 className="text-lg font-semibold text-white mb-4">Edit Campaign Assets & Rules</h2>
-        <CampaignForm initialData={campaign} isEditing={true} />
+        <CampaignForm 
+          initialData={campaign} 
+          isEditing={true} 
+          returnTo={campaign.accountId && campaign.accountId !== 'all' ? `/whatsapp/numbers/${campaign.accountId}` : '/whatsapp'}
+        />
       </div>
 
       {/* Delivery Logs Specific to this campaign */}

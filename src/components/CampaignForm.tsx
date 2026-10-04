@@ -41,9 +41,10 @@ import Link from 'next/link';
 interface CampaignFormProps {
   initialData?: Partial<WaCampaign>;
   isEditing?: boolean;
+  returnTo?: string;
 }
 
-export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
+export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormProps) {
   const router = useRouter();
 
   const [name, setName] = useState(initialData?.name || '');
@@ -52,6 +53,12 @@ export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
   const [accounts, setAccounts] = useState<Array<{ id: string; name: string; phoneNumber?: string; status: string }>>([]);
   const [keywords, setKeywords] = useState(initialData?.keywords || '');
   const [isDefault, setIsDefault] = useState(initialData?.isDefault ?? false);
+
+  useEffect(() => {
+    if (initialData?.accountId) {
+      setAccountId(initialData.accountId);
+    }
+  }, [initialData?.accountId]);
 
   // Delivery settings
   const [sendOrder, setSendOrder] = useState(initialData?.sendOrder || 'message,image,audio,video,document');
@@ -292,10 +299,13 @@ export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
       .then((data) => {
         if (data.ok && Array.isArray(data.accounts)) {
           setAccounts(data.accounts);
+          if (initialData?.accountId && initialData.accountId !== 'all') {
+            setAccountId(initialData.accountId);
+          }
         }
       })
       .catch((err) => console.error('Failed to load accounts in form:', err));
-  }, []);
+  }, [initialData?.accountId]);
 
   const toggleVariantOpen = (id: string) => {
     setOpenVariantIds((prev) => ({
@@ -439,7 +449,13 @@ export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
       }
 
 
-      router.push('/whatsapp');
+      if (returnTo) {
+        router.push(returnTo);
+      } else if (accountId && accountId !== 'all') {
+        router.push(`/whatsapp/numbers/${accountId}`);
+      } else {
+        router.push('/whatsapp');
+      }
       router.refresh();
     } catch (err: any) {
       console.error('Save error:', err);
@@ -454,11 +470,11 @@ export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
       {/* Header & Navigation */}
       <div className="flex items-center justify-between">
         <Link
-          href="/whatsapp"
+          href={returnTo || (accountId && accountId !== 'all' ? `/whatsapp/numbers/${accountId}` : '/whatsapp')}
           className="flex items-center text-sm text-muted-foreground hover:text-white transition-colors"
         >
           <ArrowLeft className="w-4 h-4 mr-1.5" />
-          Back to WhatsApp Dashboard
+          {returnTo || (accountId && accountId !== 'all') ? 'Back to Number' : 'Back to WhatsApp Dashboard'}
         </Link>
 
         <div className="flex items-center gap-3">
@@ -514,10 +530,13 @@ export function CampaignForm({ initialData, isEditing }: CampaignFormProps) {
                 onChange={(e) => setAccountId(e.target.value)}
                 className="w-full h-10 px-3 rounded-md bg-background/50 border border-border/60 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
-                <option value="all">🌐 All Numbers</option>
+                <option value="all">🌐 All Numbers (Active on all devices)</option>
+                {accountId && accountId !== 'all' && !accounts.some((a) => a.id === accountId) && (
+                  <option value={accountId}>📱 Current Number ({accountId})</option>
+                )}
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
-                    📱 {acc.name} {acc.phoneNumber ? `(${acc.phoneNumber})` : ''} - {acc.status === 'connected' ? 'Connected' : 'Disconnected'}
+                    📱 {acc.name} {acc.phoneNumber ? `(+${acc.phoneNumber.replace(/^\+/, '')})` : ''} - {acc.status === 'connected' ? 'Connected' : 'Disconnected'}
                   </option>
                 ))}
               </select>

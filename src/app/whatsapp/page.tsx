@@ -87,7 +87,7 @@ export default function WhatsAppDashboardPage() {
   // Filtered campaigns based on tab selection
   const filteredCampaigns = campaigns.filter(c => {
     if (selectedFilter === 'all') return true;
-    return c.accountId === selectedFilter || (!c.accountId && selectedFilter === 'main');
+    return c.accountId === selectedFilter || (!c.accountId && selectedFilter === 'main') || c.accountId === 'all';
   });
 
   const connectedAccountsCount = accounts.filter(a => a.status === 'connected').length;
@@ -178,6 +178,7 @@ export default function WhatsAppDashboardPage() {
 
             {accounts.map(acc => {
               const count = campaigns.filter(c => c.accountId === acc.id || (!c.accountId && acc.id === 'main') || c.accountId === 'all').length;
+              const phoneLabel = acc.phoneNumber ? ` (+${acc.phoneNumber.replace(/^\+/, '')})` : '';
               return (
                 <button
                   key={acc.id}
@@ -188,8 +189,8 @@ export default function WhatsAppDashboardPage() {
                       : 'bg-secondary/40 border-border/40 text-muted-foreground hover:bg-secondary/70 hover:text-white'
                   }`}
                 >
-                  <Phone className="w-3 h-3" />
-                  <span>{acc.name}</span>
+                  <Phone className="w-3 h-3 shrink-0" />
+                  <span>{acc.name}{phoneLabel}</span>
                   <span className="opacity-70">({count})</span>
                 </button>
               );
@@ -225,6 +226,7 @@ export default function WhatsAppDashboardPage() {
               <CampaignCard
                 key={camp.id}
                 campaign={camp}
+                accounts={accounts}
                 onToggleActive={fetchDashboardData}
                 onDelete={handleDeleteCampaign}
               />

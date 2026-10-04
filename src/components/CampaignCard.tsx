@@ -19,17 +19,68 @@ import {
   Clock,
   Sparkles,
   Phone,
-  Layers
+  Layers,
+  Globe
 } from 'lucide-react';
-import { WaCampaign } from '@/lib/whatsappTypes';
+import { WaCampaign, WaConnection } from '@/lib/whatsappTypes';
 
 interface CampaignCardProps {
   campaign: WaCampaign;
+  accounts?: WaConnection[];
+  account?: WaConnection;
   onToggleActive?: (id: string, active: boolean) => void;
   onDelete?: (id: string) => void;
 }
 
-export function CampaignCard({ campaign, onToggleActive, onDelete }: CampaignCardProps) {
+export function CampaignCard({ campaign, accounts, account, onToggleActive, onDelete }: CampaignCardProps) {
+  const [localAccounts, setLocalAccounts] = useState<WaConnection[]>(accounts || []);
+
+  React.useEffect(() => {
+    if (accounts && accounts.length > 0) {
+      setLocalAccounts(accounts);
+      return;
+    }
+    if (campaign.accountId && campaign.accountId !== 'all') {
+      fetch(`/api/whatsapp/accounts?t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.ok && Array.isArray(data.accounts)) {
+            setLocalAccounts(data.accounts);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [accounts, campaign.accountId]);
+
+  const assignedAccount = account || localAccounts.find(a => a.id === campaign.accountId);
+
+  const accountDisplay = React.useMemo(() => {
+    if (!campaign.accountId || campaign.accountId === 'all') {
+      return {
+        label: 'All Numbers',
+        isAll: true,
+      };
+    }
+    if (assignedAccount) {
+      const cleanPhone = assignedAccount.phoneNumber ? `(+${assignedAccount.phoneNumber.replace(/^\+/, '')})` : '';
+      const name = assignedAccount.name || 'Account';
+      return {
+        label: cleanPhone ? `${name} ${cleanPhone}` : name,
+        isAll: false,
+      };
+    }
+    if (campaign.accountId === 'main') {
+      return {
+        label: 'Primary WhatsApp',
+        isAll: false,
+      };
+    }
+    return {
+      label: campaign.accountId,
+      isAll: false,
+    };
+  }, [campaign.accountId, assignedAccount]);
+
   const [isActive, setIsActive] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const cached = localStorage.getItem(`wa_camp_active_${campaign.id}`);
@@ -120,9 +171,17 @@ export function CampaignCard({ campaign, onToggleActive, onDelete }: CampaignCar
                     {campaign.variants.filter(v => v.isActive).length} Variations
                   </Badge>
                 )}
-                <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-300 border-emerald-500/30 flex items-center gap-1">
-                  <Phone className="w-2.5 h-2.5" />
-                  {campaign.accountId && campaign.accountId !== 'all' ? campaign.accountId : 'All Numbers'}
+                <Badge 
+                  variant="outline" 
+                  className="text-[10px] bg-emerald-500/10 text-emerald-300 border-emerald-500/30 flex items-center gap-1 font-medium max-w-[220px] truncate"
+                  title={accountDisplay.label}
+                >
+                  {accountDisplay.isAll ? (
+                    <Globe className="w-2.5 h-2.5 shrink-0 text-emerald-400" />
+                  ) : (
+                    <Phone className="w-2.5 h-2.5 shrink-0 text-emerald-400" />
+                  )}
+                  <span className="truncate">{accountDisplay.label}</span>
                 </Badge>
               </div>
               {campaign.description && (
