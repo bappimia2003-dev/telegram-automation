@@ -5,10 +5,10 @@
  * Background scheduler that runs every 60 seconds inside the Railway wa-engine.
  * For each active campaign with followupEnabled=true:
  *   1. Calculates the delay in ms from followupDelayValue + followupDelayUnit
- *   2. Queries wa_contacted_users for rows where followup_sent_at IS NULL
- *      and the original message was sent at least `delay` ago
+ *   2. Queries wa_contacted_users for contacts who haven't received a follow-up yet
+ *      (checked via wa_message_logs where message_type='followup')
  *   3. Sends the follow-up message/media via the matching Baileys socket
- *   4. Marks followup_sent_at in the DB so it won't be re-sent
+ *   4. Logs the follow-up in wa_message_logs (no schema changes needed)
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.startFollowupScheduler = startFollowupScheduler;
@@ -31,23 +31,6 @@ function delayToMs(config) {
             return value * 60 * 1000;
     }
 }
-/** Get the Baileys socket for the account assigned to this campaign */
-function getSocketForCampaign(campaign) {
-    const accountId = campaign.accountId || 'main';
-    const info = (0, whatsapp_js_1.getConnectionInfo)(accountId);
-    if (info.status !== 'connected') {
-        // Try 'main' as fallback if a specific account isn't connected
-        if (accountId !== 'main') {
-            const mainInfo = (0, whatsapp_js_1.getConnectionInfo)('main');
-            if (mainInfo.status === 'connected') {
-                return mainInfo._sock || null;
-            }
-        }
-        return null;
-    }
-    // The sock is stored on the session — we expose it via a helper below
-    return info._sock || null;
-}
 /** Process a single campaign's pending follow-ups */
 async function processCampaignFollowups(campaign) {
     const config = campaign.followupConfig;
@@ -56,9 +39,8 @@ async function processCampaignFollowups(campaign) {
     if (pending.length === 0)
         return;
     (0, utils_js_1.log)('FOLLOWUP', `Campaign "${campaign.name}" — ${pending.length} pending follow-up(s) to send.`);
-    // Get socket — we use a workaround: import sessions map directly via whatsapp module
     const accountId = campaign.accountId && campaign.accountId !== 'all' ? campaign.accountId : null;
-    const sock = await getActiveSock(accountId);
+    const sock = getActiveSock(accountId);
     if (!sock) {
         (0, utils_js_1.log)('FOLLOWUP', `No connected socket for account "${accountId || 'any'}" — skipping follow-ups for campaign "${campaign.name}".`);
         return;
@@ -66,7 +48,7 @@ async function processCampaignFollowups(campaign) {
     for (const contact of pending) {
         try {
             await sendFollowupToContact(sock, campaign, config, contact);
-            await (0, db_js_1.markFollowupSent)(contact.id);
+            await (0, db_js_1.markFollowupSent)(campaign.id, contact.phoneNumber, contact.contactName);
             (0, utils_js_1.log)('FOLLOWUP', `✅ Follow-up sent to ${contact.phoneNumber} (${contact.contactName}) for campaign "${campaign.name}".`);
             // Small human-like delay between each follow-up (2-4s)
             const jitter = config.antiBanJitter !== false ? Math.floor(Math.random() * 2000) + 2000 : 2000;
@@ -74,8 +56,7 @@ async function processCampaignFollowups(campaign) {
         }
         catch (err) {
             (0, utils_js_1.errLog)('FOLLOWUP', `Failed to send follow-up to ${contact.phoneNumber}:`, err.message);
-            // Still mark as attempted to avoid infinite retry loops — use a separate flag if needed
-            // For now we skip marking so it will retry next cycle
+            // Will retry next cycle
         }
     }
 }
@@ -206,41 +187,27 @@ async function sendFollowupToContact(sock, campaign, config, contact) {
  * Get an active (connected) socket from the sessions map.
  * Tries the specified accountId first, then falls back to any connected account.
  */
-async function getActiveSock(preferAccountId) {
-    // We need to access the sessions map from whatsapp.ts.
-    // Since it's not exported, we use a workaround: call getConnectionInfo which 
-    // exposes the internal state, and we pull the sock via the exported getAllAccountsInfo.
-    // Actually we'll use a small trick: we export a getSocket helper from whatsapp.ts below.
-    // For now we use dynamic import to avoid circular deps at module level.
-    try {
-        const { getSocket } = await import('./whatsapp.js');
-        if (preferAccountId) {
-            const sock = getSocket(preferAccountId);
+function getActiveSock(preferAccountId) {
+    if (preferAccountId) {
+        const sock = (0, whatsapp_js_1.getSocket)(preferAccountId);
+        if (sock)
+            return sock;
+    }
+    // Try to find any connected socket
+    const accounts = (0, whatsapp_js_1.getAllAccountsInfo)();
+    for (const acc of accounts) {
+        if (acc.status === 'connected') {
+            const sock = (0, whatsapp_js_1.getSocket)(acc.id);
             if (sock)
                 return sock;
         }
-        // Try to find any connected socket
-        const { getAllAccountsInfo } = await import('./whatsapp.js');
-        const accounts = getAllAccountsInfo();
-        for (const acc of accounts) {
-            if (acc.status === 'connected') {
-                const sock = getSocket(acc.id);
-                if (sock)
-                    return sock;
-            }
-        }
-        return null;
     }
-    catch {
-        return null;
-    }
+    return null;
 }
 /** Main scheduler loop — called once, then runs every 60 seconds */
 function startFollowupScheduler() {
     const INTERVAL_MS = 60 * 1000; // 60 seconds
     (0, utils_js_1.log)('FOLLOWUP', '🕐 Follow-up scheduler started. Checking every 60 seconds...');
-    // Check if the followup_sent_at column exists (auto-migrate hint)
-    (0, db_js_1.ensureFollowupColumn)().catch(() => { });
     const runCycle = async () => {
         try {
             const campaigns = await (0, db_js_1.getCampaignsWithFollowup)();
