@@ -17,9 +17,19 @@ import {
   Sparkles,
   Phone
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { WaCampaign, WaDashboardStats, WaConnection } from '@/lib/whatsappTypes';
 
 export default function WhatsAppDashboardPage() {
+  const [followupData, setFollowupData] = useState<any>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('wa_cached_followup');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return null;
+  });
   const [campaigns, setCampaigns] = useState<WaCampaign[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -77,15 +87,26 @@ export default function WhatsAppDashboardPage() {
 
   const fetchDashboardData = async () => {
     try {
-      const [campRes, statusRes, accountsRes] = await Promise.all([
+      const [campRes, statusRes, accountsRes, followupRes] = await Promise.all([
         fetch(`/api/whatsapp/campaigns?t=${Date.now()}`, { cache: 'no-store' }),
         fetch(`/api/whatsapp/status?t=${Date.now()}`, { cache: 'no-store' }),
         fetch(`/api/whatsapp/accounts?t=${Date.now()}`, { cache: 'no-store' }),
+        fetch(`/api/whatsapp/followup?t=${Date.now()}`, { cache: 'no-store' }),
       ]);
 
       const campData = await campRes.json().catch(() => ({}));
       const statusData = await statusRes.json().catch(() => ({}));
       const accountsData = await accountsRes.json().catch(() => ({}));
+      const fupData = await followupRes.json().catch(() => ({}));
+
+      if (fupData && fupData.ok) {
+        setFollowupData(fupData);
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('wa_cached_followup', JSON.stringify(fupData));
+          } catch {}
+        }
+      }
 
       const list: WaCampaign[] = Array.isArray(campData.campaigns) ? campData.campaigns : [];
       setCampaigns(list);
@@ -141,6 +162,38 @@ export default function WhatsAppDashboardPage() {
       await fetchDashboardData();
     } catch (err) {
       console.error('Failed deleting campaign:', err);
+    }
+  };
+
+  const handleToggleFollowup = async () => {
+    if (!followupData) return;
+    const currentVal = Boolean(followupData.settings?.auto_followup);
+    const newVal = !currentVal;
+
+    setFollowupData((prev: any) => ({
+      ...prev,
+      settings: { ...prev?.settings, auto_followup: newVal },
+    }));
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('wa_followup_auto_followup', String(newVal));
+      } catch {}
+    }
+
+    try {
+      await fetch('/api/whatsapp/followup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'toggle_setting',
+          key: 'auto_followup',
+          value: newVal,
+        }),
+      });
+      fetchDashboardData();
+    } catch (err) {
+      console.error('Failed to toggle followup from main page:', err);
     }
   };
 
@@ -203,6 +256,80 @@ export default function WhatsAppDashboardPage() {
         campaigns={campaigns} 
         onDataChange={fetchDashboardData} 
       />
+
+      {/* 1.5 Active Auto Follow-up Live Monitor Card */}
+      <div className={cn(
+        "p-4 sm:p-5 rounded-2xl border shadow-sm transition-all",
+        followupData?.settings?.auto_followup
+          ? "bg-gradient-to-br from-emerald-500/10 via-[#FAF8F5] to-[#F5F2EB] dark:from-emerald-950/20 dark:via-[#15171C] dark:to-[#121418] border-emerald-500/30 dark:border-emerald-700/40"
+          : "bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930]"
+      )}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className={cn(
+              "w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-xs",
+              followupData?.settings?.auto_followup
+                ? "bg-[#164E43] text-white shadow-emerald-900/20"
+                : "bg-gray-200 dark:bg-zinc-800 text-gray-500 dark:text-zinc-400"
+            )}>
+              <Sparkles className="w-5 h-5" />
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2">
+                <span className={cn(
+                  "w-2.5 h-2.5 rounded-full shrink-0",
+                  followupData?.settings?.auto_followup ? "bg-emerald-500 animate-pulse" : "bg-gray-400"
+                )} />
+                <h3 className="text-base font-extrabold text-gray-900 dark:text-white">
+                  স্মার্ট ফলো-আপ সিস্টেম (Auto Follow-up Engine)
+                </h3>
+                <span className={cn(
+                  "px-2 py-0.5 rounded-full text-[11px] font-bold border",
+                  followupData?.settings?.auto_followup
+                    ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
+                    : "bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 border-gray-200 dark:border-zinc-700"
+                )}>
+                  {followupData?.settings?.auto_followup ? 'সক্রিয় ও রানিং (ACTIVE)' : 'বন্ধ আছে (PAUSED)'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-300 mt-1 flex-wrap font-medium">
+                <span>🔄 ভ্যারিয়েশন: <strong>{followupData?.variants?.length || 0}টি সংরক্ষিত</strong> ({followupData?.variants?.filter((v: any) => v.isActive)?.length || 0}টি রোটেশনে)</span>
+                <span>•</span>
+                <span>⏱️ বিরতি: <strong>{followupData?.settings?.min_delay_minutes || 45}-{followupData?.settings?.max_delay_minutes || 90} মি.</strong></span>
+                <span>•</span>
+                <span>👥 ব্যাচ: <strong>{followupData?.settings?.min_batch_people || 3}-{followupData?.settings?.max_batch_people || 5} জন</strong></span>
+                <span>•</span>
+                <span>📱 সিম: <strong>{followupData?.settings?.assigned_account_name || 'All Connected'}</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleToggleFollowup}
+              className={cn(
+                "h-9 px-3.5 text-xs font-bold rounded-xl border transition-colors",
+                followupData?.settings?.auto_followup
+                  ? "border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/30"
+                  : "border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+              )}
+            >
+              {followupData?.settings?.auto_followup ? 'পজ করুন (Pause)' : '▶️ চালু করুন (Turn ON)'}
+            </Button>
+
+            <Link href="/whatsapp/new-followup">
+              <Button className="bg-[#164E43] hover:bg-[#124238] text-white font-bold text-xs h-9 px-4 rounded-xl shadow-sm">
+                ⚙️ ভ্যারিয়েশন ও সেটিংস এডিট
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
 
       {/* 2. All Running Campaigns Section (Outside window overview) */}
       <div className="space-y-3 pt-3 border-t border-[#E6E2D8] dark:border-[#262930]">

@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { getAllApiKeys } from './db';
 import { getAllWaConnections } from './whatsappDb';
 import { WaCampaignVariant } from './whatsappTypes';
@@ -73,6 +74,9 @@ interface FollowupStoreData {
 }
 
 const STORE_PATH = path.resolve(process.cwd(), 'whatsapp-followup/data/followup_store.json');
+const TMP_STORE_PATH = path.join(os.tmpdir(), 'followup_store.json');
+
+let inMemoryStore: FollowupStoreData | null = null;
 
 const defaultVariants: WaCampaignVariant[] = [];
 
@@ -163,40 +167,67 @@ function pruneRolling30DayStore(store: FollowupStoreData): boolean {
 
 
 function readStore(): FollowupStoreData {
-  try {
-    if (!fs.existsSync(STORE_PATH)) {
-      try {
-        const dir = path.dirname(STORE_PATH);
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(STORE_PATH, JSON.stringify(defaultStore, null, 2), 'utf-8');
-      } catch {}
-      return { ...defaultStore };
-    }
-    const raw = fs.readFileSync(STORE_PATH, 'utf-8');
-    const parsed = JSON.parse(raw);
-    const storeObj: FollowupStoreData = {
-      ...defaultStore,
-      ...parsed,
-      variants: Array.isArray(parsed.variants) ? parsed.variants : [],
-      settings: { ...defaultStore.settings, ...(parsed.settings || {}) },
-    };
-    if (pruneRolling30DayStore(storeObj)) {
-      writeStore(storeObj);
-    }
-    return storeObj;
-  } catch (err) {
-    console.error('Error reading followup store:', err);
-    return { ...defaultStore };
+  if (inMemoryStore) {
+    return inMemoryStore;
   }
+
+  let raw = '';
+  // Try reading from STORE_PATH first
+  try {
+    if (fs.existsSync(STORE_PATH)) {
+      raw = fs.readFileSync(STORE_PATH, 'utf-8');
+    }
+  } catch {}
+
+  // If STORE_PATH had nothing or failed, try TMP_STORE_PATH
+  if (!raw) {
+    try {
+      if (fs.existsSync(TMP_STORE_PATH)) {
+        raw = fs.readFileSync(TMP_STORE_PATH, 'utf-8');
+      }
+    } catch {}
+  }
+
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      const storeObj: FollowupStoreData = {
+        ...defaultStore,
+        ...parsed,
+        variants: Array.isArray(parsed.variants) ? parsed.variants : [],
+        settings: { ...defaultStore.settings, ...(parsed.settings || {}) },
+      };
+      if (pruneRolling30DayStore(storeObj)) {
+        writeStore(storeObj);
+      }
+      inMemoryStore = storeObj;
+      return storeObj;
+    } catch (e) {
+      console.error('Error parsing followup store JSON:', e);
+    }
+  }
+
+  inMemoryStore = { ...defaultStore };
+  return inMemoryStore;
 }
 
 function writeStore(data: FollowupStoreData) {
+  inMemoryStore = JSON.parse(JSON.stringify(data));
+
+  // Try writing to primary filesystem path
   try {
     const dir = path.dirname(STORE_PATH);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
-    // Read-only filesystem on Vercel is expected
+    // Expected on Vercel read-only filesystem
+  }
+
+  // Also write to tmp as fallback
+  try {
+    fs.writeFileSync(TMP_STORE_PATH, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    // Ignore tmp write errors
   }
 }
 
@@ -336,6 +367,33 @@ export async function updateAllFollowupSettings(newSettings: Partial<FollowupSet
   store.settings = { ...store.settings, ...newSettings };
   writeStore(store);
   return store.settings;
+}
+
+export async function saveFollowupAll(payload: { variants?: WaCampaignVariant[]; settings?: Partial<FollowupSettings> }) {
+  const store = readStore();
+  if (Array.isArray(payload.variants)) {
+    store.variants = payload.variants;
+  }
+  if (payload.settings) {
+    store.settings = { ...store.settings, ...payload.settings };
+    if (payload.settings.auto_followup && !store.settings.started_date) {
+      store.settings.started_date = new Date().toISOString().split('T')[0];
+    }
+  }
+  writeStore(store);
+
+  // Sync to background WhatsApp Engine if reachable
+  try {
+    const engineUrl = process.env.WA_ENGINE_URL || 'http://localhost:3006';
+    fetch(`${engineUrl}/api/settings/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settings: store.settings, variants: store.variants }),
+      signal: AbortSignal.timeout(1500),
+    }).catch(() => {});
+  } catch {}
+
+  return { variants: store.variants, settings: store.settings };
 }
 
 export async function addMediaItem(item: { filename: string; filepath: string; media_type: 'audio' | 'image' | 'text'; category?: string }) {

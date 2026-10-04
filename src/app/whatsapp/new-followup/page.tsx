@@ -53,9 +53,37 @@ export default function NewFollowupPage() {
     return false;
   });
 
-  // Variations State
-  const [variants, setVariants] = useState<WaCampaignVariant[]>([]);
-  const [openVariantIds, setOpenVariantIds] = useState<Record<string, boolean>>({});
+  // Variations State with robust localStorage fallback
+  const [variants, setVariants] = useState<WaCampaignVariant[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('wa_followup_variants');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
+
+  const [openVariantIds, setOpenVariantIds] = useState<Record<string, boolean>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('wa_followup_variants');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const openState: Record<string, boolean> = {};
+            parsed.forEach((v: any) => { openState[v.id] = true; });
+            return openState;
+          }
+        }
+      } catch {}
+    }
+    return {};
+  });
+
   const [uploadingVariant, setUploadingVariant] = useState<{ variantId: string; type: string } | null>(null);
 
   // Accounts cache fallback to ensure all connected WhatsApp accounts are immediately available
@@ -69,17 +97,29 @@ export default function NewFollowupPage() {
     return [];
   });
 
-  const [formSettings, setFormSettings] = useState({
-    min_delay_minutes: 45,
-    max_delay_minutes: 90,
-    min_batch_people: 3,
-    max_batch_people: 5,
-    duration_hours: 6,
-    total_duration_days: 30,
-    started_date: '',
-    working_hours_start: '09:00',
-    working_hours_end: '22:00',
-    max_daily_messages: 50,
+  const [formSettings, setFormSettings] = useState(() => {
+    const defaults = {
+      min_delay_minutes: 45,
+      max_delay_minutes: 90,
+      min_batch_people: 3,
+      max_batch_people: 5,
+      duration_hours: 6,
+      total_duration_days: 30,
+      started_date: '',
+      working_hours_start: '09:00',
+      working_hours_end: '22:00',
+      max_daily_messages: 50,
+    };
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('wa_followup_settings');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return { ...defaults, ...parsed };
+        }
+      } catch {}
+    }
+    return defaults;
   });
 
   const fetchData = async () => {
@@ -114,7 +154,7 @@ export default function NewFollowupPage() {
           setAutoFollowupEnabled(activeState);
           json.settings.auto_followup = activeState;
 
-          setFormSettings({
+          const updatedSettings = {
             min_delay_minutes: json.settings.min_delay_minutes ?? 45,
             max_delay_minutes: json.settings.max_delay_minutes ?? 90,
             min_batch_people: json.settings.min_batch_people ?? 3,
@@ -125,21 +165,59 @@ export default function NewFollowupPage() {
             working_hours_start: json.settings.working_hours_start || '09:00',
             working_hours_end: json.settings.working_hours_end || '22:00',
             max_daily_messages: json.settings.max_daily_messages ?? 50,
-          });
+          };
+          setFormSettings(updatedSettings);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('wa_followup_settings', JSON.stringify(updatedSettings));
+            } catch {}
+          }
         }
         setData(json);
 
-        if (Array.isArray(json.variants)) {
-          setVariants(json.variants);
-          const openState: Record<string, boolean> = {};
-          json.variants.forEach((v: WaCampaignVariant, idx: number) => {
-            openState[v.id] = idx === 0;
-          });
-          setOpenVariantIds(openState);
-        } else {
-          setVariants([]);
-          setOpenVariantIds({});
+        // Sync Variants safely with localStorage
+        let finalVariants: WaCampaignVariant[] = [];
+        let localVariants: WaCampaignVariant[] = [];
+        if (typeof window !== 'undefined') {
+          try {
+            const saved = localStorage.getItem('wa_followup_variants');
+            if (saved) {
+              const parsed = JSON.parse(saved);
+              if (Array.isArray(parsed)) localVariants = parsed;
+            }
+          } catch {}
         }
+
+        if (Array.isArray(json.variants) && json.variants.length > 0) {
+          finalVariants = json.variants;
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('wa_followup_variants', JSON.stringify(json.variants));
+            } catch {}
+          }
+        } else if (localVariants.length > 0) {
+          // If server returned 0 variants, preserve user's local variants & re-sync to server
+          finalVariants = localVariants;
+          fetch('/api/whatsapp/followup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'update_variants',
+              variants: localVariants,
+            }),
+          }).catch(() => {});
+        }
+
+        setVariants(finalVariants);
+        setOpenVariantIds((prev) => {
+          const openState: Record<string, boolean> = { ...prev };
+          finalVariants.forEach((v: WaCampaignVariant) => {
+            if (openState[v.id] === undefined) {
+              openState[v.id] = true; // Open all by default so user can edit everything easily!
+            }
+          });
+          return openState;
+        });
 
         // Fetch latest registered WhatsApp accounts to ensure all SIMs/numbers are present
         fetch(`/api/whatsapp/accounts?t=${Date.now()}`)
@@ -225,9 +303,22 @@ export default function NewFollowupPage() {
     setOpenVariantIds((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const toggleAllVariants = (open: boolean) => {
+    const newState: Record<string, boolean> = {};
+    variants.forEach((v) => {
+      newState[v.id] = open;
+    });
+    setOpenVariantIds(newState);
+  };
+
   const toggleVariantActive = async (id: string, active: boolean) => {
     const updated = variants.map((v) => (v.id === id ? { ...v, isActive: active } : v));
     setVariants(updated);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('wa_followup_variants', JSON.stringify(updated));
+      } catch {}
+    }
     try {
       await fetch('/api/whatsapp/followup', {
         method: 'POST',
@@ -243,9 +334,15 @@ export default function NewFollowupPage() {
   };
 
   const updateVariantField = (id: string, field: keyof WaCampaignVariant, value: any) => {
-    setVariants((prev) =>
-      prev.map((v) => (v.id === id ? { ...v, [field]: value } : v))
-    );
+    setVariants((prev) => {
+      const updated = prev.map((v) => (v.id === id ? { ...v, [field]: value } : v));
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('wa_followup_variants', JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
   };
 
   const handleAddVariant = () => {
@@ -262,13 +359,24 @@ export default function NewFollowupPage() {
       documentUrl: '',
       documentName: '',
     };
-    setVariants((prev) => [...prev, newVariant]);
+    const updated = [...variants, newVariant];
+    setVariants(updated);
     setOpenVariantIds((prev) => ({ ...prev, [newId]: true }));
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('wa_followup_variants', JSON.stringify(updated));
+      } catch {}
+    }
   };
 
   const handleDeleteVariant = async (id: string) => {
     const updated = variants.filter((v) => v.id !== id);
     setVariants(updated);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('wa_followup_variants', JSON.stringify(updated));
+      } catch {}
+    }
     try {
       await fetch('/api/whatsapp/followup', {
         method: 'POST',
@@ -319,33 +427,39 @@ export default function NewFollowupPage() {
     }
   };
 
-  // Save Variations and Timing Settings to Store
+  // Save Variations and Timing Settings to Store atomically
   const handleSaveAll = async () => {
     setSaving(true);
     try {
-      await fetch('/api/whatsapp/followup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'update_variants',
-          variants,
-        }),
-      });
+      // 1. Instantly save to local storage so user data never vanishes
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('wa_followup_variants', JSON.stringify(variants));
+          localStorage.setItem('wa_followup_settings', JSON.stringify(formSettings));
+          localStorage.setItem('wa_followup_auto_followup', String(autoFollowupEnabled));
+        } catch {}
+      }
 
+      // 2. Atomic server save with single request
       const res = await fetch('/api/whatsapp/followup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'update_settings',
-          settings: formSettings,
+          action: 'save_all',
+          variants,
+          settings: {
+            ...formSettings,
+            auto_followup: autoFollowupEnabled,
+          },
         }),
       });
+
       const json = await res.json();
       if (json.ok) {
         alert('✅ সকল ভ্যারিয়েশন এবং ফলো-আপ সেটিংস সফলভাবে সেভ হয়েছে!');
         fetchData();
       } else {
-        alert('সেভ ব্যর্থ: ' + json.error);
+        alert('সেভ ব্যর্থ: ' + (json.error || 'Server error'));
       }
     } catch (err: any) {
       alert('সেভ এরর: ' + err.message);
@@ -457,6 +571,126 @@ export default function NewFollowupPage() {
         </div>
       </div>
 
+      {/* 1. Live Follow-up Status & Monitoring Dashboard */}
+      <div className={cn(
+        "p-5 sm:p-6 rounded-2xl border shadow-sm transition-all",
+        autoFollowupEnabled 
+          ? "bg-gradient-to-br from-emerald-500/10 via-[#FAF8F5] to-[#F5F2EB] dark:from-emerald-950/20 dark:via-[#15171C] dark:to-[#121418] border-emerald-500/30 dark:border-emerald-700/40"
+          : "bg-[#FBF9F4] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930]"
+      )}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E6E2D8]/80 dark:border-[#262930] pb-4">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className={cn(
+              "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-xs",
+              autoFollowupEnabled 
+                ? "bg-[#164E43] text-white shadow-emerald-900/20" 
+                : "bg-gray-200 dark:bg-zinc-800 text-gray-500 dark:text-zinc-400"
+            )}>
+              {autoFollowupEnabled ? <Sparkles className="w-6 h-6 animate-pulse" /> : <Play className="w-6 h-6 opacity-40" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className={cn(
+                  "w-3 h-3 rounded-full shrink-0",
+                  autoFollowupEnabled ? "bg-emerald-500 animate-ping" : "bg-gray-400"
+                )} />
+                <h2 className="text-base sm:text-lg font-extrabold text-gray-900 dark:text-white">
+                  {autoFollowupEnabled ? 'ফলো-আপ সক্রিয় ও রানিং (RUNNING)' : 'ফলো-আপ বর্তমানে বন্ধ আছে (PAUSED)'}
+                </h2>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-xs font-bold px-2.5 py-0.5",
+                    autoFollowupEnabled 
+                      ? "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-700" 
+                      : "bg-gray-100 text-gray-600 border-gray-300 dark:bg-zinc-800 dark:text-zinc-400"
+                  )}
+                >
+                  {autoFollowupEnabled ? 'LIVE & ACTIVE' : 'STOPPED'}
+                </Badge>
+              </div>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 mt-1">
+                {autoFollowupEnabled 
+                  ? `${variants.filter(v => v.isActive).length}টি ভ্যারিয়েশন রোটেট করে নতুন কাস্টমার ও লিডদের কাছে নির্ধারিত সময়ে অটো মেসেজ পাঠানো হচ্ছে।` 
+                  : 'সুইচ অন করে নিচে "Save" বাটনে ক্লিক করলে স্বয়ংক্রিয়ভাবে ফলো-আপ মেসেজ পাঠানো শুরু হবে।'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <Button
+              type="button"
+              onClick={() => handleToggle('auto_followup', autoFollowupEnabled)}
+              className={cn(
+                "h-9 px-4 rounded-xl font-bold text-xs shadow-sm transition-all",
+                autoFollowupEnabled 
+                  ? "bg-amber-600 hover:bg-amber-500 text-white" 
+                  : "bg-[#164E43] hover:bg-[#124238] text-white"
+              )}
+            >
+              {autoFollowupEnabled ? 'পজ করুন (Pause)' : '▶️ চালু করুন (Turn ON)'}
+            </Button>
+            <Link href="/whatsapp">
+              <Button variant="outline" size="sm" className="h-9 px-3 text-xs border-[#E6E2D8] dark:border-[#262930] text-gray-700 dark:text-gray-300">
+                📜 সেন্ট লগস
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        {/* Live Follow-up Metrics Strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
+          <div className="p-3 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930]">
+            <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 block">সক্রিয় ভ্যারিয়েশন</span>
+            <span className="text-base sm:text-lg font-extrabold text-emerald-700 dark:text-emerald-400">
+              {variants.filter(v => v.isActive).length} / {variants.length} টি
+            </span>
+            <span className="text-[10px] text-gray-500 block truncate">A/B রোটেশনে সক্রিয়</span>
+          </div>
+
+          <div className="p-3 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930]">
+            <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 block">বিরতি ও ব্যাচ</span>
+            <span className="text-base sm:text-lg font-extrabold text-gray-900 dark:text-white">
+              {formSettings.min_delay_minutes}-{formSettings.max_delay_minutes} মি.
+            </span>
+            <span className="text-[10px] text-gray-500 block truncate">ব্যাচ {formSettings.min_batch_people}-{formSettings.max_batch_people} জন</span>
+          </div>
+
+          <div className="p-3 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930]">
+            <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 block">আজ পাঠানো হয়েছে</span>
+            <span className="text-base sm:text-lg font-extrabold text-emerald-700 dark:text-emerald-400">
+              {stats.todaySent ?? 0} টি
+            </span>
+            <span className="text-[10px] text-gray-500 block truncate">রিপ্লাই: {stats.todayReplies ?? 0} টি</span>
+          </div>
+
+          <div className="p-3 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930]">
+            <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 block">সক্রিয় লিড পাইপলাইন</span>
+            <span className="text-base sm:text-lg font-extrabold text-blue-600 dark:text-blue-400">
+              {stats.activeLeads ?? leads.length} জন
+            </span>
+            <span className="text-[10px] text-gray-500 block truncate">ম্যানুয়াল চ্যাট: {stats.manualTakeover ?? 0} জন</span>
+          </div>
+        </div>
+
+        {/* Where to Monitor / Help Banner */}
+        <div className="mt-4 p-3.5 rounded-xl bg-[#EDE8DE]/60 dark:bg-[#1A1D23] border border-[#E6E2D8] dark:border-[#262930] flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">
+          <div className="flex items-start gap-2 text-gray-700 dark:text-gray-300">
+            <span className="font-bold text-emerald-700 dark:text-emerald-400 shrink-0">💡 কীভাবে মেসেজ মনিটর করবেন?</span>
+            <span>
+              ১. আপনার কানেক্টেড <strong>WhatsApp অ্যাপে</strong> প্রতিটি কাস্টমার চ্যাটে অটোমেটিক মেসেজ ও মিডিয়া চলে যায়।<br className="hidden sm:inline" />
+              ২. মূল <strong><Link href="/whatsapp" className="underline text-emerald-700 dark:text-emerald-400 font-bold">WhatsApp ড্যাশবোর্ডের</Link> Message Logs</strong> এ প্রতিটি পাঠানো মেসেজের ডেলিভারি রেকর্ড জমা হয়।<br className="hidden sm:inline" />
+              ৩. নিচে <strong>লিড ট্র্যাকিং টেবিলে</strong> প্রতিটি কাস্টমারের বর্তমান ধাপ (Step 1, Step 2) লাইভ আপডেট থাকে।
+            </span>
+          </div>
+          <Link href="/whatsapp" className="shrink-0 self-end md:self-auto">
+            <Button variant="outline" size="sm" className="h-8 text-xs font-bold border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30">
+              মেসেজ লগ দেখুন ➔
+            </Button>
+          </Link>
+        </div>
+      </div>
+
       {/* WhatsApp Number Choice System */}
       <div className="p-4 rounded-2xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
         <div className="flex items-center gap-3">
@@ -485,6 +719,7 @@ export default function NewFollowupPage() {
           </select>
         </div>
       </div>
+
       {/* 2. Message Variations Section (A/B Switching & Rotation) */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
@@ -493,18 +728,47 @@ export default function NewFollowupPage() {
               <Layers className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
               Follow-up Message Variations
             </h3>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+              মোট {variants.length}টি ভ্যারিয়েশন সংরক্ষিত ({variants.filter(v => v.isActive).length}টি রোটেশনে সক্রিয়)
+            </p>
           </div>
 
-          <Button
-            type="button"
-            onClick={handleAddVariant}
-            variant="outline"
-            size="sm"
-            className="border-emerald-500/40 text-emerald-700 hover:bg-green-600/10 text-xs flex items-center gap-1.5 self-start sm:self-auto"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Variation</span>
-          </Button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {variants.length > 0 && (
+              <>
+                <Button
+                  type="button"
+                  onClick={() => toggleAllVariants(true)}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-8 px-2.5 border-[#E6E2D8] dark:border-[#262930] text-gray-700 dark:text-gray-300 hover:bg-[#EDE8DE] dark:hover:bg-[#1F2228]"
+                  title="Expand all variations for editing"
+                >
+                  সবগুলো খুলুন (Expand All)
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => toggleAllVariants(false)}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-8 px-2.5 border-[#E6E2D8] dark:border-[#262930] text-gray-700 dark:text-gray-300 hover:bg-[#EDE8DE] dark:hover:bg-[#1F2228]"
+                  title="Collapse all variations"
+                >
+                  সংকোচন (Collapse)
+                </Button>
+              </>
+            )}
+            <Button
+              type="button"
+              onClick={handleAddVariant}
+              variant="outline"
+              size="sm"
+              className="border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-green-600/10 text-xs h-8 flex items-center gap-1.5 font-bold"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Variation</span>
+            </Button>
+          </div>
         </div>
 
         {variants.length === 0 ? (

@@ -21,7 +21,14 @@
     "total_duration_days": 30,
     "started_date": "2026-10-04"
   },
-  "variants": [],
+  "variants": [
+    {
+      "name": "Test Var",
+      "id": "var_test",
+      "welcomeMessage": "Hello test",
+      "isActive": true
+    }
+  ],
   "leads": [
     {
       "id": "lead_1",

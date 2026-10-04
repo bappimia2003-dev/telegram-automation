@@ -7,6 +7,7 @@ import {
   addMediaItem,
   deleteMediaItem,
   updateFollowupVariants,
+  saveFollowupAll,
   startCampaign,
   stopCampaign,
 } from '@/lib/followupStore';
@@ -106,6 +107,14 @@ export async function POST(request: Request) {
       const { phone, status, notes } = body;
       const leads = await updateLeadStatus(phone, status, notes);
       return NextResponse.json({ ok: true, leads });
+    }
+
+    if (action === 'save_all' || action === 'save_followup_all') {
+      const result = await saveFollowupAll({
+        variants: body.variants,
+        settings: body.settings,
+      });
+      return NextResponse.json({ ok: true, ...result });
     }
 
     if (action === 'update_variants') {
