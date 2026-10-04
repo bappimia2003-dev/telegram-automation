@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import { getAllApiKeys } from './db';
 import { WaCampaignVariant } from './whatsappTypes';
-import { getSupabase } from './supabase';
 
 export interface FollowupSettings {
   auto_followup: boolean;
@@ -161,72 +160,6 @@ function pruneRolling30DayStore(store: FollowupStoreData): boolean {
   return store.leads.length !== initialLeads;
 }
 
-const SYSTEM_STORE_CAMPAIGN_ID = 'system_followup_store';
-
-async function syncToSupabase(store: FollowupStoreData) {
-  try {
-    const supabase = getSupabase();
-    if (!supabase) return;
-
-    await supabase.from('wa_campaigns').upsert({
-      id: SYSTEM_STORE_CAMPAIGN_ID,
-      name: 'System Follow-up Configuration',
-      is_active: Boolean(store.settings.auto_followup),
-      description: JSON.stringify({
-        settings: store.settings,
-        variants: store.variants,
-        leads: store.leads,
-        campaign: store.campaign,
-      }),
-      updated_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error('Error syncing followup store to Supabase:', err);
-  }
-}
-
-async function loadFromSupabase(store: FollowupStoreData): Promise<FollowupStoreData> {
-  try {
-    const supabase = getSupabase();
-    if (!supabase) return store;
-
-    const { data, error } = await supabase
-      .from('wa_campaigns')
-      .select('*')
-      .eq('id', SYSTEM_STORE_CAMPAIGN_ID)
-      .maybeSingle();
-
-    if (error || !data) return store;
-
-    if (data.description) {
-      try {
-        const parsed = JSON.parse(data.description);
-        if (parsed.settings && typeof parsed.settings === 'object') {
-          store.settings = { ...store.settings, ...parsed.settings };
-        }
-        if (data.is_active !== undefined && data.is_active !== null) {
-          store.settings.auto_followup = Boolean(data.is_active);
-        }
-        if (Array.isArray(parsed.variants)) {
-          store.variants = parsed.variants;
-        }
-        if (Array.isArray(parsed.leads) && parsed.leads.length > 0) {
-          store.leads = parsed.leads;
-        }
-        if (parsed.campaign !== undefined) {
-          store.campaign = parsed.campaign;
-        }
-      } catch (e) {
-        // ignore parse error
-      }
-    } else if (data.is_active !== undefined && data.is_active !== null) {
-      store.settings.auto_followup = Boolean(data.is_active);
-    }
-  } catch (err) {
-    console.error('Error loading followup store from Supabase:', err);
-  }
-  return store;
-}
 
 function readStore(): FollowupStoreData {
   try {
@@ -310,8 +243,7 @@ export async function getFollowupData() {
     ];
   }
 
-  let store = readStore();
-  store = await loadFromSupabase(store);
+  const store = readStore();
 
   // Ensure default assigned account if missing
   if (!store.settings.assigned_account_id) {
@@ -351,17 +283,14 @@ export async function getFollowupData() {
 }
 
 export async function updateFollowupVariants(variants: WaCampaignVariant[]) {
-  let store = readStore();
-  store = await loadFromSupabase(store);
+  const store = readStore();
   store.variants = variants;
   writeStore(store);
-  await syncToSupabase(store);
   return store.variants;
 }
 
 export async function updateFollowupSetting(key: string, value: any) {
-  let store = readStore();
-  store = await loadFromSupabase(store);
+  const store = readStore();
   (store.settings as any)[key] = value;
 
   if (key === 'auto_followup' && value === true) {
@@ -378,7 +307,6 @@ export async function updateFollowupSetting(key: string, value: any) {
   }
 
   writeStore(store);
-  await syncToSupabase(store);
 
   // Sync to background WhatsApp Engine if reachable
   try {
@@ -395,17 +323,14 @@ export async function updateFollowupSetting(key: string, value: any) {
 }
 
 export async function updateAllFollowupSettings(newSettings: Partial<FollowupSettings>) {
-  let store = readStore();
-  store = await loadFromSupabase(store);
+  const store = readStore();
   store.settings = { ...store.settings, ...newSettings };
   writeStore(store);
-  await syncToSupabase(store);
   return store.settings;
 }
 
 export async function addMediaItem(item: { filename: string; filepath: string; media_type: 'audio' | 'image' | 'text'; category?: string }) {
-  let store = readStore();
-  store = await loadFromSupabase(store);
+  const store = readStore();
   const newItem: FollowupMedia = {
     id: `m_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     filename: item.filename,
@@ -418,35 +343,29 @@ export async function addMediaItem(item: { filename: string; filepath: string; m
 
   store.media.unshift(newItem);
   writeStore(store);
-  await syncToSupabase(store);
   return newItem;
 }
 
 export async function deleteMediaItem(id: string) {
-  let store = readStore();
-  store = await loadFromSupabase(store);
+  const store = readStore();
   store.media = store.media.filter((m) => m.id !== id);
   writeStore(store);
-  await syncToSupabase(store);
   return store.media;
 }
 
 export async function updateLeadStatus(phone: string, status: string, notes = '') {
-  let store = readStore();
-  store = await loadFromSupabase(store);
+  const store = readStore();
   const lead = store.leads.find((l) => l.phone === phone);
   if (lead) {
     lead.status = status as any;
     if (notes) lead.notes = notes;
     writeStore(store);
-    await syncToSupabase(store);
   }
   return store.leads;
 }
 
 export async function startCampaign(config: any) {
-  let store = readStore();
-  store = await loadFromSupabase(store);
+  const store = readStore();
   store.campaign = {
     id: `camp_${Date.now()}`,
     name: config.name || 'Special Offer',
@@ -461,17 +380,14 @@ export async function startCampaign(config: any) {
     startedAt: new Date().toISOString(),
   };
   writeStore(store);
-  await syncToSupabase(store);
   return { ok: true, campaign: store.campaign };
 }
 
 export async function stopCampaign() {
-  let store = readStore();
-  store = await loadFromSupabase(store);
+  const store = readStore();
   if (store.campaign) {
     store.campaign.status = 'stopped';
     writeStore(store);
-    await syncToSupabase(store);
   }
   return { ok: true };
 }
