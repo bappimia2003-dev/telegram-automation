@@ -57,11 +57,19 @@ async function sendTextMessage(sock, jid, text) {
 }
 async function sendImageMessage(sock, jid, imageSource, caption) {
     const buffer = await getMediaBuffer(imageSource);
-    const payload = { image: buffer };
+    const cleanUrl = imageSource.split('?')[0].toLowerCase();
+    let mimetype = 'image/jpeg';
+    if (cleanUrl.endsWith('.png') || imageSource.startsWith('data:image/png'))
+        mimetype = 'image/png';
+    else if (cleanUrl.endsWith('.webp') || imageSource.startsWith('data:image/webp'))
+        mimetype = 'image/webp';
+    else if (cleanUrl.endsWith('.gif') || imageSource.startsWith('data:image/gif'))
+        mimetype = 'image/gif';
+    const payload = { image: buffer, mimetype };
     if (caption)
         payload.caption = caption;
     await sock.sendMessage(jid, payload);
-    (0, utils_js_1.log)('SENDER', `Sent image to ${jid}`);
+    (0, utils_js_1.log)('SENDER', `Sent image (${(buffer.length / 1024).toFixed(1)} KB, ${mimetype}) to ${jid}`);
 }
 async function sendVideoMessage(sock, jid, videoSource, caption) {
     const buffer = await getMediaBuffer(videoSource);

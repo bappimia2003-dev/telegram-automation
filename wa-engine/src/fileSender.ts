@@ -55,10 +55,16 @@ export async function sendTextMessage(sock: any, jid: string, text: string): Pro
 
 export async function sendImageMessage(sock: any, jid: string, imageSource: string, caption?: string): Promise<void> {
   const buffer = await getMediaBuffer(imageSource);
-  const payload: any = { image: buffer };
+  const cleanUrl = imageSource.split('?')[0].toLowerCase();
+  let mimetype = 'image/jpeg';
+  if (cleanUrl.endsWith('.png') || imageSource.startsWith('data:image/png')) mimetype = 'image/png';
+  else if (cleanUrl.endsWith('.webp') || imageSource.startsWith('data:image/webp')) mimetype = 'image/webp';
+  else if (cleanUrl.endsWith('.gif') || imageSource.startsWith('data:image/gif')) mimetype = 'image/gif';
+
+  const payload: any = { image: buffer, mimetype };
   if (caption) payload.caption = caption;
   await sock.sendMessage(jid, payload);
-  log('SENDER', `Sent image to ${jid}`);
+  log('SENDER', `Sent image (${(buffer.length / 1024).toFixed(1)} KB, ${mimetype}) to ${jid}`);
 }
 
 export async function sendVideoMessage(sock: any, jid: string, videoSource: string, caption?: string): Promise<void> {
