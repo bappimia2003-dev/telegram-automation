@@ -51,18 +51,18 @@ app.post('/upload', async (req, res) => {
 app.get('/health', (_req, res) => {
     res.json({
         ok: true,
-        version: '2.3.0',
-        buildDate: '2026-10-03T10:30:00Z',
-        features: ['random-ms-delay-3-4s', 'variation-rotation-ab'],
+        version: '2.4.0',
+        buildDate: '2026-10-04T06:00:00Z',
+        features: ['random-ms-delay-3-4s', 'variation-rotation-ab', 'followup-scheduler'],
         uptime: Math.floor(process.uptime()),
         timestamp: new Date().toISOString(),
     });
 });
 app.get('/version', (_req, res) => {
     res.json({
-        version: '2.3.0',
-        buildDate: '2026-10-03T10:30:00Z',
-        features: ['random-ms-delay-3-4s', 'variation-rotation-ab'],
+        version: '2.4.0',
+        buildDate: '2026-10-04T06:00:00Z',
+        features: ['random-ms-delay-3-4s', 'variation-rotation-ab', 'followup-scheduler'],
         uptime: Math.floor(process.uptime()),
     });
 });
