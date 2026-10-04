@@ -384,6 +384,35 @@ export async function getCampaignsWithFollowup(): Promise<WaCampaign[]> {
   );
 }
 
+// ─── Follow-up column migration ───────────────────────────────────────────────
+// Track whether the followup_sent_at column exists. We'll try once on startup.
+let followupColumnExists: boolean | null = null;
+
+// In-memory fallback: track which contacted_user IDs have already been sent follow-ups
+// This is used when the DB column doesn't exist yet.
+const inMemoryFollowupSent = new Set<string>();
+
+export async function ensureFollowupColumn(): Promise<void> {
+  if (!supabase) return;
+  try {
+    // Try a small query that uses followup_sent_at — if it errors, column doesn't exist
+    const { error } = await supabase
+      .from('wa_contacted_users')
+      .select('followup_sent_at')
+      .limit(1);
+    if (!error) {
+      followupColumnExists = true;
+      log('DB', '✅ followup_sent_at column exists in wa_contacted_users.');
+    } else {
+      followupColumnExists = false;
+      log('DB', '⚠️ followup_sent_at column not found. Using in-memory tracking as fallback.');
+      log('DB', '👉 Run this SQL in Supabase Dashboard: ALTER TABLE wa_contacted_users ADD COLUMN IF NOT EXISTS followup_sent_at TIMESTAMPTZ DEFAULT NULL;');
+    }
+  } catch (e: any) {
+    followupColumnExists = false;
+  }
+}
+
 /**
  * Get wa_contacted_users rows for a campaign that have NOT yet received a follow-up
  * (followup_sent_at IS NULL) and were contacted at least `delayMs` milliseconds ago.
@@ -394,17 +423,38 @@ export async function getPendingFollowupContacts(
 ): Promise<{ id: string; phoneNumber: string; contactName: string; sentAt: string }[]> {
   if (!supabase) return [];
   try {
-    // Fetch all contacted users for this campaign that haven't had followup sent yet
-    const { data, error } = await supabase
-      .from('wa_contacted_users')
-      .select('id, phone_number, contact_name, sent_at, followup_sent_at')
-      .eq('campaign_id', campaignId)
-      .is('followup_sent_at', null)
-      .eq('status', 'sent');
+    let data: any[] | null = null;
 
-    if (error) {
-      errLog('DB', 'Error fetching pending followup contacts:', error.message);
-      return [];
+    if (followupColumnExists === true) {
+      // Optimised query: filter by followup_sent_at IS NULL in DB
+      const res = await supabase
+        .from('wa_contacted_users')
+        .select('id, phone_number, contact_name, sent_at, followup_sent_at')
+        .eq('campaign_id', campaignId)
+        .is('followup_sent_at', null)
+        .eq('status', 'sent');
+      if (res.error) {
+        // Column may have been dropped — fall back
+        followupColumnExists = false;
+        data = null;
+      } else {
+        data = res.data;
+      }
+    }
+
+    if (data === null) {
+      // Fallback: select without followup_sent_at filter, filter in-memory
+      const res = await supabase
+        .from('wa_contacted_users')
+        .select('id, phone_number, contact_name, sent_at')
+        .eq('campaign_id', campaignId)
+        .eq('status', 'sent');
+      if (res.error) {
+        errLog('DB', 'Error fetching pending followup contacts (fallback):', res.error.message);
+        return [];
+      }
+      // Filter out already-sent in memory
+      data = (res.data || []).filter((row: any) => !inMemoryFollowupSent.has(row.id));
     }
 
     const now = Date.now();
@@ -429,7 +479,10 @@ export async function getPendingFollowupContacts(
  * Mark a wa_contacted_users row as having received a follow-up message.
  */
 export async function markFollowupSent(contactedUserId: string): Promise<void> {
-  if (!supabase) return;
+  // Always track in-memory as well (covers both cases)
+  inMemoryFollowupSent.add(contactedUserId);
+
+  if (!supabase || followupColumnExists !== true) return;
   try {
     const { error } = await supabase
       .from('wa_contacted_users')

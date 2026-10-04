@@ -239,6 +239,8 @@ async function getActiveSock(preferAccountId) {
 function startFollowupScheduler() {
     const INTERVAL_MS = 60 * 1000; // 60 seconds
     (0, utils_js_1.log)('FOLLOWUP', '🕐 Follow-up scheduler started. Checking every 60 seconds...');
+    // Check if the followup_sent_at column exists (auto-migrate hint)
+    (0, db_js_1.ensureFollowupColumn)().catch(() => { });
     const runCycle = async () => {
         try {
             const campaigns = await (0, db_js_1.getCampaignsWithFollowup)();

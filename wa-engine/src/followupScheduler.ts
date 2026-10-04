@@ -11,7 +11,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { getCampaignsWithFollowup, getPendingFollowupContacts, markFollowupSent, addMessageLog } from './db.js';
+import { getCampaignsWithFollowup, getPendingFollowupContacts, markFollowupSent, addMessageLog, ensureFollowupColumn } from './db.js';
 import {
   sendTextMessage,
   sendImageMessage,
@@ -254,6 +254,9 @@ export function startFollowupScheduler(): void {
   const INTERVAL_MS = 60 * 1000; // 60 seconds
 
   log('FOLLOWUP', '🕐 Follow-up scheduler started. Checking every 60 seconds...');
+
+  // Check if the followup_sent_at column exists (auto-migrate hint)
+  ensureFollowupColumn().catch(() => {});
 
   const runCycle = async () => {
     try {
