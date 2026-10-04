@@ -1,0 +1,90 @@
+{
+  "settings": {
+    "auto_followup": true,
+    "ai_brain": true,
+    "antiban": true,
+    "auto_cleanup": true,
+    "gender_detection": true,
+    "assigned_account_id": "acc_4929c1a7",
+    "assigned_account_phone": "8801830086837",
+    "assigned_account_name": "gemini",
+    "gemini_api_key": "",
+    "working_hours_start": "09:00",
+    "working_hours_end": "22:00",
+    "max_daily_messages": 30,
+    "rolling_days": 30,
+    "min_delay_minutes": 45,
+    "max_delay_minutes": 90,
+    "min_batch_people": 3,
+    "max_batch_people": 5,
+    "duration_hours": 6,
+    "total_duration_days": 30,
+    "started_date": "2026-10-04"
+  },
+  "variants": [],
+  "leads": [
+    {
+      "id": "lead_1",
+      "phone": "8801711223344",
+      "name": "রাহেলা আপু",
+      "gender": "apu",
+      "product": "washroom rack",
+      "status": "manual_takeover",
+      "promise_date": null,
+      "follow_up_step": 1,
+      "last_sent_at": "2026-10-04 09:15:00",
+      "notes": "Customer replied, manual chat active"
+    },
+    {
+      "id": "lead_2",
+      "phone": "8801812345678",
+      "name": "তানভীর ভাইয়া",
+      "gender": "vai",
+      "product": "gemini",
+      "status": "in_followup",
+      "promise_date": null,
+      "follow_up_step": 2,
+      "last_sent_at": "2026-10-04 08:30:00",
+      "notes": "Sent voice note follow-up"
+    },
+    {
+      "id": "lead_3",
+      "phone": "8801919876543",
+      "name": "সুমাইয়া",
+      "gender": "apu",
+      "product": "washroom rack",
+      "status": "promised",
+      "promise_date": "2026-10-09",
+      "follow_up_step": 1,
+      "last_sent_at": "2026-10-03 14:00:00",
+      "notes": "Promised to buy on Friday"
+    }
+  ],
+  "media": [
+    {
+      "id": "m_1",
+      "filename": "step0_intro.txt",
+      "filepath": "/media/texts/step0_intro.txt",
+      "media_type": "text",
+      "category": "intro",
+      "used_count": 14
+    },
+    {
+      "id": "m_2",
+      "filename": "step1_check.txt",
+      "filepath": "/media/texts/step1_check.txt",
+      "media_type": "text",
+      "category": "check",
+      "used_count": 8
+    },
+    {
+      "id": "m_3",
+      "filename": "step2_soft.txt",
+      "filepath": "/media/texts/step2_soft.txt",
+      "media_type": "text",
+      "category": "soft_text",
+      "used_count": 5
+    }
+  ],
+  "campaign": null
+}

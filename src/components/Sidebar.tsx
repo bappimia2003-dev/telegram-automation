@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { LayoutDashboard, Bot, Key, LogOut, Menu, X, MessageCircle, PlusCircle, Settings } from "lucide-react"
+import { LayoutDashboard, Bot, Key, LogOut, Menu, X, MessageCircle, PlusCircle, Settings, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "./ui/button"
 
@@ -15,6 +15,7 @@ const telegramNavItems = [
 
 const waNavItems = [
   { href: "/whatsapp", icon: MessageCircle, label: "WhatsApp" },
+  { href: "/whatsapp/new-followup", icon: Sparkles, label: "New Follow-up" },
   { href: "/whatsapp/campaigns/new", icon: PlusCircle, label: "New Campaign" },
 ]
 

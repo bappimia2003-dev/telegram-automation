@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp Smart Follow-up & Campaign Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="navbar">
+    <div class="brand">
+      <div class="logo-icon">💬</div>
+      <div>
+        <h1>WhatsApp Smart Follow-up</h1>
+        <span class="subtext">Auto Follow-up • Gemini AI • Anti-ban • Offer Campaign</span>
+      </div>
+    </div>
+
+    <div class="nav-right">
+      <div id="waStatusBadge" class="status-badge disconnected">
+        <span class="dot"></span>
+        <span id="waStatusText">Connecting...</span>
+      </div>
+      <button id="btnConnectWA" class="btn btn-primary btn-sm">WhatsApp কানেক্ট</button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="container">
+
+    <!-- QR Code Scan Modal (if disconnected or qr_ready) -->
+    <section id="qrSection" class="card qr-box" style="display: none;">
+      <h2>📱 WhatsApp QR কোড স্ক্যান করুন</h2>
+      <p>আপনার ফোনের WhatsApp থেকে <strong>Linked Devices -> Link a Device</strong> এ গিয়ে ক্যামেরা দিয়ে নিচের কোডটি স্ক্যান করুন:</p>
+      <div class="qr-wrapper">
+        <img id="qrImage" src="" alt="WhatsApp QR Code">
+      </div>
+    </section>
+
+    <!-- Quick Stats Cards -->
+    <section class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-title">অ্যাক্টিভ লিডস</div>
+        <div id="statActiveLeads" class="stat-value">0</div>
+        <div class="stat-desc">ফলো-আপ চলছে</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">আজকে পাঠানো হয়েছে</div>
+        <div id="statTodaySent" class="stat-value text-blue">0</div>
+        <div class="stat-desc">অটো ও ক্যাম্পেইন মিলিয়ে</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">কাস্টমার রিপ্লাই</div>
+        <div id="statTodayReplies" class="stat-value text-green">0</div>
+        <div class="stat-desc">আজকের উত্তর</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">ম্যানুয়াল টেকওভার</div>
+        <div id="statManualTakeover" class="stat-value text-orange">0</div>
+        <div class="stat-desc">মানুষ চ্যাট করছে (AI মিউট)</div>
+      </div>
+    </section>
+
+    <!-- 2 Columns: Controls & Campaign -->
+    <div class="grid-2col">
+
+      <!-- Column 1: Feature Toggles & Settings -->
+      <section class="card">
+        <h2>⚙️ মডিউল কন্ট্রোল (ON / OFF বাটন)</h2>
+        <div class="toggle-list">
+
+          <div class="toggle-item">
+            <div>
+              <strong>অটো ফলো-আপ (Auto Follow-up)</strong>
+              <p>নতুন কাস্টমারকে ২ মি, ৩ ঘণ্টা, ডে ১ ও ডে ২ এ মেসেজ পাঠাবে</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="toggle_auto_followup">
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="toggle-item">
+            <div>
+              <strong>Gemini AI ব্রেইন (Smart Variation)</strong>
+              <p>প্রম্পট অনুযায়ী প্রতিবার ন্যাচারাল বাংলায় বদলে লিখবে</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="toggle_ai_brain">
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="toggle-item">
+            <div>
+              <strong>অ্যান্টি-ব্যান প্রোটেকশন (Anti-Ban Guard)</strong>
+              <p>টাইপিং ইন্ডিকেটর ও র‍্যান্ডম হিউম্যান ডিলে বজায় রাখবে</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="toggle_antiban">
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="toggle-item">
+            <div>
+              <strong>রোলিং ৩০-দিনের ডেটা ক্লিনআপ</strong>
+              <p>প্রতিদিন পুরনো ১ দিনের ডেটা মুছে ৩০ দিন ফ্রেশ রাখবে</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="toggle_auto_cleanup">
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="toggle-item">
+            <div>
+              <strong>জেন্ডার ডিটেকশন (আপু / ভাইয়া / আপনি)</strong>
+              <p>নাম ও কথা বুঝে সম্মানসূচক সম্বোধন নির্ধারণ করবে</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="toggle_gender_detection">
+              <span class="slider"></span>
+            </label>
+          </div>
+
+        </div>
+
+        <hr class="divider">
+
+        <h3>🔑 Gemini API Key & সেটিংস</h3>
+        <div class="form-group">
+          <label>Google AI Studio API Key:</label>
+          <div class="input-with-btn">
+            <input type="password" id="inputApiKey" placeholder="AIzaSy...">
+            <button id="btnSaveKey" class="btn btn-secondary">সেভ করুন</button>
+          </div>
+        </div>
+
+        <div class="grid-2col-compact">
+          <div class="form-group">
+            <label>কাজের সময় (শুরু):</label>
+            <input type="time" id="inputStartHour" value="09:00">
+          </div>
+          <div class="form-group">
+            <label>কাজের সময় (শেষ):</label>
+            <input type="time" id="inputEndHour" value="22:00">
+          </div>
+        </div>
+
+        <div class="grid-2col-compact">
+          <div class="form-group">
+            <label>দৈনিক সর্বোচ্চ মেসেজ:</label>
+            <input type="number" id="inputDailyMax" value="30">
+          </div>
+          <div class="form-group">
+            <label>রোলিং ডেটা উইন্ডো (দিন):</label>
+            <input type="number" id="inputRollingDays" value="30">
+          </div>
+        </div>
+        <button id="btnSaveLimits" class="btn btn-secondary btn-full">কাজের সময় ও লিমিট আপডেট করুন</button>
+      </section>
+
+      <!-- Column 2: Offer Follow-up Campaign Panel -->
+      <section class="card">
+        <h2>🎯 অফার ফলো-আপ ক্যাম্পেইন প্যানেল</h2>
+        <p class="section-desc">র‍্যান্ডম বিরতিতে নির্দিষ্ট সংখ্যক মানুষকে স্পেশাল অফার পাঠাতে এই প্যানেল ব্যবহার করুন।</p>
+
+        <div id="campaignStatusBanner" class="campaign-banner stopped">
+          <div class="status-indicator"></div>
+          <div>
+            <strong id="campaignStatusTitle">ক্যাম্পেইন বন্ধ আছে</strong>
+            <p id="campaignStatusSub">নতুন ক্যাম্পেইন শুরু করতে নিচের ফর্ম পূরণ করুন</p>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>ক্যাম্পেইন এর নাম:</label>
+          <input type="text" id="campaignName" placeholder="যেমন: Rack Flash Sale Oct">
+        </div>
+
+        <div class="form-group">
+          <label>📁 ক্যাম্পেইনে পাঠানোর ফাইল সিলেক্ট করুন:</label>
+          <div id="campaignFilesList" class="file-picker-box">
+            <!-- Dynamically populated from media vault -->
+            <p class="text-muted">মিডিয়া লোড হচ্ছে...</p>
+          </div>
+        </div>
+
+        <div class="grid-2col-compact">
+          <div class="form-group">
+            <label>মিনিমাম ডিলে (মিনিট):</label>
+            <input type="number" id="campMinDelay" value="45">
+          </div>
+          <div class="form-group">
+            <label>ম্যাক্সিমাম ডিলে (মিনিট):</label>
+            <input type="number" id="campMaxDelay" value="90">
+          </div>
+        </div>
+
+        <div class="grid-2col-compact">
+          <div class="form-group">
+            <label>প্রতিবারে কতজন (মিন):</label>
+            <input type="number" id="campMinPeople" value="3">
+          </div>
+          <div class="form-group">
+            <label>প্রতিবারে কতজন (ম্যাক্স):</label>
+            <input type="number" id="campMaxPeople" value="5">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>মোট কত ঘণ্টা চলবে?</label>
+          <input type="number" id="campDuration" value="6" placeholder="যেমন: 6">
+        </div>
+
+        <div class="btn-group">
+          <button id="btnStartCampaign" class="btn btn-success btn-full">▶️ ক্যাম্পেইন শুরু করুন</button>
+          <button id="btnStopCampaign" class="btn btn-danger btn-full" style="display: none;">⏹️ ক্যাম্পেইন থামান</button>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Media Vault Section -->
+    <section class="card mt-20">
+      <div class="card-header">
+        <div>
+          <h2>📁 মিডিয়া ভল্ট (Media Vault)</h2>
+          <p class="section-desc">এখানে আপনার কণ্ঠের অডিও, প্রোডাক্টের ছবি ও টেক্সট টেমপ্লেট আপলোড করে রাখুন।</p>
+        </div>
+        <div>
+          <input type="file" id="mediaUploadInput" style="display: none;">
+          <button id="btnUploadMedia" class="btn btn-primary">+ নতুন ফাইল আপলোড</button>
+        </div>
+      </div>
+
+      <div id="mediaGrid" class="media-grid">
+        <!-- Dynamically rendered media cards -->
+      </div>
+    </section>
+
+    <!-- Leads Management & Conversation Table -->
+    <section class="card mt-20">
+      <div class="card-header">
+        <div>
+          <h2>👥 কাস্টমার ও লিড ট্র্যাকিং</h2>
+          <p class="section-desc">সকল কাস্টমারদের স্ট্যাটাস এবং ম্যানুয়াল টেকওভার লিস্ট</p>
+        </div>
+        <div class="filter-tabs">
+          <button class="tab active" data-filter="all">সবাই</button>
+          <button class="tab" data-filter="in_followup">ফলো-আপ চলছে</button>
+          <button class="tab text-orange" data-filter="manual_takeover">🚨 ম্যানুয়াল চ্যাট</button>
+          <button class="tab text-green" data-filter="promised">📅 তারিখ দেওয়া</button>
+          <button class="tab" data-filter="archived">আর্কাইভড</button>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="leads-table">
+          <thead>
+            <tr>
+              <th>ফোন নম্বর</th>
+              <th>নাম</th>
+              <th>সম্বোধন</th>
+              <th>স্ট্যাটাস</th>
+              <th>ফলো-আপ ধাপ</th>
+              <th>প্রমিজ ডেট</th>
+              <th>শেষ মেসেজ</th>
+              <th>অ্যাকশন</th>
+            </tr>
+          </thead>
+          <tbody id="leadsTableBody">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

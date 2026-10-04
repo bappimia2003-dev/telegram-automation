@@ -41,6 +41,9 @@ export interface WaCampaign {
   // WhatsApp Account Assignment
   accountId?: string; // 'all' or specific account id
 
+  // AI Automation & Intelligent Follow-up Configuration
+  followupConfig?: WaFollowupConfig;
+
   // Controls
   isActive: boolean;
   chatReplyEnabled: boolean;
@@ -51,6 +54,52 @@ export interface WaCampaign {
   // Timestamps
   createdAt: string;
   updatedAt: string;
+}
+
+export interface WaUnderstandingFile {
+  id: string;
+  name: string;
+  url: string;
+  size?: number;
+  type?: string;
+  snippet?: string;
+  uploadedAt: string;
+}
+
+export interface WaFollowupMediaFile {
+  id: string;
+  name: string;
+  url: string;
+  type: 'image' | 'audio' | 'video' | 'document';
+  size?: number;
+  uploadedAt: string;
+}
+
+export interface WaFollowupConfig {
+  aiEnabled: boolean;
+  aiApiKey?: string;
+  aiModel?: string;
+  aiSystemPrompt?: string;
+
+  // Understanding files for AI context (knowledge base)
+  understandingFiles?: WaUnderstandingFile[];
+  understandingText?: string;
+
+  // Timing & Schedule ("some time later follow up")
+  followupEnabled: boolean;
+  followupDelayValue?: number;
+  followupDelayUnit?: 'minutes' | 'hours' | 'days';
+  followupCondition?: 'no_reply' | 'unconfirmed' | 'always';
+  antiBanJitter?: boolean;
+
+  // Given follow-up message & multiple files
+  followupMessage?: string;
+  followupFiles?: WaFollowupMediaFile[];
+  followupImageUrl?: string;
+  followupVideoUrl?: string;
+  followupAudioUrl?: string;
+  followupDocumentUrl?: string;
+  followupDocumentName?: string;
 }
 
 export interface WaContactedUser {

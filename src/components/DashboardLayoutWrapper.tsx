@@ -36,7 +36,7 @@ export function DashboardLayoutWrapper({ children }: { children: React.ReactNode
           </header>
 
           <main className="flex-1 p-4 sm:p-6 md:p-8 w-full">
-            <div className="max-w-6xl mx-auto w-full">
+            <div className="max-w-[1700px] mx-auto w-full">
               {children}
             </div>
           </main>

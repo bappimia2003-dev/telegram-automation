@@ -36,6 +36,7 @@ export async function POST(request: Request) {
       documentUrl: body.documentUrl || '',
       documentName: body.documentName || '',
       variants: Array.isArray(body.variants) ? body.variants : [],
+      followupConfig: body.followupConfig || undefined,
       sendOrder: body.sendOrder || 'message,image,video,audio,document',
       delayBetweenSends: Number(body.delayBetweenSends) || 3,
       isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,

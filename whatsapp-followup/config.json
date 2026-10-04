@@ -1,0 +1,25 @@
+{
+  "port": 3006,
+  "gemini_api_key": "",
+  "working_hours": {
+    "start": "09:00",
+    "end": "22:00"
+  },
+  "max_daily_messages": 30,
+  "rolling_days": 30,
+  "toggles": {
+    "auto_followup": true,
+    "offer_campaign": false,
+    "ai_brain": true,
+    "antiban": true,
+    "auto_cleanup": true,
+    "gender_detection": true
+  },
+  "followup_timeline": {
+    "step1_minutes": 2,
+    "step2_hours": 3,
+    "step3_days": 1,
+    "step4_days": 2,
+    "max_steps": 4
+  }
+}

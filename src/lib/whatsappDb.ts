@@ -1,5 +1,15 @@
 import { getSupabase } from './supabase';
-import { WaCampaign, WaCampaignVariant, WaContactedUser, WaMessageLog, WaConnection, WaDashboardStats } from './whatsappTypes';
+import { 
+  WaCampaign, 
+  WaCampaignVariant, 
+  WaFollowupConfig,
+  WaUnderstandingFile,
+  WaFollowupMediaFile,
+  WaContactedUser, 
+  WaMessageLog, 
+  WaConnection, 
+  WaDashboardStats 
+} from './whatsappTypes';
 
 // =============================================
 // In-memory fallback (same pattern as db.ts)
@@ -21,10 +31,16 @@ const waMemory = {
 // =============================================
 // Row Mappers (snake_case <-> camelCase)
 // =============================================
-function parseDescriptionTags(rawDesc: string): { accountId: string; variants: WaCampaignVariant[]; description: string } {
+function parseDescriptionTags(rawDesc: string): { 
+  accountId: string; 
+  variants: WaCampaignVariant[]; 
+  followupConfig?: WaFollowupConfig;
+  description: string; 
+} {
   let description = rawDesc || '';
   let accountId = 'all';
   let variants: WaCampaignVariant[] = [];
+  let followupConfig: WaFollowupConfig | undefined = undefined;
 
   // Extract [acc:...]
   if (description.includes('[acc:')) {
@@ -58,11 +74,30 @@ function parseDescriptionTags(rawDesc: string): { accountId: string; variants: W
     }
   }
 
-  return { accountId, variants, description };
+  // Extract [fup:...]
+  if (description.includes('[fup:')) {
+    const start = description.indexOf('[fup:');
+    const end = description.indexOf(']', start);
+    if (end !== -1) {
+      const fupRaw = description.substring(start + 5, end);
+      try {
+        let decoded = fupRaw;
+        if (!fupRaw.startsWith('{')) {
+          decoded = Buffer.from(fupRaw, 'base64').toString('utf-8');
+        }
+        followupConfig = JSON.parse(decoded);
+      } catch (e) {
+        // ignore parse error
+      }
+      description = (description.substring(0, start) + description.substring(end + 1)).trim();
+    }
+  }
+
+  return { accountId, variants, followupConfig, description };
 }
 
 function rowToCampaign(r: any): WaCampaign {
-  const { accountId, variants: parsedVariants, description } = parseDescriptionTags(r.description || '');
+  const { accountId, variants: parsedVariants, followupConfig, description } = parseDescriptionTags(r.description || '');
 
   // If no variants array in description, construct default variant 1 from row data
   let variants = parsedVariants;
@@ -96,6 +131,7 @@ function rowToCampaign(r: any): WaCampaign {
     documentUrl: r.document_url || '',
     documentName: r.document_name || '',
     variants,
+    followupConfig: followupConfig || (r.followup_config ? (typeof r.followup_config === 'string' ? JSON.parse(r.followup_config) : r.followup_config) : undefined),
     sendOrder: r.send_order || 'message,image,video,audio,document',
     delayBetweenSends: r.delay_between_sends ?? 3,
     isActive: Boolean(r.is_active),
@@ -110,8 +146,12 @@ function campaignToRow(c: Partial<WaCampaign>): any {
   const row: any = {};
   if (c.id !== undefined) row.id = c.id;
   if (c.name !== undefined) row.name = c.name;
-  if (c.description !== undefined || c.accountId !== undefined || c.variants !== undefined) {
+  if (c.description !== undefined || c.accountId !== undefined || c.variants !== undefined || c.followupConfig !== undefined) {
     let desc = c.description || '';
+    if (c.followupConfig) {
+      const base64Fup = Buffer.from(JSON.stringify(c.followupConfig)).toString('base64');
+      desc = `[fup:${base64Fup}] ${desc}`;
+    }
     if (c.variants && c.variants.length > 0) {
       const base64Vars = Buffer.from(JSON.stringify(c.variants)).toString('base64');
       desc = `[vars:${base64Vars}] ${desc}`;
@@ -519,6 +559,13 @@ export async function deleteWaConnection(id: string): Promise<boolean> {
 // DASHBOARD STATS
 // =============================================
 export async function getWaDashboardStats(): Promise<WaDashboardStats> {
+  // Trigger rolling 30-day cleanup check
+  try {
+    performRolling30DayCleanup(30);
+  } catch {
+    // Non-blocking
+  }
+
   const campaigns = await getAllCampaigns();
   const connection = await getWaConnection();
   const uniqueUsers = await getUniqueContactedCount();
@@ -531,3 +578,47 @@ export async function getWaDashboardStats(): Promise<WaDashboardStats> {
     connectionStatus: connection?.status || 'disconnected',
   };
 }
+
+// =============================================
+// ROLLING 30-DAY CLEANUP
+// Preserves exactly 30 days of data across website WhatsApp tables.
+// Day 31 -> Day 1 data deleted, Day 31 added.
+// Day 32 -> Day 2 data deleted, Day 32 added.
+// =============================================
+export async function performRolling30DayCleanup(days = 30): Promise<{ deletedLogs: number; deletedContacted: number }> {
+  const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  let deletedLogs = 0;
+  let deletedContacted = 0;
+
+  // 1. In-memory cleanup
+  const prevLogsCount = waMemory.messageLogs.length;
+  waMemory.messageLogs = waMemory.messageLogs.filter((l) => l.sentAt >= cutoffDate);
+  deletedLogs += prevLogsCount - waMemory.messageLogs.length;
+
+  const prevContactedCount = waMemory.contactedUsers.length;
+  waMemory.contactedUsers = waMemory.contactedUsers.filter((u) => u.sentAt >= cutoffDate);
+  deletedContacted += prevContactedCount - waMemory.contactedUsers.length;
+
+  // 2. Database (Supabase) cleanup
+  const supabase = getSupabase();
+  if (supabase) {
+    try {
+      const { error: logErr } = await supabase
+        .from('wa_message_logs')
+        .delete()
+        .lt('sent_at', cutoffDate);
+      if (logErr) console.error('Error cleaning rolling wa_message_logs:', logErr.message);
+
+      const { error: userErr } = await supabase
+        .from('wa_contacted_users')
+        .delete()
+        .lt('sent_at', cutoffDate);
+      if (userErr) console.error('Error cleaning rolling wa_contacted_users:', userErr.message);
+    } catch (e: any) {
+      console.error('Error in performRolling30DayCleanup:', e.message);
+    }
+  }
+
+  return { deletedLogs, deletedContacted };
+}
+

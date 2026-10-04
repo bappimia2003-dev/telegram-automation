@@ -42,3 +42,7 @@ whatsapp-auth/
 wa-engine/whatsapp-auth/
 wa-engine/node_modules/
 wa-engine/.env
+whatsapp-followup/node_modules/
+whatsapp-followup/sessions/
+whatsapp-followup/database/*.db*
+whatsapp-followup/.env*
