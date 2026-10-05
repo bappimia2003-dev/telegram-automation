@@ -136,7 +136,7 @@ function replaceVariables(template, contactName, campaignName, gender) {
  * Resolve configuration for a specific step (1, 2, or 3) from fup.steps array,
  * with backwards-compatible fallback to top-level legacy fields.
  */
-function getStepConfig(fup, stepNumber, campaign) {
+function getStepConfig(fup, stepNumber, campaign, recipientPhone) {
     // 1. Primary: Match explicit step in fup.steps
     const step = fup.steps?.find((s) => s.stepNumber === stepNumber);
     if (step && (step.message || step.imageUrl || step.audioUrl || step.videoUrl || step.documentUrl)) {
@@ -182,7 +182,9 @@ function getStepConfig(fup, stepNumber, campaign) {
     // 2. Secondary: Check explicit followupVariants stored in followupConfig (never campaign auto-reply variants!)
     const fupVariants = (fup.followupVariants || []).filter((v) => v.isActive);
     if (fupVariants.length > 0) {
-        const variantIndex = (stepNumber - 1) % fupVariants.length;
+        const digits = (recipientPhone || '').replace(/\D/g, '');
+        const phoneSeed = digits.length >= 4 ? parseInt(digits.slice(-4), 10) : 0;
+        const variantIndex = (phoneSeed + stepNumber - 1) % fupVariants.length;
         const variant = fupVariants[variantIndex] || fupVariants[0];
         return {
             message: variant.welcomeMessage || '',
@@ -428,7 +430,9 @@ async function processCampaignFollowups(campaign) {
     if (!sock) {
         return; // No WhatsApp connection available for this account
     }
-    const contacts = await (0, db_js_1.getRecentContactedUsers)(campaign.id);
+    const minAgeDays = Number(fup.minContactAgeDays) || 4;
+    const maxDaysBack = Number(fup.totalDurationDays) || 30;
+    const contacts = await (0, db_js_1.getRecentContactedUsers)(campaign.id, minAgeDays, maxDaysBack);
     if (contacts.length === 0)
         return;
     const todayStr = new Date().toISOString().split('T')[0];
@@ -439,7 +443,16 @@ async function processCampaignFollowups(campaign) {
         }
         try {
             const initialContactMs = new Date(contact.sentAt).getTime();
-            const ageMinutes = (now - initialContactMs) / (60 * 1000);
+            const ageDays = (now - initialContactMs) / (24 * 60 * 60 * 1000);
+            // Strictly enforce: conversation must be at least minAgeDays old (default 4 days)
+            // Anyone who messaged within the last 4 days (0 to 3.99 days ago) is excluded
+            if (ageDays < minAgeDays) {
+                continue;
+            }
+            // Campaign duration limit check (e.g. max 30/60/90 days)
+            if (maxDaysBack > 0 && ageDays > maxDaysBack) {
+                continue;
+            }
             // Fetch message logs for this contact
             const logs = await (0, db_js_1.getContactLogs)(campaign.id, contact.phoneNumber);
             const state = analyzeContactFollowupState(logs, initialContactMs);
@@ -452,7 +465,7 @@ async function processCampaignFollowups(campaign) {
                     inFlightKeys.add(flightKey);
                     try {
                         (0, utils_js_1.log)('FOLLOWUP', `📅 Promise date reached (${state.promiseTargetDate}) for ${contact.phoneNumber}. Sending reminder...`);
-                        const step1Config = getStepConfig(fup, 1, campaign);
+                        const step1Config = getStepConfig(fup, 1, campaign, contact.phoneNumber);
                         const msg = step1Config.message || 'আসসালামু আলাইকুম {name}! আপনার আগ্রহের অফারটির বিষয়ে জানাতে পারেন।';
                         await (0, fileSender_js_1.sendTextMessage)(sock, contact.phoneNumber, msg);
                         await (0, db_js_1.markPromiseSent)(campaign.id, contact.phoneNumber, contact.contactName);
@@ -472,40 +485,26 @@ async function processCampaignFollowups(campaign) {
                 continue;
             }
             // ─────────────────────────────────────────────────────────────────────────
-            // Step 1: Configured delay with individualized randomized jitter per contact
+            // Step 1: Deliver to oldest eligible contact (>= 4 days old) with human pacing
             // ─────────────────────────────────────────────────────────────────────────
             if (state.highestStep === 0) {
-                let minDelay = Number(fup.minDelayMinutes) || 3;
-                if (minDelay <= 0)
-                    minDelay = 2;
-                const phoneDigits = contact.phoneNumber.replace(/\D/g, '');
-                // Deterministic recipient seed so every contact gets a unique second & minute target
-                const seed = phoneDigits.length >= 4 ? parseInt(phoneDigits.slice(-4), 10) : 1234;
-                const jitterMinutes = ((seed % 150) / 60) + ((seed % 10) * 0.05); // 0.5 to 2.5 min jitter
-                const targetMinutes = minDelay + jitterMinutes;
-                if (ageMinutes >= targetMinutes) {
-                    // Safety: Don't blast ancient contacts older than 24 hours
-                    if (ageMinutes > 1440) {
-                        continue;
-                    }
-                    inFlightKeys.add(flightKey);
+                inFlightKeys.add(flightKey);
+                try {
+                    (0, utils_js_1.log)('FOLLOWUP', `⏳ [Oldest-First Follow-up (${ageDays.toFixed(1)} days ago)] Sending to ${contact.phoneNumber} (${contact.contactName}) for "${campaign.name}"...`);
+                    const step1Config = getStepConfig(fup, 1, campaign, contact.phoneNumber);
+                    const success = await dispatchStepFollowup(sock, campaign, contact, 1, step1Config, gender, fup);
                     try {
-                        (0, utils_js_1.log)('FOLLOWUP', `⏳ [Step 1: ${targetMinutes.toFixed(2)}-min target] Sending to ${contact.phoneNumber} (${contact.contactName}) for "${campaign.name}"...`);
-                        const step1Config = getStepConfig(fup, 1, campaign);
-                        const success = await dispatchStepFollowup(sock, campaign, contact, 1, step1Config, gender, fup);
-                        try {
-                            await sock.sendPresenceUpdate('paused', contact.phoneNumber);
-                        }
-                        catch { }
-                        if (success) {
-                            // Apply randomized pacing gap and exit loop: only 1 send per tick!
-                            applyAccountCooldown(accountId, fup);
-                            break;
-                        }
+                        await sock.sendPresenceUpdate('paused', contact.phoneNumber);
                     }
-                    finally {
-                        inFlightKeys.delete(flightKey);
+                    catch { }
+                    if (success) {
+                        // Apply randomized pacing gap and exit loop: only 1 send per tick!
+                        applyAccountCooldown(accountId, fup);
+                        break;
                     }
+                }
+                finally {
+                    inFlightKeys.delete(flightKey);
                 }
             }
             // ─────────────────────────────────────────────────────────────────────────
@@ -517,7 +516,7 @@ async function processCampaignFollowups(campaign) {
                     inFlightKeys.add(flightKey);
                     try {
                         (0, utils_js_1.log)('FOLLOWUP', `🕒 [Step 2: 3-4h nudge] Sending to ${contact.phoneNumber} (${contact.contactName})...`);
-                        const step2Config = getStepConfig(fup, 2, campaign);
+                        const step2Config = getStepConfig(fup, 2, campaign, contact.phoneNumber);
                         const success = await dispatchStepFollowup(sock, campaign, contact, 2, step2Config, gender, fup);
                         try {
                             await sock.sendPresenceUpdate('paused', contact.phoneNumber);
@@ -542,7 +541,7 @@ async function processCampaignFollowups(campaign) {
                     inFlightKeys.add(flightKey);
                     try {
                         (0, utils_js_1.log)('FOLLOWUP', `🌅 [Step 3: Next-day value] Sending to ${contact.phoneNumber}...`);
-                        const step3Config = getStepConfig(fup, 3, campaign);
+                        const step3Config = getStepConfig(fup, 3, campaign, contact.phoneNumber);
                         const success = await dispatchStepFollowup(sock, campaign, contact, 3, step3Config, gender, fup);
                         try {
                             await sock.sendPresenceUpdate('paused', contact.phoneNumber);

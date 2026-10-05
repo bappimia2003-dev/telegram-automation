@@ -460,25 +460,34 @@ export async function getCampaignsWithFollowup(): Promise<WaCampaign[]> {
 }
 
 /**
- * Get contacts for a campaign from the last 7 days.
- * Ancient contacts from weeks ago are ignored to prevent accidental mass-blasting.
+ * Get contacts eligible for follow-up:
+ * - Strictly contacts whose conversation was AT LEAST minAgeDays ago (default 4 days).
+ * - Up to maxDaysBack historical ceiling (default 30 days, or up to 365 days if unlimited).
+ * - Strictly ordered OLDEST FIRST (sent_at ascending) so execution starts from the very oldest customer!
  */
 export async function getRecentContactedUsers(
-  campaignId: string
+  campaignId: string,
+  minAgeDays = 4,
+  maxDaysBack = 30
 ): Promise<{ id: string; phoneNumber: string; contactName: string; sentAt: string }[]> {
   if (!supabase) return [];
   try {
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const minAgeMs = Math.max(0, minAgeDays) * 24 * 60 * 60 * 1000;
+    const maxDaysMs = (maxDaysBack > 0 ? maxDaysBack : 365) * 24 * 60 * 60 * 1000;
+    const maxEligibleDate = new Date(Date.now() - minAgeMs).toISOString(); // Must be <= 4 days ago
+    const minEligibleDate = new Date(Date.now() - maxDaysMs).toISOString(); // Historical window
+
     const { data, error } = await supabase
       .from('wa_contacted_users')
       .select('id, phone_number, contact_name, sent_at')
       .eq('campaign_id', campaignId)
       .eq('status', 'sent')
-      .gte('sent_at', sevenDaysAgo)
-      .order('sent_at', { ascending: false });
+      .lte('sent_at', maxEligibleDate)
+      .gte('sent_at', minEligibleDate)
+      .order('sent_at', { ascending: true }); // OLDEST FIRST
 
     if (error) {
-      errLog('DB', 'Error fetching recent contacted users:', error.message);
+      errLog('DB', 'Error fetching contacted users:', error.message);
     }
 
     const contactMap = new Map<string, { id: string; phoneNumber: string; contactName: string; sentAt: string }>();
@@ -494,17 +503,16 @@ export async function getRecentContactedUsers(
       }
     }
 
-    // Safety fallback: also check wa_message_logs for recently delivered campaign triggers
-    // so no contact is ever dropped even if wa_contacted_users table was cleared!
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    // Also check wa_message_logs for eligible campaign triggers with identical 4-day age and oldest-first order
     const { data: logsData } = await supabase
       .from('wa_message_logs')
       .select('id, phone_number, contact_name, sent_at')
       .eq('campaign_id', campaignId)
       .in('message_type', ['text', 'image', 'video', 'audio', 'document'])
       .eq('status', 'sent')
-      .gte('sent_at', twoHoursAgo)
-      .order('sent_at', { ascending: false });
+      .lte('sent_at', maxEligibleDate)
+      .gte('sent_at', minEligibleDate)
+      .order('sent_at', { ascending: true });
 
     for (const logRow of (logsData || [])) {
       if (!contactMap.has(logRow.phone_number)) {
@@ -517,9 +525,13 @@ export async function getRecentContactedUsers(
       }
     }
 
-    return Array.from(contactMap.values());
+    // Sort strictly OLDEST FIRST (earliest sentAt first)
+    const result = Array.from(contactMap.values());
+    result.sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime());
+
+    return result;
   } catch (e: any) {
-    errLog('DB', 'Exception fetching recent contacted users:', e.message);
+    errLog('DB', 'Exception fetching contacted users:', e.message);
     return [];
   }
 }

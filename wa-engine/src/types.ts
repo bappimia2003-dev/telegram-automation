@@ -38,6 +38,8 @@ export interface WaFollowupConfig {
   maxDelayMinutes?: number;
   minBatchPeople?: number;
   maxBatchPeople?: number;
+  minContactAgeDays?: number;
+  totalDurationDays?: number;
   followupVariants?: WaCampaignVariant[];
   steps?: WaFollowupStep[];
   followupMessage?: string;

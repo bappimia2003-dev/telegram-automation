@@ -25,6 +25,7 @@ export interface FollowupSettings {
   max_batch_people: number;
   duration_hours: number;
   total_duration_days: number;
+  min_contact_age_days: number;
   started_date: string;
 }
 
@@ -101,6 +102,7 @@ const defaultStore: FollowupStoreData = {
     max_batch_people: 5,
     duration_hours: 6,
     total_duration_days: 30,
+    min_contact_age_days: 4,
     started_date: new Date().toISOString().split('T')[0],
   },
   variants: defaultVariants,
@@ -451,6 +453,8 @@ export async function saveFollowupAll(payload: { variants?: WaCampaignVariant[];
             maxDelayMinutes: Number(store.settings.max_delay_minutes) || 5,
             minBatchPeople: Number(store.settings.min_batch_people) || 3,
             maxBatchPeople: Number(store.settings.max_batch_people) || 5,
+            minContactAgeDays: Number(store.settings.min_contact_age_days) || 4,
+            totalDurationDays: Number(store.settings.total_duration_days) || 30,
             followupMessage: primaryVar?.welcomeMessage || '',
             followupImageUrl: primaryVar?.imageUrl || '',
             followupAudioUrl: primaryVar?.audioUrl || '',

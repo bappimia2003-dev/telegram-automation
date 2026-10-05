@@ -105,6 +105,7 @@ export default function NewFollowupPage() {
       max_batch_people: 5,
       duration_hours: 6,
       total_duration_days: 30,
+      min_contact_age_days: 4,
       started_date: '',
       working_hours_start: '09:00',
       working_hours_end: '22:00',
@@ -161,6 +162,7 @@ export default function NewFollowupPage() {
             max_batch_people: json.settings.max_batch_people ?? 5,
             duration_hours: json.settings.duration_hours ?? 6,
             total_duration_days: json.settings.total_duration_days ?? 30,
+            min_contact_age_days: json.settings.min_contact_age_days ?? 4,
             started_date: json.settings.started_date || '',
             working_hours_start: json.settings.working_hours_start || '09:00',
             working_hours_end: json.settings.working_hours_end || '22:00',
@@ -1282,7 +1284,62 @@ export default function NewFollowupPage() {
             )}
           </div>
 
-          {/* Row 2: Interval Delays & Batch Size */}
+          {/* Row 2: Minimum Conversation Age (Oldest Customer First) */}
+          <div className="p-4 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+              <label className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>ন্যূনতম কত দিন আগের কাস্টমার (Min Conversation Age)</span>
+              </label>
+              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 font-mono">
+                {formSettings.min_contact_age_days} দিন বা তার পুরোনো
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min="1"
+                value={formSettings.min_contact_age_days}
+                onChange={(e) => setFormSettings({ ...formSettings, min_contact_age_days: Math.max(1, Number(e.target.value) || 1) })}
+                className="bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-900 dark:text-white text-xs sm:text-sm h-10 font-bold max-w-[130px]"
+                placeholder="4"
+              />
+              <span className="text-xs sm:text-sm font-bold text-gray-700 dark:text-gray-300">দিন আগের কাস্টমার থেকে শুরু করবে</span>
+            </div>
+
+            {/* Quick Presets */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+              {[
+                { label: '৩ দিন', value: 3 },
+                { label: '৪ দিন (ডিফল্ট)', value: 4 },
+                { label: '৫ দিন', value: 5 },
+                { label: '৭ দিন', value: 7 },
+                { label: '১০ দিন', value: 10 },
+                { label: '১৫ দিন', value: 15 },
+              ].map((chip) => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={() => setFormSettings({ ...formSettings, min_contact_age_days: chip.value })}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border",
+                    formSettings.min_contact_age_days === chip.value
+                      ? "bg-green-700 text-white border-green-700 shadow-sm"
+                      : "bg-[#EDE8DE] dark:bg-[#181A1F] hover:bg-[#E0DBD0] dark:hover:bg-[#20242C] text-gray-800 dark:text-gray-200 border-[#E6E2D8] dark:border-[#262930]"
+                  )}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+
+            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed pt-1 border-t border-[#E6E2D8]/60 dark:border-[#262930]">
+              🎯 <strong>অর্ডার ও নিয়ম:</strong> ডাটাবেজের <strong>একদম পুরোনো কাস্টমার থেকে শুরু করবে</strong> এবং ক্রমান্বয়ে <strong>{formSettings.min_contact_age_days} দিন আগের কাস্টমার পর্যন্ত</strong> আসবে। সাম্প্রতিক (গত {formSettings.min_contact_age_days} দিনের মধ্যে কথা হওয়া) কাস্টমারদের কোনো মেসেজ যাবে না।
+            </p>
+          </div>
+
+          {/* Row 3: Interval Delays & Batch Size */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Interval Delay Min - Max */}
             <div className="space-y-1.5">
