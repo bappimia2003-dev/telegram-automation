@@ -166,23 +166,33 @@ export async function processIncomingMessage(
       log('CAMPAIGN', `ℹ️ [Variation] Using "${selectedVariant.name}" for ${sender}`);
     }
 
+    // Robust media fallback: if a variation doesn't define its own image/audio/video/document,
+    // inherit from campaign top-level media or from the primary active variation.
+    // This guarantees that when users rotate text variations, audio and images are NEVER dropped for any recipient!
+    const effectiveMessage = (selectedVariant.welcomeMessage && selectedVariant.welcomeMessage.trim()) || campaign.welcomeMessage?.trim() || '';
+    const effectiveImageUrl = (selectedVariant.imageUrl && selectedVariant.imageUrl.trim()) || campaign.imageUrl?.trim() || activeVariants[0]?.imageUrl?.trim() || '';
+    const effectiveAudioUrl = (selectedVariant.audioUrl && selectedVariant.audioUrl.trim()) || campaign.audioUrl?.trim() || activeVariants[0]?.audioUrl?.trim() || '';
+    const effectiveVideoUrl = (selectedVariant.videoUrl && selectedVariant.videoUrl.trim()) || campaign.videoUrl?.trim() || activeVariants[0]?.videoUrl?.trim() || '';
+    const effectiveDocumentUrl = (selectedVariant.documentUrl && selectedVariant.documentUrl.trim()) || campaign.documentUrl?.trim() || activeVariants[0]?.documentUrl?.trim() || '';
+    const effectiveDocumentName = (selectedVariant.documentName && selectedVariant.documentName.trim()) || campaign.documentName?.trim() || activeVariants[0]?.documentName?.trim() || 'Document';
+
     const orderList = campaign.sendOrder
       .split(',')
       .map((item) => item.trim().toLowerCase())
       .filter(Boolean);
 
-    // Filter which items in the send order actually have content in this variant
+    // Filter which items in the send order actually have content
     const itemsToSend: string[] = [];
     for (const item of orderList) {
-      if (item === 'message' && selectedVariant.welcomeMessage && selectedVariant.welcomeMessage.trim()) {
+      if (item === 'message' && effectiveMessage) {
         itemsToSend.push('message');
-      } else if (item === 'image' && selectedVariant.imageUrl && selectedVariant.imageUrl.trim()) {
+      } else if (item === 'image' && effectiveImageUrl) {
         itemsToSend.push('image');
-      } else if (item === 'video' && selectedVariant.videoUrl && selectedVariant.videoUrl.trim()) {
+      } else if (item === 'video' && effectiveVideoUrl) {
         itemsToSend.push('video');
-      } else if (item === 'audio' && selectedVariant.audioUrl && selectedVariant.audioUrl.trim()) {
+      } else if (item === 'audio' && effectiveAudioUrl) {
         itemsToSend.push('audio');
-      } else if (item === 'document' && selectedVariant.documentUrl && selectedVariant.documentUrl.trim()) {
+      } else if (item === 'document' && effectiveDocumentUrl) {
         itemsToSend.push('document');
       }
     }
@@ -210,7 +220,7 @@ export async function processIncomingMessage(
 
       try {
         if (item === 'message') {
-          await sendTextMessage(sock, sender, selectedVariant.welcomeMessage.trim());
+          await sendTextMessage(sock, sender, effectiveMessage);
           await addMessageLog({
             id: uuidv4(),
             campaignId: campaign.id,
@@ -223,8 +233,8 @@ export async function processIncomingMessage(
             sentAt: new Date().toISOString(),
           });
         } else if (item === 'image') {
-          await sendImageMessage(sock, sender, selectedVariant.imageUrl.trim());
-          const cleanLogUrl = selectedVariant.imageUrl.startsWith('data:') ? 'photo.jpg' : selectedVariant.imageUrl.trim();
+          await sendImageMessage(sock, sender, effectiveImageUrl);
+          const cleanLogUrl = effectiveImageUrl.startsWith('data:') ? 'photo.jpg' : effectiveImageUrl;
           await addMessageLog({
             id: uuidv4(),
             campaignId: campaign.id,
@@ -237,8 +247,8 @@ export async function processIncomingMessage(
             sentAt: new Date().toISOString(),
           });
         } else if (item === 'video') {
-          await sendVideoMessage(sock, sender, selectedVariant.videoUrl.trim());
-          const cleanLogUrl = selectedVariant.videoUrl.startsWith('data:') ? 'video.mp4' : selectedVariant.videoUrl.trim();
+          await sendVideoMessage(sock, sender, effectiveVideoUrl);
+          const cleanLogUrl = effectiveVideoUrl.startsWith('data:') ? 'video.mp4' : effectiveVideoUrl;
           await addMessageLog({
             id: uuidv4(),
             campaignId: campaign.id,
@@ -251,8 +261,8 @@ export async function processIncomingMessage(
             sentAt: new Date().toISOString(),
           });
         } else if (item === 'audio') {
-          await sendAudioMessage(sock, sender, selectedVariant.audioUrl.trim());
-          const cleanLogUrl = selectedVariant.audioUrl.startsWith('data:') ? 'voice_note.mp3' : selectedVariant.audioUrl.trim();
+          await sendAudioMessage(sock, sender, effectiveAudioUrl);
+          const cleanLogUrl = effectiveAudioUrl.startsWith('data:') ? 'voice_note.mp3' : effectiveAudioUrl;
           await addMessageLog({
             id: uuidv4(),
             campaignId: campaign.id,
@@ -265,9 +275,8 @@ export async function processIncomingMessage(
             sentAt: new Date().toISOString(),
           });
         } else if (item === 'document') {
-          const docName = selectedVariant.documentName || 'Document';
-          await sendDocumentMessage(sock, sender, selectedVariant.documentUrl.trim(), docName);
-          const cleanLogUrl = selectedVariant.documentUrl.startsWith('data:') ? docName : selectedVariant.documentUrl.trim();
+          await sendDocumentMessage(sock, sender, effectiveDocumentUrl, effectiveDocumentName);
+          const cleanLogUrl = effectiveDocumentUrl.startsWith('data:') ? effectiveDocumentName : effectiveDocumentUrl;
           await addMessageLog({
             id: uuidv4(),
             campaignId: campaign.id,

@@ -453,7 +453,7 @@ export async function saveFollowupAll(payload: { variants?: WaCampaignVariant[];
             maxDelayMinutes: Number(store.settings.max_delay_minutes) || 5,
             minBatchPeople: Number(store.settings.min_batch_people) || 3,
             maxBatchPeople: Number(store.settings.max_batch_people) || 5,
-            minContactAgeDays: Number(store.settings.min_contact_age_days) || 4,
+            minContactAgeDays: Number(store.settings.min_contact_age_days) || 0,
             totalDurationDays: Number(store.settings.total_duration_days) || 30,
             followupMessage: primaryVar?.welcomeMessage || '',
             followupImageUrl: primaryVar?.imageUrl || '',

@@ -394,18 +394,17 @@ function applyAccountCooldown(accountId, fup) {
     const maxBatch = Number(fup.maxBatchPeople) || 5;
     const batchTarget = Math.max(2, Math.floor(Math.random() * (maxBatch - minBatch + 1)) + minBatch);
     if (currentBatch >= batchTarget) {
-        // Batch limit reached: Longer human-like pause (4 to 8 minutes)
+        // Batch limit reached: Longer human-like pause (3 to 5 minutes)
         accountBatchCountMap.set(accountId, 0);
-        const batchPauseSeconds = Math.floor(Math.random() * (480 - 240 + 1)) + 240;
+        const batchPauseSeconds = Math.floor(Math.random() * (300 - 180 + 1)) + 180;
         const batchPauseMs = batchPauseSeconds * 1000 + Math.floor(Math.random() * 999);
         accountCooldownMap.set(accountId, Date.now() + batchPauseMs);
         (0, utils_js_1.log)('FOLLOWUP', `🛑 [Batch limit of ${batchTarget} reached on Acc: ${accountId}] Anti-ban pause for ${(batchPauseSeconds / 60).toFixed(1)} minutes before next batch.`);
     }
     else {
-        // Normal interval between individual recipients:
-        // Random 60 to 180 seconds (1 to 3 minutes) with unique random seconds & ms
+        // Normal interval between individual recipients: 15 to 40 seconds
         accountBatchCountMap.set(accountId, currentBatch);
-        const gapSeconds = Math.floor(Math.random() * (160 - 60 + 1)) + 60;
+        const gapSeconds = Math.floor(Math.random() * (40 - 15 + 1)) + 15;
         const gapMs = gapSeconds * 1000 + Math.floor(Math.random() * 999);
         accountCooldownMap.set(accountId, Date.now() + gapMs);
         (0, utils_js_1.log)('FOLLOWUP', `⏳ [Staggered Pacing on Acc: ${accountId}] Next follow-up allowed in ${gapSeconds}s (${(gapSeconds / 60).toFixed(2)} min). Batch progress: ${currentBatch}/${batchTarget}.`);
@@ -430,7 +429,7 @@ async function processCampaignFollowups(campaign) {
     if (!sock) {
         return; // No WhatsApp connection available for this account
     }
-    const minAgeDays = Number(fup.minContactAgeDays) || 4;
+    const minAgeDays = Number(fup.minContactAgeDays) || 0;
     const maxDaysBack = Number(fup.totalDurationDays) || 30;
     const contacts = await (0, db_js_1.getRecentContactedUsers)(campaign.id, minAgeDays, maxDaysBack);
     if (contacts.length === 0)
@@ -443,10 +442,11 @@ async function processCampaignFollowups(campaign) {
         }
         try {
             const initialContactMs = new Date(contact.sentAt).getTime();
-            const ageDays = (now - initialContactMs) / (24 * 60 * 60 * 1000);
-            // Strictly enforce: conversation must be at least minAgeDays old (default 4 days)
-            // Anyone who messaged within the last 4 days (0 to 3.99 days ago) is excluded
-            if (ageDays < minAgeDays) {
+            const ageMs = now - initialContactMs;
+            const ageMinutes = ageMs / (60 * 1000);
+            const ageDays = ageMs / (24 * 60 * 60 * 1000);
+            // If minContactAgeDays is explicitly set (> 0), enforce that age requirement
+            if (minAgeDays > 0 && ageDays < minAgeDays) {
                 continue;
             }
             // Campaign duration limit check (e.g. max 30/60/90 days)
@@ -485,12 +485,44 @@ async function processCampaignFollowups(campaign) {
                 continue;
             }
             // ─────────────────────────────────────────────────────────────────────────
-            // Step 1: Deliver to oldest eligible contact (>= 4 days old) with human pacing
+            // Step 1: Deliver to eligible contact after configured delay (e.g. 2-5 min)
             // ─────────────────────────────────────────────────────────────────────────
             if (state.highestStep === 0) {
+                let minDelay = Number(fup.minDelayMinutes);
+                if (!minDelay || minDelay <= 0) {
+                    if (fup.followupDelayUnit === 'hours') {
+                        minDelay = (Number(fup.followupDelayValue) || 1) * 60;
+                    }
+                    else if (fup.followupDelayUnit === 'days') {
+                        minDelay = (Number(fup.followupDelayValue) || 1) * 1440;
+                    }
+                    else {
+                        minDelay = Number(fup.followupDelayValue) || 2;
+                    }
+                }
+                if (minDelay <= 0)
+                    minDelay = 2;
+                const phoneDigits = contact.phoneNumber.replace(/\D/g, '');
+                const seed = phoneDigits.length >= 4 ? parseInt(phoneDigits.slice(-4), 10) : 1234;
+                const jitterMinutes = ((seed % 120) / 60) + ((seed % 10) * 0.05); // 0.2 to 2.2 min jitter
+                const targetMinutes = minDelay + (fup.antiBanJitter !== false ? jitterMinutes : 0);
+                // When running real-time campaign follow-up (minAgeDays == 0):
+                if (minAgeDays === 0) {
+                    // If not enough minutes have passed since contact was created, wait
+                    if (ageMinutes < targetMinutes) {
+                        continue;
+                    }
+                    // Safety: Don't blast contacts older than 24 hours without Step 1
+                    if (ageMinutes > 1440) {
+                        continue;
+                    }
+                }
                 inFlightKeys.add(flightKey);
                 try {
-                    (0, utils_js_1.log)('FOLLOWUP', `⏳ [Oldest-First Follow-up (${ageDays.toFixed(1)} days ago)] Sending to ${contact.phoneNumber} (${contact.contactName}) for "${campaign.name}"...`);
+                    const timingLabel = minAgeDays > 0
+                        ? `${ageDays.toFixed(1)} days ago`
+                        : `${targetMinutes.toFixed(2)}-min target`;
+                    (0, utils_js_1.log)('FOLLOWUP', `⏳ [Step 1: ${timingLabel}] Sending to ${contact.phoneNumber} (${contact.contactName}) for "${campaign.name}"...`);
                     const step1Config = getStepConfig(fup, 1, campaign, contact.phoneNumber);
                     const success = await dispatchStepFollowup(sock, campaign, contact, 1, step1Config, gender, fup);
                     try {

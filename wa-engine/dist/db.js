@@ -477,18 +477,20 @@ async function getCampaignsWithFollowup() {
 }
 /**
  * Get contacts eligible for follow-up:
- * - Strictly contacts whose conversation was AT LEAST minAgeDays ago (default 4 days).
- * - Up to maxDaysBack historical ceiling (default 30 days, or up to 365 days if unlimited).
- * - Strictly ordered OLDEST FIRST (sent_at ascending) so execution starts from the very oldest customer!
+ * - If minAgeDays > 0: filters contacts whose conversation was AT LEAST minAgeDays ago (sorted oldest first).
+ * - If minAgeDays == 0 (default for standard campaign follow-up): includes recent contacts up to now (sorted newest first so fresh leads get timely step 1/2/3).
+ * - Up to maxDaysBack historical ceiling (default 30 days).
  */
-async function getRecentContactedUsers(campaignId, minAgeDays = 4, maxDaysBack = 30) {
+async function getRecentContactedUsers(campaignId, minAgeDays = 0, maxDaysBack = 30) {
     if (!supabase)
         return [];
     try {
         const minAgeMs = Math.max(0, minAgeDays) * 24 * 60 * 60 * 1000;
-        const maxDaysMs = (maxDaysBack > 0 ? maxDaysBack : 365) * 24 * 60 * 60 * 1000;
-        const maxEligibleDate = new Date(Date.now() - minAgeMs).toISOString(); // Must be <= 4 days ago
-        const minEligibleDate = new Date(Date.now() - maxDaysMs).toISOString(); // Historical window
+        const maxDaysMs = (maxDaysBack > 0 ? maxDaysBack : 30) * 24 * 60 * 60 * 1000;
+        const maxEligibleDate = minAgeDays > 0
+            ? new Date(Date.now() - minAgeMs).toISOString()
+            : new Date().toISOString();
+        const minEligibleDate = new Date(Date.now() - maxDaysMs).toISOString();
         const { data, error } = await supabase
             .from('wa_contacted_users')
             .select('id, phone_number, contact_name, sent_at')
@@ -496,7 +498,7 @@ async function getRecentContactedUsers(campaignId, minAgeDays = 4, maxDaysBack =
             .eq('status', 'sent')
             .lte('sent_at', maxEligibleDate)
             .gte('sent_at', minEligibleDate)
-            .order('sent_at', { ascending: true }); // OLDEST FIRST
+            .order('sent_at', { ascending: minAgeDays > 0 });
         if (error) {
             (0, utils_js_1.errLog)('DB', 'Error fetching contacted users:', error.message);
         }
@@ -511,7 +513,7 @@ async function getRecentContactedUsers(campaignId, minAgeDays = 4, maxDaysBack =
                 });
             }
         }
-        // Also check wa_message_logs for eligible campaign triggers with identical 4-day age and oldest-first order
+        // Also check wa_message_logs for eligible campaign triggers as backup
         const { data: logsData } = await supabase
             .from('wa_message_logs')
             .select('id, phone_number, contact_name, sent_at')
@@ -520,7 +522,7 @@ async function getRecentContactedUsers(campaignId, minAgeDays = 4, maxDaysBack =
             .eq('status', 'sent')
             .lte('sent_at', maxEligibleDate)
             .gte('sent_at', minEligibleDate)
-            .order('sent_at', { ascending: true });
+            .order('sent_at', { ascending: minAgeDays > 0 });
         for (const logRow of (logsData || [])) {
             if (!contactMap.has(logRow.phone_number)) {
                 contactMap.set(logRow.phone_number, {
@@ -531,9 +533,15 @@ async function getRecentContactedUsers(campaignId, minAgeDays = 4, maxDaysBack =
                 });
             }
         }
-        // Sort strictly OLDEST FIRST (earliest sentAt first)
         const result = Array.from(contactMap.values());
-        result.sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime());
+        if (minAgeDays > 0) {
+            // Oldest first for cold lead reactivation
+            result.sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime());
+        }
+        else {
+            // Newest first for active real-time campaign follow-ups
+            result.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
+        }
         return result;
     }
     catch (e) {

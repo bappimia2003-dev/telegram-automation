@@ -519,16 +519,17 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
   const handleAddVariant = () => {
     const newId = `var_${Date.now()}`;
     const newIndex = variants.length + 1;
+    const primary = variants[0];
     const newVariant: WaCampaignVariant = {
       id: newId,
       name: `Variation ${newIndex}`,
       isActive: true,
       welcomeMessage: '',
-      imageUrl: '',
-      audioUrl: '',
-      videoUrl: '',
-      documentUrl: '',
-      documentName: '',
+      imageUrl: primary?.imageUrl || '',
+      audioUrl: primary?.audioUrl || '',
+      videoUrl: primary?.videoUrl || '',
+      documentUrl: primary?.documentUrl || '',
+      documentName: primary?.documentName || '',
     };
     setVariants((prev) => [...prev, newVariant]);
     setOpenVariantIds((prev) => ({ ...prev, [newId]: true }));
