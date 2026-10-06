@@ -171,9 +171,14 @@ async function processIncomingMessage(sock, sender, pushName, messageText, accou
         let allSuccessful = true;
         for (let i = 0; i < itemsToSend.length; i++) {
             const item = itemsToSend[i];
-            // Keep typing presence alive
+            // Keep typing/recording presence alive
             try {
-                await sock.sendPresenceUpdate('composing', sender);
+                if (item === 'audio') {
+                    await sock.sendPresenceUpdate('recording', sender);
+                }
+                else {
+                    await sock.sendPresenceUpdate('composing', sender);
+                }
             }
             catch (e) { }
             try {
@@ -251,11 +256,18 @@ async function processIncomingMessage(sock, sender, pushName, messageText, accou
                         sentAt: new Date().toISOString(),
                     });
                 }
-                // 4. Delay Before Next Item: 1 to 2 seconds in random milliseconds (non-matching)
+                // 4. Delay Before Next Item: Exactly 2 to 3 seconds in random milliseconds (non-matching)
                 if (i < itemsToSend.length - 1) {
-                    const nextDelay = getRandomDelay(1000, 2000, lastSubsequentDelayMs);
+                    const nextItem = itemsToSend[i + 1];
+                    const nextDelay = getRandomDelay(2000, 3000, lastSubsequentDelayMs);
                     lastSubsequentDelayMs = nextDelay;
-                    (0, utils_js_1.log)('CAMPAIGN', `⏳ Waiting ${(nextDelay / 1000).toFixed(3)}s (${nextDelay}ms) before item ${i + 2}...`);
+                    (0, utils_js_1.log)('CAMPAIGN', `⏳ Waiting ${(nextDelay / 1000).toFixed(3)}s (${nextDelay}ms) before item ${i + 2} (${nextItem})...`);
+                    if (nextItem === 'audio') {
+                        try {
+                            await sock.sendPresenceUpdate('recording', sender);
+                        }
+                        catch (e) { }
+                    }
                     await (0, utils_js_1.sleep)(nextDelay);
                 }
             }
