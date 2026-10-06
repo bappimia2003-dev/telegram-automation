@@ -402,22 +402,12 @@ export async function deleteAuthBackup(accountId: string): Promise<void> {
 }
 
 /**
- * Persist uploaded media permanently to Supabase Cloud DB so it survives Railway restarts.
+ * Persist uploaded media permanently.
+ * Disabled: All media files are now hosted on Cloudflare R2 with zero Supabase storage usage.
  */
 export async function saveMediaBackup(filename: string, base64: string, mimeType = 'application/octet-stream'): Promise<void> {
-  if (!supabase) return;
-  try {
-    await supabase.from('wa_connection').upsert({
-      id: `file_${filename}`,
-      phone_number: filename,
-      qr_code: base64,
-      status: mimeType,
-      last_connected: new Date().toISOString(),
-    });
-    log('MEDIA', `💾 Backed up media ${filename} to Cloud DB permanently.`);
-  } catch (err: any) {
-    errLog('MEDIA', `Error backing up media ${filename}:`, err.message);
-  }
+  // No-op: Do not save heavy base64 files into Supabase database
+  return;
 }
 
 /**

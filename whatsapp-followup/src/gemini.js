@@ -4,9 +4,9 @@ import fs from 'fs';
 
 // Helper to get Google AI client
 function getGenAI() {
-  const apiKey = getSetting('gemini_api_key') || process.env.GEMINI_API_KEY || '';
-  if (!apiKey || apiKey.trim() === '') return null;
-  return new GoogleGenerativeAI(apiKey.trim());
+  const apiKey = (getSetting('gemini_api_key') || '').trim();
+  if (!apiKey || apiKey === 'none' || apiKey === 'off' || apiKey === 'disabled') return null;
+  return new GoogleGenerativeAI(apiKey);
 }
 
 /**

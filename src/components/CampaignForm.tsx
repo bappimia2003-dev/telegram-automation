@@ -186,9 +186,11 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
     }
     const initialFup = initialData?.followupConfig;
     const initialSteps = ensureThreeSteps(initialFup?.steps, initialFup);
+    const hasAiExplicit = initialFup?.aiEnabled !== undefined;
+    const isAi = hasAiExplicit ? Boolean(initialFup.aiEnabled) : defaultAi;
     return {
-      aiEnabled: initialFup?.aiEnabled ?? defaultAi,
-      aiApiKey: initialFup?.aiApiKey || '',
+      aiEnabled: isAi,
+      aiApiKey: initialFup?.aiApiKey || (isAi ? '' : 'none'),
       aiModel: initialFup?.aiModel || 'gemini-flash-latest',
       aiSystemPrompt: initialFup?.aiSystemPrompt || 'প্রোডাক্ট নলেজ ও তথ্যের আলোকে ফলো-আপ মেসেজটি মিষ্টি, আকর্ষণীয় ও মার্জিত বাংলায় গুছিয়ে লিখে পাঠাবে। কোনো রোবোটিক ভাব রাখবে না।',
       understandingFiles: initialFup?.understandingFiles || [],
@@ -213,9 +215,13 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
     if (initialData?.followupConfig) {
       setFupConfig((prev) => {
         const nextSteps = ensureThreeSteps(initialData.followupConfig?.steps, initialData.followupConfig);
+        const hasAi = initialData.followupConfig?.aiEnabled !== undefined;
+        const isAi = hasAi ? Boolean(initialData.followupConfig?.aiEnabled) : prev.aiEnabled;
         return {
           ...prev,
           ...initialData.followupConfig,
+          aiEnabled: isAi,
+          aiApiKey: initialData.followupConfig?.aiApiKey || (isAi ? (prev.aiApiKey === 'none' ? '' : prev.aiApiKey) : 'none'),
           steps: nextSteps,
         };
       });
@@ -350,7 +356,24 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
     }
   };
 
+  const deleteMediaFromStorage = async (url?: string) => {
+    if (!url || typeof url !== 'string' || !url.startsWith('http')) return;
+    try {
+      await fetch('/api/whatsapp/upload', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+    } catch (err) {
+      console.warn('Failed to delete media from storage:', err);
+    }
+  };
+
   const handleDeleteUnderstandingFile = (id: string) => {
+    const targetDoc = fupConfig.understandingFiles?.find((f) => f.id === id);
+    if (targetDoc?.url) {
+      deleteMediaFromStorage(targetDoc.url);
+    }
     setFupConfig((prev) => ({
       ...prev,
       understandingFiles: (prev.understandingFiles || []).filter((f) => f.id !== id),
@@ -452,8 +475,21 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
   };
 
   const handleDeleteStepMediaFile = (stepNumber: number, fileId: string) => {
+    // Purge file from Cloudflare R2 / storage
+    const targetFile = fupConfig.steps?.flatMap(s => s.files || []).find(f => f.id === fileId)
+      || fupConfig.followupFiles?.find(f => f.id === fileId);
+    if (targetFile?.url) {
+      deleteMediaFromStorage(targetFile.url);
+    }
+
     setFupConfig((prev) => {
       const currentSteps = ensureThreeSteps(prev.steps, prev);
+      let step1Img = prev.followupImageUrl;
+      let step1Aud = prev.followupAudioUrl;
+      let step1Vid = prev.followupVideoUrl;
+      let step1Doc = prev.followupDocumentUrl;
+      let step1DocName = prev.followupDocumentName;
+
       const updatedSteps = currentSteps.map((s) => {
         if (s.stepNumber !== stepNumber) return s;
         const remainingFiles = (s.files || []).filter((f) => f.id !== fileId);
@@ -461,6 +497,14 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
         const remainingAud = remainingFiles.find((f) => f.type === 'audio')?.url || '';
         const remainingVid = remainingFiles.find((f) => f.type === 'video')?.url || '';
         const remainingDoc = remainingFiles.find((f) => f.type === 'document');
+
+        if (stepNumber === 1) {
+          step1Img = remainingImg;
+          step1Aud = remainingAud;
+          step1Vid = remainingVid;
+          step1Doc = remainingDoc?.url || '';
+          step1DocName = remainingDoc?.name || '';
+        }
 
         return {
           ...s,
@@ -478,6 +522,11 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
         steps: updatedSteps,
         ...(stepNumber === 1 ? {
           followupFiles: (prev.followupFiles || []).filter((f) => f.id !== fileId),
+          followupImageUrl: step1Img,
+          followupAudioUrl: step1Aud,
+          followupVideoUrl: step1Vid,
+          followupDocumentUrl: step1Doc,
+          followupDocumentName: step1DocName,
         } : {}),
       };
     });
@@ -575,6 +624,20 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
         throw new Error(data?.error || 'Upload failed');
       }
 
+      // If variant already had an old file, purge it from Cloudflare R2 / storage
+      const currVar = variants.find((v) => v.id === variantId);
+      if (currVar) {
+        if (type === 'image' && currVar.imageUrl && currVar.imageUrl !== data.url) {
+          deleteMediaFromStorage(currVar.imageUrl);
+        } else if (type === 'video' && currVar.videoUrl && currVar.videoUrl !== data.url) {
+          deleteMediaFromStorage(currVar.videoUrl);
+        } else if (type === 'audio' && currVar.audioUrl && currVar.audioUrl !== data.url) {
+          deleteMediaFromStorage(currVar.audioUrl);
+        } else if (type === 'document' && currVar.documentUrl && currVar.documentUrl !== data.url) {
+          deleteMediaFromStorage(currVar.documentUrl);
+        }
+      }
+
       if (type === 'image') updateVariantField(variantId, 'imageUrl', data.url);
       if (type === 'video') updateVariantField(variantId, 'videoUrl', data.url);
       if (type === 'audio') updateVariantField(variantId, 'audioUrl', data.url);
@@ -608,6 +671,21 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
     // Primary active variant for backwards compatibility in top-level table columns
     const primary = variants.find((v) => v.isActive) || variants[0];
 
+    const finalSteps = ensureThreeSteps(fupConfig.steps, fupConfig);
+    const isAiActive = Boolean(fupConfig.aiEnabled && fupConfig.aiApiKey && fupConfig.aiApiKey !== 'none' && fupConfig.aiApiKey !== 'off');
+    const finalFupConfig = {
+      ...fupConfig,
+      steps: finalSteps,
+      aiEnabled: isAiActive,
+      aiApiKey: isAiActive ? (fupConfig.aiApiKey || '') : 'none',
+      followupMessage: finalSteps[0]?.message || '',
+      followupImageUrl: finalSteps[0]?.imageUrl || '',
+      followupAudioUrl: finalSteps[0]?.audioUrl || '',
+      followupVideoUrl: finalSteps[0]?.videoUrl || '',
+      followupDocumentUrl: finalSteps[0]?.documentUrl || '',
+      followupDocumentName: finalSteps[0]?.documentName || '',
+    };
+
     const payload = {
       name: name.trim(),
       description,
@@ -621,7 +699,7 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
       documentUrl: primary?.documentUrl || '',
       documentName: primary?.documentName || '',
       variants,
-      followupConfig: fupConfig,
+      followupConfig: finalFupConfig,
       sendOrder,
       delayBetweenSends: Number(delayBetweenSends) || 3,
       isActive,
@@ -902,7 +980,10 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
                             {variant.imageUrl && (
                               <button
                                 type="button"
-                                onClick={() => updateVariantField(variant.id, 'imageUrl', '')}
+                                onClick={() => {
+                                  deleteMediaFromStorage(variant.imageUrl);
+                                  updateVariantField(variant.id, 'imageUrl', '');
+                                }}
                                 className="text-gray-500 hover:text-destructive text-xs"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -949,7 +1030,10 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
                             {variant.audioUrl && (
                               <button
                                 type="button"
-                                onClick={() => updateVariantField(variant.id, 'audioUrl', '')}
+                                onClick={() => {
+                                  deleteMediaFromStorage(variant.audioUrl);
+                                  updateVariantField(variant.id, 'audioUrl', '');
+                                }}
                                 className="text-gray-500 hover:text-destructive text-xs"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -992,7 +1076,10 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
                             {variant.videoUrl && (
                               <button
                                 type="button"
-                                onClick={() => updateVariantField(variant.id, 'videoUrl', '')}
+                                onClick={() => {
+                                  deleteMediaFromStorage(variant.videoUrl);
+                                  updateVariantField(variant.id, 'videoUrl', '');
+                                }}
                                 className="text-gray-500 hover:text-destructive text-xs"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -1034,6 +1121,7 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
                               <button
                                 type="button"
                                 onClick={() => {
+                                  deleteMediaFromStorage(variant.documentUrl);
                                   updateVariantField(variant.id, 'documentUrl', '');
                                   updateVariantField(variant.id, 'documentName', '');
                                 }}
@@ -1175,8 +1263,15 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
                   <div className="flex items-center gap-2 flex-wrap">
                     <Key className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Google AI Studio (Gemini) API Key</h4>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 font-medium">
-                      ⚡ Auto-Switching Models Active
+                    <span className={cn(
+                      "text-[10px] px-2 py-0.5 rounded-full font-medium border",
+                      (fupConfig.aiEnabled && fupConfig.aiApiKey !== 'none')
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25"
+                        : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25"
+                    )}>
+                      {(fupConfig.aiEnabled && fupConfig.aiApiKey !== 'none')
+                        ? "⚡ AI অপটিমাইজেশন সক্রিয় (মেসেজ রিরাইট করবে)"
+                        : "🔒 AI অপটিমাইজেশন বন্ধ (হুবহু নিজের টেক্সট যাবে)"}
                     </span>
                   </div>
 
@@ -1209,8 +1304,17 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
                     </div>
 
                     <Switch
-                      checked={fupConfig.aiEnabled}
-                      onCheckedChange={(checked) => updateFup('aiEnabled', checked)}
+                      checked={Boolean(fupConfig.aiEnabled && fupConfig.aiApiKey !== 'none')}
+                      onCheckedChange={(checked) => {
+                        updateFup('aiEnabled', checked);
+                        if (!checked) {
+                          updateFup('aiApiKey', 'none');
+                        } else {
+                          if (!fupConfig.aiApiKey || fupConfig.aiApiKey === 'none') {
+                            updateFup('aiApiKey', '');
+                          }
+                        }
+                      }}
                       className="data-[state=checked]:bg-green-700"
                     />
                   </div>
@@ -1220,11 +1324,24 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-gray-900 dark:text-white">Select Saved Gmail Account:</label>
                     <select
-                      value={fupConfig.aiApiKey || ''}
-                      onChange={(e) => updateFup('aiApiKey', e.target.value)}
+                      value={fupConfig.aiApiKey || (fupConfig.aiEnabled ? '' : 'none')}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        updateFup('aiApiKey', val);
+                        if (val === 'none') {
+                          updateFup('aiEnabled', false);
+                        } else {
+                          updateFup('aiEnabled', true);
+                        }
+                      }}
                       className="w-full h-10 px-3 rounded-md bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     >
-                      <option value="" className="bg-[#FAF8F5] dark:bg-[#181A1F] text-gray-900 dark:text-white">⚙️ System Default Active Key</option>
+                      <option value="none" className="bg-[#FAF8F5] dark:bg-[#181A1F] text-amber-600 font-semibold">
+                        🚫 AI অপটিমাইজেশন বন্ধ (API Key OFF - শুধুমাত্র নিজের টেক্সট যাবে)
+                      </option>
+                      <option value="" className="bg-[#FAF8F5] dark:bg-[#181A1F] text-gray-900 dark:text-white">
+                        ⚙️ সিস্টেম ডিফল্ট একটিভ কি (System Default Active Key)
+                      </option>
                       {apiKeys.map((k) => (
                         <option key={k.id} value={k.id} className="bg-[#FAF8F5] dark:bg-[#181A1F] text-gray-900 dark:text-white">
                           📧 {k.gmail} {k.label ? `(${k.label})` : ''} - {k.status || 'Active'}
@@ -1284,8 +1401,27 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
                   </div>
                 )}
 
+                {/* Visual Status Indicator: Active vs OFF */}
+                {(!fupConfig.aiEnabled || fupConfig.aiApiKey === 'none') ? (
+                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                    <span className="text-base shrink-0">🔒</span>
+                    <div>
+                      <span className="font-bold">AI অপটিমাইজেশন সম্পূর্ণ বন্ধ (OFF): </span>
+                      কাস্টমারকে মেসেজ পাঠানোর সময় কোনো AI বা Gemini API ব্যবহার হবে না। প্রতিটি ফলো-আপ ধাপে আপনার লেখা মূল টেক্সট এবং আপলোড করা ইমেজ/মিডিয়া হুবহু পাঠানো হবে।
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-800 dark:text-emerald-300 flex items-start gap-2">
+                    <span className="text-base shrink-0">✨</span>
+                    <div>
+                      <span className="font-bold">AI অপটিমাইজেশন সক্রিয় (ACTIVE): </span>
+                      Gemini AI আপনার ফলো-আপ ড্রাফট ও প্রোডাক্ট তথ্যের আলোকে মিষ্টি ও মার্জিত করে গুছিয়ে টেক্সট পাঠাবে।
+                    </div>
+                  </div>
+                )}
+
                 {/* AI Prompt / Instruction */}
-                <div className="space-y-1.5 pt-1">
+                <div className={cn("space-y-1.5 pt-1 transition-opacity", (!fupConfig.aiEnabled || fupConfig.aiApiKey === 'none') && "opacity-50 pointer-events-none")}>
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-medium text-gray-900 dark:text-white">
                       AI Follow-up Writing Instruction (মেসেজ গুছিয়ে লেখার নির্দেশনা)

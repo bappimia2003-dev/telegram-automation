@@ -139,7 +139,7 @@ function replaceVariables(template, contactName, campaignName, gender) {
 function getStepConfig(fup, stepNumber, campaign, recipientPhone) {
     // 1. Primary: Match explicit step in fup.steps
     const step = fup.steps?.find((s) => s.stepNumber === stepNumber);
-    if (step && (step.message || step.imageUrl || step.audioUrl || step.videoUrl || step.documentUrl)) {
+    if (step) {
         let img = step.imageUrl || '';
         let aud = step.audioUrl || '';
         let vid = step.videoUrl || '';
@@ -158,19 +158,23 @@ function getStepConfig(fup, stepNumber, campaign, recipientPhone) {
                 docName = f.name;
             }
         }
-        // Also fallback to top-level fup image/media if not specifically set on step
-        if (!img && fup.followupImageUrl)
-            img = fup.followupImageUrl;
-        if (!aud && fup.followupAudioUrl)
-            aud = fup.followupAudioUrl;
-        if (!vid && fup.followupVideoUrl)
-            vid = fup.followupVideoUrl;
-        if (!doc && fup.followupDocumentUrl) {
-            doc = fup.followupDocumentUrl;
-            docName = fup.followupDocumentName || docName;
+        // ONLY for Step 1: if step 1 doesn't have an explicit image, allow legacy top-level fup fallback
+        if (stepNumber === 1) {
+            if (!img && fup.followupImageUrl)
+                img = fup.followupImageUrl;
+            if (!aud && fup.followupAudioUrl)
+                aud = fup.followupAudioUrl;
+            if (!vid && fup.followupVideoUrl)
+                vid = fup.followupVideoUrl;
+            if (!doc && fup.followupDocumentUrl) {
+                doc = fup.followupDocumentUrl;
+                docName = fup.followupDocumentName || docName;
+            }
         }
+        // For Step 2 and Step 3: Strictly do NOT inherit Step 1's media!
+        // They must use ONLY their own media files/urls so old images never repeat.
         return {
-            message: step.message !== undefined ? step.message : (stepNumber === 1 ? (fup.followupMessage || '') : ''),
+            message: step.message !== undefined ? step.message : '',
             imageUrl: img,
             audioUrl: aud,
             videoUrl: vid,
@@ -182,9 +186,7 @@ function getStepConfig(fup, stepNumber, campaign, recipientPhone) {
     // 2. Secondary: Check explicit followupVariants stored in followupConfig (never campaign auto-reply variants!)
     const fupVariants = (fup.followupVariants || []).filter((v) => v.isActive);
     if (fupVariants.length > 0) {
-        const digits = (recipientPhone || '').replace(/\D/g, '');
-        const phoneSeed = digits.length >= 4 ? parseInt(digits.slice(-4), 10) : 0;
-        const variantIndex = (phoneSeed + stepNumber - 1) % fupVariants.length;
+        const variantIndex = (stepNumber - 1) < fupVariants.length ? (stepNumber - 1) : ((stepNumber - 1) % fupVariants.length);
         const variant = fupVariants[variantIndex] || fupVariants[0];
         return {
             message: variant.welcomeMessage || '',
@@ -196,21 +198,22 @@ function getStepConfig(fup, stepNumber, campaign, recipientPhone) {
             files: [],
         };
     }
-    // 3. Fallback: Top-level followup fields
+    // 3. Fallback: Top-level followup fields (ONLY for Step 1)
     return {
         message: stepNumber === 1 ? (fup.followupMessage || '') : '',
-        imageUrl: fup.followupImageUrl || '',
-        audioUrl: fup.followupAudioUrl || '',
-        videoUrl: fup.followupVideoUrl || '',
-        documentUrl: fup.followupDocumentUrl || '',
-        documentName: fup.followupDocumentName || 'Document',
-        files: fup.followupFiles || [],
+        imageUrl: stepNumber === 1 ? (fup.followupImageUrl || '') : '',
+        audioUrl: stepNumber === 1 ? (fup.followupAudioUrl || '') : '',
+        videoUrl: stepNumber === 1 ? (fup.followupVideoUrl || '') : '',
+        documentUrl: stepNumber === 1 ? (fup.followupDocumentUrl || '') : '',
+        documentName: stepNumber === 1 ? (fup.followupDocumentName || 'Document') : '',
+        files: stepNumber === 1 ? (fup.followupFiles || []) : [],
     };
 }
 /**
  * Dispatches step content respecting user intent:
- * - Sends 100% exact text provided by user (no AI modification or alteration)
- * - Sends 100% exact image provided by user
+ * - When AI is OFF or API Key is OFF: Sends 100% exact text provided by user (no AI modification)
+ * - When AI is ON and API Key is active: Optimizes message with Gemini
+ * - Sends 100% exact media provided for THIS specific step
  * - If both image and text exist, delivers image with exact text as caption
  */
 async function dispatchStepFollowup(sock, campaign, contact, stepNumber, stepConfig, gender, fup) {
@@ -221,7 +224,6 @@ async function dispatchStepFollowup(sock, campaign, contact, stepNumber, stepCon
     const hasDoc = Boolean(stepConfig.documentUrl);
     let msg = '';
     if (hasText) {
-        // Deliver exact text written by user without any AI alteration
         let text = stepConfig.message.trim();
         if (text.includes('{name}')) {
             const cleanName = (contact.contactName || '').trim();
@@ -229,6 +231,37 @@ async function dispatchStepFollowup(sock, campaign, contact, stepNumber, stepCon
             text = text.replace(/\{name\}/gi, hasValidName ? cleanName : '');
         }
         msg = text.trim();
+        // AI Optimization Check:
+        // If aiEnabled is false, or aiApiKey is 'none'/'off'/empty, NEVER optimize with AI!
+        const isAiActive = fup.aiEnabled === true &&
+            Boolean(fup.aiApiKey) &&
+            fup.aiApiKey !== 'none' &&
+            fup.aiApiKey !== 'off' &&
+            fup.aiApiKey !== 'disabled';
+        if (isAiActive) {
+            try {
+                const optimized = await (0, ai_js_1.generateFollowupText)({
+                    step: stepNumber,
+                    contactName: contact.contactName,
+                    gender,
+                    campaignName: campaign.name,
+                    understandingText: fup.understandingText,
+                    baseTemplate: msg,
+                    apiKeyOrId: fup.aiApiKey,
+                    preferredModel: fup.aiModel || 'gemini-flash-latest',
+                });
+                if (optimized && optimized.trim()) {
+                    msg = optimized.trim();
+                    (0, utils_js_1.log)('FOLLOWUP', `✨ Step ${stepNumber} AI optimized text for ${contact.phoneNumber}: "${msg.slice(0, 50)}..."`);
+                }
+            }
+            catch (err) {
+                (0, utils_js_1.log)('FOLLOWUP', `AI optimization skipped for Step ${stepNumber} (${err.message}). Using exact text.`);
+            }
+        }
+        else {
+            (0, utils_js_1.log)('FOLLOWUP', `🔒 Step ${stepNumber} AI is OFF. Sending exact user text to ${contact.phoneNumber}.`);
+        }
     }
     // Case 1: ONLY Audio (voice note)
     if (hasAudio && !hasText && !hasImage && !hasVideo && !hasDoc) {

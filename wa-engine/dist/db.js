@@ -419,24 +419,12 @@ async function deleteAuthBackup(accountId) {
     }
 }
 /**
- * Persist uploaded media permanently to Supabase Cloud DB so it survives Railway restarts.
+ * Persist uploaded media permanently.
+ * Disabled: All media files are now hosted on Cloudflare R2 with zero Supabase storage usage.
  */
 async function saveMediaBackup(filename, base64, mimeType = 'application/octet-stream') {
-    if (!supabase)
-        return;
-    try {
-        await supabase.from('wa_connection').upsert({
-            id: `file_${filename}`,
-            phone_number: filename,
-            qr_code: base64,
-            status: mimeType,
-            last_connected: new Date().toISOString(),
-        });
-        (0, utils_js_1.log)('MEDIA', `💾 Backed up media ${filename} to Cloud DB permanently.`);
-    }
-    catch (err) {
-        (0, utils_js_1.errLog)('MEDIA', `Error backing up media ${filename}:`, err.message);
-    }
+    // No-op: Do not save heavy base64 files into Supabase database
+    return;
 }
 /**
  * Restore media from Supabase Cloud DB if not present on container disk.

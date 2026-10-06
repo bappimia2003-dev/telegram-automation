@@ -1,4 +1,5 @@
 import { getSupabase } from './supabase';
+import { deleteMediaUrl, extractAllMediaUrlsFromCampaign, cleanupReplacedMedia } from './mediaCleaner';
 import { 
   WaCampaign, 
   WaCampaignVariant, 
@@ -328,6 +329,14 @@ export async function updateCampaign(id: string, updates: Partial<WaCampaign>): 
     ...updates,
     updatedAt: new Date().toISOString(),
   };
+
+  // Automatically delete any replaced or removed media from Cloudflare R2 / storage
+  if (existing) {
+    cleanupReplacedMedia(existing, merged).catch(err => {
+      console.warn('[UpdateCampaign] Error cleaning replaced media:', err);
+    });
+  }
+
   const rowUpdates = campaignToRow(merged);
 
   if (!supabase) {
@@ -347,6 +356,19 @@ export async function updateCampaign(id: string, updates: Partial<WaCampaign>): 
 
 export async function deleteCampaign(id: string): Promise<boolean> {
   invalidateCampaignsCache();
+
+  // 1. Purge all campaign media files from Cloudflare R2 and Supabase storage
+  const existing = await getCampaignById(id);
+  if (existing) {
+    const urls = extractAllMediaUrlsFromCampaign(existing);
+    console.log(`[DeleteCampaign] Purging ${urls.length} media files from Cloudflare R2 & storage for campaign ${id}...`);
+    for (const url of urls) {
+      deleteMediaUrl(url).catch(err => {
+        console.warn(`[DeleteCampaign] Error purging media ${url}:`, err);
+      });
+    }
+  }
+
   const supabase = getSupabase();
   if (!supabase) {
     const before = waMemory.campaigns.length;

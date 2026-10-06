@@ -48,7 +48,30 @@ export async function uploadFile(
 
   const isLargeFile = file.size > 4 * 1024 * 1024;
 
-  // 1. Direct Supabase Storage Upload (Bypasses Vercel 4.5MB limit)
+  // 1. Try /api/upload first (Routes to Cloudflare R2 with zero Supabase egress / bandwidth cost)
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', type);
+
+    const res = await fetch('/api/upload', { method: 'POST', body: formData });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.url) {
+        return {
+          url: data.url,
+          filename: data.filename || file.name,
+          parsedContent: data.parsedContent,
+        };
+      }
+    } else if (res.status === 413) {
+      console.warn('File exceeds serverless payload size, trying direct storage fallback');
+    }
+  } catch (apiErr) {
+    console.warn('/api/upload failed, trying fallback:', apiErr);
+  }
+
+  // 2. Direct Supabase Storage Upload (Fallback if API route unavailable)
   const supabase = getClientSupabase();
   if (supabase) {
     try {
@@ -68,25 +91,10 @@ export async function uploadFile(
           .getPublicUrl(safeFilename);
 
         if (pubUrlData?.publicUrl) {
-          let parsedContent = '';
-          // If document, extract text using server parser
-          if (type === 'document') {
-            try {
-              const formData = new FormData();
-              formData.append('file', file);
-              formData.append('type', 'document');
-              const parseRes = await fetch('/api/upload', { method: 'POST', body: formData });
-              const parseData = await parseRes.json();
-              parsedContent = parseData.parsedContent || '';
-            } catch (pErr) {
-              console.warn('Doc parsing fallback:', pErr);
-            }
-          }
-
           return {
             url: pubUrlData.publicUrl,
             filename: safeFilename,
-            parsedContent,
+            parsedContent: '',
           };
         }
       } else if (error) {
@@ -103,30 +111,7 @@ export async function uploadFile(
     }
   }
 
-  // 2. Fallback to /api/upload for smaller files (< 4.5MB)
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('type', type);
-
-  const res = await fetch('/api/upload', { method: 'POST', body: formData });
-  if (!res.ok) {
-    if (res.status === 413) {
-      throw new Error('ফাইলটি Vercel সার্ভারলেস সীমার (৪.৫ MB) চেয়ে বড়। দয়া করে ৪.৫ MB-র কম সাইজের ফাইল আপলোড করুন অথবা সরাসরি ভিডিও লিঙ্ক ব্যবহার করুন।');
-    }
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.error || `ফাইল আপলোড ব্যর্থ হয়েছে (Status: ${res.status})`);
-  }
-
-  const data = await res.json();
-  if (!data.url) {
-    throw new Error('আপলোড সম্পন্ন হয়নি');
-  }
-
-  return {
-    url: data.url,
-    filename: data.filename || file.name,
-    parsedContent: data.parsedContent,
-  };
+  throw new Error('ফাইল আপলোড ব্যর্থ হয়েছে। দয়া করে ফাইলটি পরীক্ষা করে আবার চেষ্টা করুন।');
 }
 
 /**

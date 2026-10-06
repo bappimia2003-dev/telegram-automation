@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { getSupabase } from '@/lib/supabase';
+import { isR2Configured, uploadToR2 } from '@/lib/r2';
 
 export async function POST(request: Request) {
   try {
@@ -36,27 +37,39 @@ export async function POST(request: Request) {
     const safeFilename = `${Date.now()}-${uuidv4().slice(0, 8)}${ext}`;
     let publicUrl = '';
 
-    // 1. Try uploading to Supabase Storage (Best for Vercel & Production)
-    const supabase = getSupabase();
-    if (supabase) {
+    // 1. Prioritize Cloudflare R2 (100% Free Bandwidth & Zero Egress Fees)
+    if (isR2Configured()) {
       try {
-        const { data: uploadData, error: uploadErr } = await supabase.storage
-          .from('media')
-          .upload(safeFilename, buffer, {
-            contentType: file.type || 'application/octet-stream',
-            upsert: true,
-          });
+        publicUrl = await uploadToR2(buffer, safeFilename, file.type || 'application/octet-stream');
+        console.log(`[Upload] Uploaded to Cloudflare R2: ${publicUrl}`);
+      } catch (r2Err: any) {
+        console.warn('Cloudflare R2 upload fallback:', r2Err.message);
+      }
+    }
 
-        if (!uploadErr && uploadData) {
-          const { data: pubUrlData } = supabase.storage
+    // 2. Try uploading to Supabase Storage (Fallback if R2 not configured)
+    if (!publicUrl) {
+      const supabase = getSupabase();
+      if (supabase) {
+        try {
+          const { data: uploadData, error: uploadErr } = await supabase.storage
             .from('media')
-            .getPublicUrl(safeFilename);
-          if (pubUrlData?.publicUrl) {
-            publicUrl = pubUrlData.publicUrl;
+            .upload(safeFilename, buffer, {
+              contentType: file.type || 'application/octet-stream',
+              upsert: true,
+            });
+
+          if (!uploadErr && uploadData) {
+            const { data: pubUrlData } = supabase.storage
+              .from('media')
+              .getPublicUrl(safeFilename);
+            if (pubUrlData?.publicUrl) {
+              publicUrl = pubUrlData.publicUrl;
+            }
           }
+        } catch (sbErr) {
+          console.warn('Supabase storage upload fallback:', sbErr);
         }
-      } catch (sbErr) {
-        console.warn('Supabase storage upload fallback:', sbErr);
       }
     }
 

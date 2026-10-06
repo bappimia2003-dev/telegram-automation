@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '@/lib/supabase';
+import { isR2Configured, uploadToR2 } from '@/lib/r2';
+import { deleteMediaUrl } from '@/lib/mediaCleaner';
 import fs from 'fs';
 import path from 'path';
 
@@ -17,7 +19,21 @@ export async function POST(request: Request) {
     const ext = file.name.split('.').pop() || 'bin';
     const safeName = `wa-${type}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${ext}`;
 
-    // 1. Prioritize Railway Engine Backend for cloud hosting
+    // 1. Prioritize Cloudflare R2 (100% Free CDN Bandwidth)
+    if (isR2Configured()) {
+      try {
+        const r2Url = await uploadToR2(buffer, `whatsapp/${safeName}`, file.type || 'application/octet-stream');
+        return NextResponse.json({
+          ok: true,
+          url: r2Url,
+          filename: file.name,
+        });
+      } catch (r2Err: any) {
+        console.warn('Cloudflare R2 WhatsApp upload fallback:', r2Err.message);
+      }
+    }
+
+    // 2. Prioritize Railway Engine Backend for cloud hosting
     const engineUrl = process.env.WA_ENGINE_URL || process.env.NEXT_PUBLIC_WA_ENGINE_URL;
     if (engineUrl) {
       try {
@@ -94,5 +110,19 @@ export async function POST(request: Request) {
     }
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const url = body.url;
+    if (!url) {
+      return NextResponse.json({ ok: false, error: 'No media url provided' }, { status: 400 });
+    }
+    const purged = await deleteMediaUrl(url);
+    return NextResponse.json({ ok: true, purged });
+  } catch (err: any) {
+    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
   }
 }

@@ -29,8 +29,8 @@ const apiKeyCache = new Map<string, string>();
  */
 export async function resolveGeminiApiKey(keyOrId?: string): Promise<string> {
   const candidate = (keyOrId || '').trim();
-  if (!candidate) {
-    return process.env.GEMINI_API_KEY || '';
+  if (!candidate || candidate === 'none' || candidate === 'off' || candidate === 'disabled') {
+    return '';
   }
 
   // If it already looks like a Gemini key (starts with AIza or AQ.)

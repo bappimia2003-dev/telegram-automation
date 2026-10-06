@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { sendPhoto, sendAudio, sendVoice, sendVideo } from '@/lib/telegram';
 import { getSupabase } from '@/lib/supabase';
+import { deleteFromR2 } from '@/lib/r2';
 import { updateBot, getBotById, getAllBots } from '@/lib/db';
 
 export async function POST(request: Request) {
@@ -89,13 +90,14 @@ export async function POST(request: Request) {
 
     const permanentFileId = result.fileId;
 
-    // 2. Delete temporary file from Supabase storage so 0 bytes remain on server
+    // 2. Delete temporary file from Supabase storage / Cloudflare R2 so 0 bytes remain on server
     if (tempFilename) {
       try {
+        await deleteFromR2(tempFilename);
         const supabase = getSupabase();
         if (supabase) {
           await supabase.storage.from('media').remove([tempFilename]);
-          console.log(`[TelegramCloud] Purged temporary file ${tempFilename} from Supabase storage.`);
+          console.log(`[TelegramCloud] Purged temporary file ${tempFilename}`);
         }
       } catch (cleanErr) {
         console.warn('[TelegramCloud] Failed to remove temp file:', cleanErr);
