@@ -545,8 +545,8 @@ export async function getContactLogs(
     const { data, error } = await supabase
       .from('wa_message_logs')
       .select('*')
-      .eq('campaign_id', campaignId)
       .eq('phone_number', phoneNumber)
+      .or(`campaign_id.eq.${campaignId},message_type.eq.incoming`)
       .order('sent_at', { ascending: true });
 
     if (error) return [];

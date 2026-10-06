@@ -2,19 +2,23 @@
  * followupScheduler.ts
  *
  * Intelligent Multi-Step WhatsApp Follow-up Scheduler:
- * 1. Checks campaigns every 30 seconds.
+ * 1. Checks campaigns every 15 seconds.
  * 2. Strictly obeys campaign follow-up switch:
  *    If followupEnabled is OFF, campaign is 100% ignored.
  * 3. Reply Detection (Manual Takeover):
  *    If the customer replied at any point, automated follow-up is STOPPED immediately.
  * 4. Step Timeline (Only if customer did NOT reply):
- *    - Step 1: ~2 minutes after initial message -> AI Studio optimized sweet text message.
- *    - Step 2: 3 to 4 hours later -> Image or Audio (voice note) + soft nudge.
- *    - Step 3: Next day (~20-24h later) -> Friendly courteous closing reminder.
+ *    - Step 1: ~2 minutes after initial message -> AI Studio optimized sweet text message / exact text.
+ *    - Step 2: 3 to 4 hours later (within 48h ceiling) -> Image or Audio (voice note) + soft nudge.
+ *    - Step 3: Next day (~20-24h later, within 96h ceiling) -> Friendly courteous closing reminder.
  * 5. Promise Date Handling:
  *    If customer said e.g. "কাল নিব", "শুক্রবার", "2 din por", the reminder fires on that date!
- * 6. Historical Safety:
- *    Ancient contacts (>60 minutes old without step 1) are never retroactively blasted.
+ * 6. Historical Safety & Anti-Blast Protection:
+ *    - Leads older than allowable window are never retroactively blasted.
+ *    - Staggered randomized intervals between contacts.
+ *    - If any partial message is delivered (e.g. text succeeded but audio failed), step is marked
+ *      completed immediately so the text is NEVER sent repeatedly.
+ *    - If all media in a step fails, after 2 attempts the step is marked to prevent infinite retry loops.
  */
 
 import { v4 as uuidv4 } from 'uuid';
@@ -66,17 +70,18 @@ function analyzeContactFollowupState(logs: any[], initialContactTimeMs: number) 
   let promiseTargetDate: string | null = null;
   let promiseAlreadySent = false;
 
+  const validInitialContactMs = Number.isFinite(initialContactTimeMs) ? initialContactTimeMs : 0;
+
   for (const l of logs) {
     const logTimeMs = new Date(l.sentAt).getTime();
 
-    // CRITICAL: Ignore any historical logs from previous test sessions or before the current campaign trigger!
-    // This guarantees that every new trigger starts clean at Step 1.
-    if (logTimeMs < initialContactTimeMs - 2000) {
+    // Ignore any historical logs from older sessions before current contact
+    if (validInitialContactMs > 0 && logTimeMs < validInitialContactMs - 10000) {
       continue;
     }
 
-    // Inbound reply from customer AFTER the auto-campaign message was delivered
-    if (l.messageType === 'incoming' && logTimeMs > initialContactTimeMs + 2000) {
+    // Inbound reply from customer: ANY incoming message after initial contact means manual takeover!
+    if (l.messageType === 'incoming' && (validInitialContactMs === 0 || logTimeMs >= validInitialContactMs - 5000)) {
       hasReplied = true;
     }
 
@@ -149,34 +154,33 @@ function getStepConfig(fup: WaFollowupConfig, stepNumber: number, campaign?: WaC
   // 1. Primary: Match explicit step in fup.steps
   const step = fup.steps?.find((s) => s.stepNumber === stepNumber);
   if (step) {
-    let img = step.imageUrl || '';
-    let aud = step.audioUrl || '';
-    let vid = step.videoUrl || '';
-    let doc = step.documentUrl || '';
-    let docName = step.documentName || 'Document';
+    let img = (step.imageUrl || '').trim();
+    let aud = (step.audioUrl || '').trim();
+    let vid = (step.videoUrl || '').trim();
+    let doc = (step.documentUrl || '').trim();
+    let docName = (step.documentName || 'Document').trim();
     const files = step.files || [];
     for (const f of files) {
-      if (f.type === 'image' && !img) img = f.url;
-      if (f.type === 'audio' && !aud) aud = f.url;
-      if (f.type === 'video' && !vid) vid = f.url;
+      if (!f.url) continue;
+      if (f.type === 'image' && !img) img = f.url.trim();
+      if (f.type === 'audio' && !aud) aud = f.url.trim();
+      if (f.type === 'video' && !vid) vid = f.url.trim();
       if (f.type === 'document' && !doc) {
-        doc = f.url;
-        docName = f.name;
+        doc = f.url.trim();
+        docName = (f.name || docName).trim();
       }
     }
 
     // ONLY for Step 1: if step 1 doesn't have an explicit image, allow legacy top-level fup fallback
     if (stepNumber === 1) {
-      if (!img && fup.followupImageUrl) img = fup.followupImageUrl;
-      if (!aud && fup.followupAudioUrl) aud = fup.followupAudioUrl;
-      if (!vid && fup.followupVideoUrl) vid = fup.followupVideoUrl;
+      if (!img && fup.followupImageUrl) img = fup.followupImageUrl.trim();
+      if (!aud && fup.followupAudioUrl) aud = fup.followupAudioUrl.trim();
+      if (!vid && fup.followupVideoUrl) vid = fup.followupVideoUrl.trim();
       if (!doc && fup.followupDocumentUrl) {
-        doc = fup.followupDocumentUrl;
-        docName = fup.followupDocumentName || docName;
+        doc = fup.followupDocumentUrl.trim();
+        docName = (fup.followupDocumentName || docName).trim();
       }
     }
-    // For Step 2 and Step 3: Strictly do NOT inherit Step 1's media!
-    // They must use ONLY their own media files/urls so old images never repeat.
 
     return {
       message: step.message !== undefined ? step.message : '',
@@ -196,11 +200,11 @@ function getStepConfig(fup: WaFollowupConfig, stepNumber: number, campaign?: WaC
     const variant = fupVariants[variantIndex] || fupVariants[0];
     return {
       message: variant.welcomeMessage || '',
-      imageUrl: variant.imageUrl || '',
-      audioUrl: variant.audioUrl || '',
-      videoUrl: variant.videoUrl || '',
-      documentUrl: variant.documentUrl || '',
-      documentName: variant.documentName || '',
+      imageUrl: (variant.imageUrl || '').trim(),
+      audioUrl: (variant.audioUrl || '').trim(),
+      videoUrl: (variant.videoUrl || '').trim(),
+      documentUrl: (variant.documentUrl || '').trim(),
+      documentName: (variant.documentName || '').trim(),
       files: [],
     };
   }
@@ -208,21 +212,22 @@ function getStepConfig(fup: WaFollowupConfig, stepNumber: number, campaign?: WaC
   // 3. Fallback: Top-level followup fields (ONLY for Step 1)
   return {
     message: stepNumber === 1 ? (fup.followupMessage || '') : '',
-    imageUrl: stepNumber === 1 ? (fup.followupImageUrl || '') : '',
-    audioUrl: stepNumber === 1 ? (fup.followupAudioUrl || '') : '',
-    videoUrl: stepNumber === 1 ? (fup.followupVideoUrl || '') : '',
-    documentUrl: stepNumber === 1 ? (fup.followupDocumentUrl || '') : '',
-    documentName: stepNumber === 1 ? (fup.followupDocumentName || 'Document') : '',
+    imageUrl: stepNumber === 1 ? (fup.followupImageUrl || '').trim() : '',
+    audioUrl: stepNumber === 1 ? (fup.followupAudioUrl || '').trim() : '',
+    videoUrl: stepNumber === 1 ? (fup.followupVideoUrl || '').trim() : '',
+    documentUrl: stepNumber === 1 ? (fup.followupDocumentUrl || '').trim() : '',
+    documentName: stepNumber === 1 ? (fup.followupDocumentName || 'Document').trim() : '',
     files: stepNumber === 1 ? (fup.followupFiles || []) : [],
   };
 }
 
 /**
- * Dispatches step content respecting user intent:
+ * Dispatches step content respecting user intent with full crash resilience:
  * - When AI is OFF or API Key is OFF: Sends 100% exact text provided by user (no AI modification)
  * - When AI is ON and API Key is active: Optimizes message with Gemini
- * - Sends 100% exact media provided for THIS specific step
- * - If both image and text exist, delivers image with exact text as caption
+ * - Resilient delivery: If both image/video and text exist, delivers image/video with exact text as caption
+ * - CRITICAL ANTI-LOOP FIX: If text is delivered but audio/media fails, step is marked completed
+ *   so the customer is NEVER repeatedly spammed with duplicate text messages!
  */
 async function dispatchStepFollowup(
   sock: any,
@@ -241,10 +246,15 @@ async function dispatchStepFollowup(
   fup: WaFollowupConfig
 ): Promise<boolean> {
   const hasText = Boolean(stepConfig.message && stepConfig.message.trim());
-  const hasImage = Boolean(stepConfig.imageUrl);
-  const hasAudio = Boolean(stepConfig.audioUrl);
-  const hasVideo = Boolean(stepConfig.videoUrl);
-  const hasDoc = Boolean(stepConfig.documentUrl);
+  const hasImage = Boolean(stepConfig.imageUrl && stepConfig.imageUrl.trim());
+  const hasAudio = Boolean(stepConfig.audioUrl && stepConfig.audioUrl.trim());
+  const hasVideo = Boolean(stepConfig.videoUrl && stepConfig.videoUrl.trim());
+  const hasDoc = Boolean(stepConfig.documentUrl && stepConfig.documentUrl.trim());
+
+  if (!hasText && !hasImage && !hasAudio && !hasVideo && !hasDoc) {
+    log('FOLLOWUP', `⚠️ Step ${stepNumber} for campaign "${campaign.name}" has no message or media configured.`);
+    return false;
+  }
 
   let msg = '';
   if (hasText) {
@@ -256,8 +266,7 @@ async function dispatchStepFollowup(
     }
     msg = text.trim();
 
-    // AI Optimization Check:
-    // If aiEnabled is false, or aiApiKey is 'none'/'off'/empty, NEVER optimize with AI!
+    // AI Optimization Check
     const isAiActive = fup.aiEnabled === true && 
       Boolean(fup.aiApiKey) && 
       fup.aiApiKey !== 'none' && 
@@ -288,142 +297,103 @@ async function dispatchStepFollowup(
     }
   }
 
-  // Case 1: ONLY Audio (voice note)
-  if (hasAudio && !hasText && !hasImage && !hasVideo && !hasDoc) {
+  let deliveredAny = false;
+  let loggedType: 'text' | 'image' | 'audio' | 'video' | 'document' = 'text';
+  let loggedUrl = '';
+
+  // 1. Deliver Image (with text caption if available)
+  if (hasImage) {
     try {
-      await sock.sendPresenceUpdate('recording', contact.phoneNumber);
-      await sleep(1500);
-      await sendAudioMessage(sock, contact.phoneNumber, stepConfig.audioUrl);
-      await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'audio', stepConfig.audioUrl);
-      log('FOLLOWUP', `✅ Step ${stepNumber} delivered voice note only to ${contact.phoneNumber}`);
-      return true;
+      try {
+        await sock.sendPresenceUpdate('composing', contact.phoneNumber);
+      } catch {}
+      await sleep(1000);
+      const caption = msg; // send message as caption
+      await sendImageMessage(sock, contact.phoneNumber, stepConfig.imageUrl, caption);
+      deliveredAny = true;
+      loggedType = 'image';
+      loggedUrl = stepConfig.imageUrl;
+      msg = ''; // text delivered with image
+      log('FOLLOWUP', `✅ Step ${stepNumber} delivered image to ${contact.phoneNumber}`);
     } catch (e: any) {
-      errLog('FOLLOWUP', `Step ${stepNumber} audio failed: ${e.message}`);
-      return false;
+      errLog('FOLLOWUP', `Step ${stepNumber} image send failed: ${e.message}`);
     }
   }
 
-  // Case 2: ONLY Image
-  if (hasImage && !hasText && !hasAudio && !hasVideo && !hasDoc) {
+  // 2. Deliver Video (with text caption if available and not already sent with image)
+  if (hasVideo) {
     try {
-      await sendImageMessage(sock, contact.phoneNumber, stepConfig.imageUrl, '');
-      await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'image', stepConfig.imageUrl);
-      log('FOLLOWUP', `✅ Step ${stepNumber} delivered image only to ${contact.phoneNumber}`);
-      return true;
+      try {
+        await sock.sendPresenceUpdate('composing', contact.phoneNumber);
+      } catch {}
+      await sleep(1000);
+      const caption = msg;
+      await sendVideoMessage(sock, contact.phoneNumber, stepConfig.videoUrl, caption);
+      deliveredAny = true;
+      loggedType = 'video';
+      loggedUrl = stepConfig.videoUrl;
+      msg = ''; // text delivered with video
+      log('FOLLOWUP', `✅ Step ${stepNumber} delivered video to ${contact.phoneNumber}`);
     } catch (e: any) {
-      errLog('FOLLOWUP', `Step ${stepNumber} image failed: ${e.message}`);
-      return false;
+      errLog('FOLLOWUP', `Step ${stepNumber} video send failed: ${e.message}`);
     }
   }
 
-  // Case 3: ONLY Video
-  if (hasVideo && !hasText && !hasAudio && !hasImage && !hasDoc) {
-    try {
-      await sendVideoMessage(sock, contact.phoneNumber, stepConfig.videoUrl, '');
-      await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'video', stepConfig.videoUrl);
-      log('FOLLOWUP', `✅ Step ${stepNumber} delivered video only to ${contact.phoneNumber}`);
-      return true;
-    } catch (e: any) {
-      errLog('FOLLOWUP', `Step ${stepNumber} video failed: ${e.message}`);
-      return false;
-    }
-  }
-
-  // Case 4: ONLY Document
-  if (hasDoc && !hasText && !hasAudio && !hasImage && !hasVideo) {
+  // 3. Deliver Document
+  if (hasDoc) {
     try {
       await sendDocumentMessage(sock, contact.phoneNumber, stepConfig.documentUrl, stepConfig.documentName);
-      await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'document', stepConfig.documentUrl);
-      log('FOLLOWUP', `✅ Step ${stepNumber} delivered document only to ${contact.phoneNumber}`);
-      return true;
+      deliveredAny = true;
+      loggedType = 'document';
+      loggedUrl = stepConfig.documentUrl;
+      log('FOLLOWUP', `✅ Step ${stepNumber} delivered document to ${contact.phoneNumber}`);
     } catch (e: any) {
-      errLog('FOLLOWUP', `Step ${stepNumber} document failed: ${e.message}`);
-      return false;
+      errLog('FOLLOWUP', `Step ${stepNumber} document send failed: ${e.message}`);
     }
   }
 
-  // Case 5: Image + Text (as caption)
-  if (hasImage && msg) {
-    try {
-      try {
-        await sock.sendPresenceUpdate('composing', contact.phoneNumber);
-      } catch {}
-      await sleep(1000);
-      await sendImageMessage(sock, contact.phoneNumber, stepConfig.imageUrl, msg);
-      await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'image', stepConfig.imageUrl);
-      log('FOLLOWUP', `✅ Step ${stepNumber} delivered image with caption to ${contact.phoneNumber}`);
-      return true;
-    } catch (e: any) {
-      errLog('FOLLOWUP', `Step ${stepNumber} image with caption failed: ${e.message}`);
-      // Fallback: If image fetch/network failed, deliver exact text so customer is not missed
-      try {
-        await sendTextMessage(sock, contact.phoneNumber, msg);
-        await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'text', '');
-        log('FOLLOWUP', `✅ Step ${stepNumber} fallback text delivered to ${contact.phoneNumber}`);
-        return true;
-      } catch (err: any) {
-        return false;
-      }
-    }
-  }
-
-  // Case 6: Video + Text (as caption)
-  if (hasVideo && msg) {
-    try {
-      await sendVideoMessage(sock, contact.phoneNumber, stepConfig.videoUrl, msg);
-      await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'video', stepConfig.videoUrl);
-      log('FOLLOWUP', `✅ Step ${stepNumber} delivered video with caption to ${contact.phoneNumber}`);
-      return true;
-    } catch (e: any) {
-      errLog('FOLLOWUP', `Step ${stepNumber} video with caption failed: ${e.message}`);
-      try {
-        await sendTextMessage(sock, contact.phoneNumber, msg);
-        await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'text', '');
-        return true;
-      } catch {
-        return false;
-      }
-    }
-  }
-
-  // Case 7: Text + Audio (Voice note)
-  if (hasAudio && msg) {
-    try {
-      try {
-        await sock.sendPresenceUpdate('composing', contact.phoneNumber);
-      } catch {}
-      await sleep(1000);
-      await sendTextMessage(sock, contact.phoneNumber, msg);
-
-      try {
-        await sock.sendPresenceUpdate('recording', contact.phoneNumber);
-      } catch {}
-      await sleep(1000);
-      await sendAudioMessage(sock, contact.phoneNumber, stepConfig.audioUrl);
-      await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'audio', stepConfig.audioUrl);
-      log('FOLLOWUP', `✅ Step ${stepNumber} delivered text + voice note to ${contact.phoneNumber}`);
-      return true;
-    } catch (e: any) {
-      errLog('FOLLOWUP', `Step ${stepNumber} text + audio failed: ${e.message}`);
-      return false;
-    }
-  }
-
-  // Case 8: Text only
+  // 4. Deliver Text (if text has not already been sent as image/video caption)
   if (msg) {
     try {
       try {
         await sock.sendPresenceUpdate('composing', contact.phoneNumber);
       } catch {}
-      await sleep(1500);
+      await sleep(1200);
       await sendTextMessage(sock, contact.phoneNumber, msg);
-      await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, 'text', '');
+      deliveredAny = true;
+      if (!loggedUrl) {
+        loggedType = 'text';
+      }
       log('FOLLOWUP', `✅ Step ${stepNumber} delivered text to ${contact.phoneNumber}: "${msg.slice(0, 60)}..."`);
-      return true;
     } catch (e: any) {
-      errLog('FOLLOWUP', `Step ${stepNumber} text failed: ${e.message}`);
-      return false;
+      errLog('FOLLOWUP', `Step ${stepNumber} text send failed: ${e.message}`);
     }
+  }
+
+  // 5. Deliver Audio (Voice note)
+  if (hasAudio) {
+    try {
+      try {
+        await sock.sendPresenceUpdate('recording', contact.phoneNumber);
+      } catch {}
+      await sleep(1200);
+      await sendAudioMessage(sock, contact.phoneNumber, stepConfig.audioUrl);
+      deliveredAny = true;
+      if (loggedType === 'text') {
+        loggedType = 'audio';
+        loggedUrl = stepConfig.audioUrl;
+      }
+      log('FOLLOWUP', `✅ Step ${stepNumber} delivered voice note to ${contact.phoneNumber}`);
+    } catch (e: any) {
+      errLog('FOLLOWUP', `Step ${stepNumber} audio send failed: ${e.message}`);
+    }
+  }
+
+  // CRITICAL RESILIENCE: If ANY part of the step was delivered (e.g. text succeeded even if audio failed):
+  // We MUST log the step as sent and return true! This prevents infinite repeat spam loops.
+  if (deliveredAny) {
+    await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, loggedType, loggedUrl);
+    return true;
   }
 
   return false;
@@ -436,12 +406,13 @@ let isCycleRunning = false;
 const inFlightKeys = new Set<string>(); // key: `${campaignId}:${phoneNumber}`
 const accountCooldownMap = new Map<string, number>(); // accountId -> nextAllowedDispatchTimestamp
 const accountBatchCountMap = new Map<string, number>(); // accountId -> messagesSentInCurrentBatch
+const stepFailCountMap = new Map<string, number>(); // failKey -> failure count to prevent infinite retries
 
 /**
  * Apply randomized cooldown after sending a follow-up:
- * - Between individual sends: random 60 to 180 seconds (1 to 3 minutes), plus random seconds & ms.
- * - When batch limit (3 to 5 people) is reached: pause for random 4 to 8 minutes.
- * - Result: No two contacts ever receive at the same time; every recipient is on a different minute and second!
+ * - Between individual sends: random 15 to 40 seconds.
+ * - When batch limit (3 to 5 people) is reached: pause for random 3 to 5 minutes.
+ * - Result: No two contacts ever receive at the same time; pacing is human-like and anti-ban compliant!
  */
 function applyAccountCooldown(accountId: string, fup: WaFollowupConfig): void {
   const currentBatch = (accountBatchCountMap.get(accountId) || 0) + 1;
@@ -518,7 +489,7 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
         continue;
       }
 
-      // Fetch message logs for this contact
+      // Fetch message logs for this contact (including incoming replies across campaigns)
       const logs = await getContactLogs(campaign.id, contact.phoneNumber);
       const state = analyzeContactFollowupState(logs, initialContactMs);
       const gender = ruleBasedGender(contact.contactName, '');
@@ -533,9 +504,26 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
             log('FOLLOWUP', `📅 Promise date reached (${state.promiseTargetDate}) for ${contact.phoneNumber}. Sending reminder...`);
             const step1Config = getStepConfig(fup, 1, campaign, contact.phoneNumber);
             const msg = step1Config.message || 'আসসালামু আলাইকুম {name}! আপনার আগ্রহের অফারটির বিষয়ে জানাতে পারেন।';
-            await sendTextMessage(sock, contact.phoneNumber, msg);
-            await markPromiseSent(campaign.id, contact.phoneNumber, contact.contactName);
-            log('FOLLOWUP', `✅ Promise reminder sent to ${contact.phoneNumber}`);
+            let promiseSent = false;
+            try {
+              await sendTextMessage(sock, contact.phoneNumber, msg);
+              promiseSent = true;
+            } catch (pErr: any) {
+              errLog('FOLLOWUP', `Failed sending promise reminder to ${contact.phoneNumber}: ${pErr.message}`);
+            }
+
+            if (promiseSent) {
+              await markPromiseSent(campaign.id, contact.phoneNumber, contact.contactName);
+              log('FOLLOWUP', `✅ Promise reminder sent to ${contact.phoneNumber}`);
+            } else {
+              const pFailKey = `prm:${campaign.id}:${contact.phoneNumber}`;
+              const pFails = (stepFailCountMap.get(pFailKey) || 0) + 1;
+              stepFailCountMap.set(pFailKey, pFails);
+              if (pFails >= 2) {
+                await markPromiseSent(campaign.id, contact.phoneNumber, contact.contactName);
+                stepFailCountMap.delete(pFailKey);
+              }
+            }
 
             applyAccountCooldown(accountId, fup);
             break; // Stop after 1 send to maintain strictly staggered pacing
@@ -575,7 +563,6 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
 
         // When running real-time campaign follow-up (minAgeDays == 0):
         if (minAgeDays === 0) {
-          // If not enough minutes have passed since contact was created, wait
           if (ageMinutes < targetMinutes) {
             continue;
           }
@@ -593,6 +580,7 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
           log('FOLLOWUP', `⏳ [Step 1: ${timingLabel}] Sending to ${contact.phoneNumber} (${contact.contactName}) for "${campaign.name}"...`);
 
           const step1Config = getStepConfig(fup, 1, campaign, contact.phoneNumber);
+          const failKey = `${campaign.id}:${contact.phoneNumber}:1`;
           const success = await dispatchStepFollowup(sock, campaign, contact, 1, step1Config, gender, fup);
 
           try {
@@ -600,7 +588,17 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
           } catch {}
 
           if (success) {
-            // Apply randomized pacing gap and exit loop: only 1 send per tick!
+            stepFailCountMap.delete(failKey);
+            applyAccountCooldown(accountId, fup);
+            break;
+          } else {
+            const fails = (stepFailCountMap.get(failKey) || 0) + 1;
+            stepFailCountMap.set(failKey, fails);
+            if (fails >= 2) {
+              log('FOLLOWUP', `⚠️ [Safety Skip] Step 1 for ${contact.phoneNumber} failed ${fails} times (broken file/network). Recording step as failed.`);
+              await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, 1, 'text', 'failed: max_retries_exceeded');
+              stepFailCountMap.delete(failKey);
+            }
             applyAccountCooldown(accountId, fup);
             break;
           }
@@ -610,16 +608,21 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
       }
 
       // ─────────────────────────────────────────────────────────────────────────
-      // Step 2: 3 to 4 Hours after Step 1
+      // Step 2: 3 to 4 Hours after Step 1 (Safety Ceiling: 48 Hours)
       // ─────────────────────────────────────────────────────────────────────────
       if (state.highestStep === 1) {
         const hoursSinceStep1 = (now - state.lastStepTimeMs) / (60 * 60 * 1000);
+        if (hoursSinceStep1 > 48) {
+          // Lapsed lead: older than 48 hours since Step 1 without Step 2. Safely skip to prevent ancient nudges.
+          continue;
+        }
         if (hoursSinceStep1 >= 3) {
           inFlightKeys.add(flightKey);
           try {
             log('FOLLOWUP', `🕒 [Step 2: 3-4h nudge] Sending to ${contact.phoneNumber} (${contact.contactName})...`);
 
             const step2Config = getStepConfig(fup, 2, campaign, contact.phoneNumber);
+            const failKey = `${campaign.id}:${contact.phoneNumber}:2`;
             const success = await dispatchStepFollowup(sock, campaign, contact, 2, step2Config, gender, fup);
 
             try {
@@ -627,8 +630,19 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
             } catch {}
 
             if (success) {
+              stepFailCountMap.delete(failKey);
               applyAccountCooldown(accountId, fup);
-              break; // Crucial: Break loop to maintain staggered pacing!
+              break;
+            } else {
+              const fails = (stepFailCountMap.get(failKey) || 0) + 1;
+              stepFailCountMap.set(failKey, fails);
+              if (fails >= 2) {
+                log('FOLLOWUP', `⚠️ [Safety Skip] Step 2 for ${contact.phoneNumber} failed ${fails} times. Recording step as failed.`);
+                await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, 2, 'text', 'failed: max_retries_exceeded');
+                stepFailCountMap.delete(failKey);
+              }
+              applyAccountCooldown(accountId, fup);
+              break;
             }
           } finally {
             inFlightKeys.delete(flightKey);
@@ -637,16 +651,21 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
       }
 
       // ─────────────────────────────────────────────────────────────────────────
-      // Step 3: Next Day (~20-24 Hours after Step 2)
+      // Step 3: Next Day (~20-24 Hours after Step 2, Safety Ceiling: 96 Hours)
       // ─────────────────────────────────────────────────────────────────────────
       if (state.highestStep === 2) {
         const hoursSinceStep2 = (now - state.lastStepTimeMs) / (60 * 60 * 1000);
+        if (hoursSinceStep2 > 96) {
+          // Lapsed lead: older than 4 days since Step 2 without Step 3. Safely skip.
+          continue;
+        }
         if (hoursSinceStep2 >= 20) {
           inFlightKeys.add(flightKey);
           try {
             log('FOLLOWUP', `🌅 [Step 3: Next-day value] Sending to ${contact.phoneNumber}...`);
 
             const step3Config = getStepConfig(fup, 3, campaign, contact.phoneNumber);
+            const failKey = `${campaign.id}:${contact.phoneNumber}:3`;
             const success = await dispatchStepFollowup(sock, campaign, contact, 3, step3Config, gender, fup);
 
             try {
@@ -654,9 +673,20 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
             } catch {}
 
             if (success) {
+              stepFailCountMap.delete(failKey);
               log('FOLLOWUP', `✅ Step 3 completed for ${contact.phoneNumber}. Follow-up sequence finished.`);
               applyAccountCooldown(accountId, fup);
-              break; // Crucial: Break loop!
+              break;
+            } else {
+              const fails = (stepFailCountMap.get(failKey) || 0) + 1;
+              stepFailCountMap.set(failKey, fails);
+              if (fails >= 2) {
+                log('FOLLOWUP', `⚠️ [Safety Skip] Step 3 for ${contact.phoneNumber} failed ${fails} times. Recording step as failed.`);
+                await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, 3, 'text', 'failed: max_retries_exceeded');
+                stepFailCountMap.delete(failKey);
+              }
+              applyAccountCooldown(accountId, fup);
+              break;
             }
           } finally {
             inFlightKeys.delete(flightKey);

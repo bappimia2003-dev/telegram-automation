@@ -42,7 +42,6 @@ async function matchCampaign(messageText, accountId) {
             const isMatch = cleanedText === kw ||
                 words.includes(kw) ||
                 (kw.length >= 3 && cleanedText.includes(kw)) ||
-                (cleanedText.length >= 4 && kw.startsWith(cleanedText)) ||
                 allKwWordsInMessage;
             if (isMatch) {
                 (0, utils_js_1.log)('CAMPAIGN', `[Acc: ${accountId || 'all'}] Matched keyword "${kw}" for campaign: "${campaign.name}" (incoming: "${messageText}")`);

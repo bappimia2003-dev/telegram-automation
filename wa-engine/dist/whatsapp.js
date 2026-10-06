@@ -259,15 +259,17 @@ async function startWhatsApp(accountId = 'main', accountName) {
                     else {
                         // B. CUSTOMER REPLY! (Customer replied to our message)
                         // Follow-up is turned OFF IMMEDIATELY for this customer!
-                        const campaignId = await (0, db_js_1.findContactCampaign)(sender, accountId);
-                        if (campaignId) {
-                            (0, utils_js_1.log)('WA', `🛑 Customer ${sender} replied: "${messageText}". Follow-up turned OFF immediately!`);
-                            await (0, db_js_1.logInboundMessage)(campaignId, sender, pushName, messageText);
-                            // Check if customer gave a promise date ("কাল নিব", "শুক্রবার", "২ দিন পর", etc.)
-                            const analysis = await (0, ai_js_1.detectGenderAndIntent)(pushName, messageText);
-                            if (analysis.promiseDate) {
-                                await (0, db_js_1.schedulePromiseFollowup)(campaignId, sender, pushName, analysis.promiseDate);
-                            }
+                        let campaignId = await (0, db_js_1.findContactCampaign)(sender, accountId);
+                        if (!campaignId) {
+                            const activeCamps = await (0, db_js_1.getActiveCampaigns)();
+                            campaignId = activeCamps[0]?.id || 'general';
+                        }
+                        (0, utils_js_1.log)('WA', `🛑 Customer ${sender} replied: "${messageText}". Follow-up turned OFF immediately!`);
+                        await (0, db_js_1.logInboundMessage)(campaignId, sender, pushName, messageText);
+                        // Check if customer gave a promise date ("কাল নিব", "শুক্রবার", "২ দিন পর", etc.)
+                        const analysis = await (0, ai_js_1.detectGenderAndIntent)(pushName, messageText);
+                        if (analysis.promiseDate) {
+                            await (0, db_js_1.schedulePromiseFollowup)(campaignId, sender, pushName, analysis.promiseDate);
                         }
                     }
                 }).catch((err) => {

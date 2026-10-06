@@ -28,7 +28,7 @@ async function getMediaBuffer(source) {
     }
     if (source.startsWith('http://') || source.startsWith('https://')) {
         try {
-            const res = await fetch(source);
+            const res = await fetch(source, { signal: AbortSignal.timeout(15000) });
             if (res.ok) {
                 const arrayBuf = await res.arrayBuffer();
                 return Buffer.from(arrayBuf);

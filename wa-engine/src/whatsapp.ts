@@ -12,6 +12,7 @@ import {
   findContactCampaign,
   logInboundMessage,
   schedulePromiseFollowup,
+  getActiveCampaigns,
 } from './db.js';
 import { processIncomingMessage, matchCampaign } from './campaigns.js';
 import { detectGenderAndIntent } from './ai.js';
@@ -284,16 +285,19 @@ export async function startWhatsApp(accountId = 'main', accountName?: string): P
           } else {
             // B. CUSTOMER REPLY! (Customer replied to our message)
             // Follow-up is turned OFF IMMEDIATELY for this customer!
-            const campaignId = await findContactCampaign(sender, accountId);
-            if (campaignId) {
-              log('WA', `🛑 Customer ${sender} replied: "${messageText}". Follow-up turned OFF immediately!`);
-              await logInboundMessage(campaignId, sender, pushName, messageText);
+            let campaignId = await findContactCampaign(sender, accountId);
+            if (!campaignId) {
+              const activeCamps = await getActiveCampaigns();
+              campaignId = activeCamps[0]?.id || 'general';
+            }
 
-              // Check if customer gave a promise date ("কাল নিব", "শুক্রবার", "২ দিন পর", etc.)
-              const analysis = await detectGenderAndIntent(pushName, messageText);
-              if (analysis.promiseDate) {
-                await schedulePromiseFollowup(campaignId, sender, pushName, analysis.promiseDate);
-              }
+            log('WA', `🛑 Customer ${sender} replied: "${messageText}". Follow-up turned OFF immediately!`);
+            await logInboundMessage(campaignId, sender, pushName, messageText);
+
+            // Check if customer gave a promise date ("কাল নিব", "শুক্রবার", "২ দিন পর", etc.)
+            const analysis = await detectGenderAndIntent(pushName, messageText);
+            if (analysis.promiseDate) {
+              await schedulePromiseFollowup(campaignId, sender, pushName, analysis.promiseDate);
             }
           }
         }).catch((err) => {

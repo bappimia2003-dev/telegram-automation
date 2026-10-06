@@ -59,7 +59,6 @@ export async function matchCampaign(messageText: string, accountId?: string): Pr
         cleanedText === kw ||
         words.includes(kw) ||
         (kw.length >= 3 && cleanedText.includes(kw)) ||
-        (cleanedText.length >= 4 && kw.startsWith(cleanedText)) ||
         allKwWordsInMessage;
 
       if (isMatch) {
