@@ -297,12 +297,12 @@ export function WhatsAppNumbers({
 
   return (
     <div className="space-y-4">
-      {/* Header Bar (Accordion Trigger: All numbers show ONLY on click) */}
+      {/* Header Bar (Accordion Trigger: All numbers show ONLY on click of text) */}
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"
           onClick={() => setShowAllNumbers(prev => !prev)}
-          className="flex items-center gap-2 group cursor-pointer text-left focus:outline-none min-w-0"
+          className="flex items-center gap-2 group cursor-pointer text-left focus:outline-none min-w-0 select-none hover:opacity-80 transition-opacity"
         >
           <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white font-['Sora',sans-serif] whitespace-nowrap flex items-center gap-2">
             <span>Connected WhatsApp Numbers</span>
@@ -310,9 +310,6 @@ export function WhatsAppNumbers({
               {accounts.filter(a => a.status === 'connected').length}
             </span>
           </h2>
-          <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform duration-300 shrink-0 ${
-            showAllNumbers ? 'rotate-180' : 'rotate-0'
-          }`} />
         </button>
 
         <Button
@@ -341,7 +338,7 @@ export function WhatsAppNumbers({
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 pt-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 pt-1 items-start">
           {accounts.filter(acc => !(acc.id === 'main' && !acc.phoneNumber && acc.status === 'disconnected' && accounts.length > 1)).map((acc) => {
             const campCount = getAccountCampaignCount(acc.id);
             const isConnected = acc.status === 'connected';
@@ -351,7 +348,7 @@ export function WhatsAppNumbers({
             return (
               <div 
                 key={acc.id} 
-                className="rounded-[20px] overflow-hidden bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E4DFD2] dark:border-[#262930] shadow-xs hover:border-[#164E43]/40 transition-all duration-200 flex flex-col justify-between"
+                className="rounded-[20px] overflow-hidden bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E4DFD2] dark:border-[#262930] shadow-xs hover:border-[#164E43]/40 transition-all duration-200 flex flex-col h-fit self-start w-full"
               >
                 {/* Accordion / Header Banner in Artboard Emerald Style */}
                 <button

@@ -269,7 +269,7 @@ export default function WhatsAppDashboardPage() {
           <button
             type="button"
             onClick={() => setShowRunningCampaigns(prev => !prev)}
-            className="flex items-center gap-2 group cursor-pointer text-left focus:outline-none"
+            className="flex items-center gap-2 group cursor-pointer text-left focus:outline-none select-none hover:opacity-80 transition-opacity"
           >
             <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 font-['Sora',sans-serif]">
               <span>All Running Campaigns</span>
@@ -277,10 +277,6 @@ export default function WhatsAppDashboardPage() {
                 {campaigns.length}
               </span>
             </h2>
-            <ChevronDown className={cn(
-              "w-5 h-5 text-gray-500 transition-transform duration-300 ml-0.5",
-              showRunningCampaigns && "rotate-180"
-            )} />
           </button>
 
           <Link href="/whatsapp/campaigns/new">
@@ -353,7 +349,7 @@ export default function WhatsAppDashboardPage() {
                 </Link>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 items-start">
                 {filteredCampaigns.map((camp) => (
                   <CampaignCard
                     key={camp.id}
