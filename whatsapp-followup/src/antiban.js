@@ -9,14 +9,39 @@ export function getRandomInt(min, max) {
 }
 
 /**
- * Check if the current time falls within working hours (e.g. 09:00 - 22:00)
+ * Check if the current time falls within working hours.
+ * Enforces strict quiet hours: 12:00 AM (00:00) to 08:00 AM (08:00) Bangladesh Time (Asia/Dhaka).
+ * Default active hours: 08:00 - 23:59.
  */
 export function isWithinWorkingHours() {
-  const startStr = getSetting('working_hours_start', '09:00');
-  const endStr = getSetting('working_hours_end', '22:00');
+  const startStr = getSetting('working_hours_start', '08:00');
+  const endStr = getSetting('working_hours_end', '23:59');
 
   const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  let bdH = now.getHours();
+  let bdM = now.getMinutes();
+
+  try {
+    const timeStr = now.toLocaleTimeString('en-US', {
+      timeZone: 'Asia/Dhaka',
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const parts = timeStr.split(':').map(Number);
+    bdH = parts[0];
+    bdM = parts[1];
+  } catch {
+    bdH = (now.getUTCHours() + 6) % 24;
+    bdM = now.getUTCMinutes();
+  }
+
+  // Strict quiet hours: 12:00 AM (midnight, 00:00) to 08:00 AM (morning, 08:00) BD Time
+  if (bdH >= 0 && bdH < 8) {
+    return false;
+  }
+
+  const currentMinutes = bdH * 60 + bdM;
 
   const [startH, startM] = startStr.split(':').map(Number);
   const [endH, endM] = endStr.split(':').map(Number);

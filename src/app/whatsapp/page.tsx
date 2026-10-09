@@ -84,6 +84,7 @@ export default function WhatsAppDashboardPage() {
     }
     return true;
   });
+  const [openAddNumberModal, setOpenAddNumberModal] = useState<boolean>(false);
 
   const fetchDashboardData = async () => {
     try {
@@ -207,27 +208,40 @@ export default function WhatsAppDashboardPage() {
 
   return (
     <div className="space-y-8 pb-16">
-      {/* Header */}
+      {/* Header & Quick Action Buttons (Android & Desktop Optimized) */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2.5">
-            <span className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 flex items-center justify-center text-emerald-700 dark:text-emerald-400">
+            <span className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 flex items-center justify-center text-[#164F43] dark:text-[#34D399] shadow-xs">
               <Smartphone className="w-5 h-5" />
             </span>
             WhatsApp Automation
           </h1>
         </div>
 
-        <Link href="/whatsapp/campaigns/new">
-          <Button className="bg-[#164E43] hover:bg-[#124238] text-white font-semibold text-xs h-9 px-4 shadow-sm rounded-xl">
-            <Plus className="w-4 h-4 mr-1.5" />
-            New Campaign
+        {/* Quick Action Buttons (48px Android touch targets, responsive side-by-side) */}
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
+          <Link href="/whatsapp/campaigns/new" className="w-full sm:w-auto">
+            <Button className="w-full h-12 sm:h-10 px-4 rounded-[15px] sm:rounded-xl bg-[#164F43] hover:bg-[#124238] text-white font-bold text-sm sm:text-xs shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-transform">
+              <Plus className="w-4 h-4 shrink-0" />
+              <span>New Campaign</span>
+            </Button>
+          </Link>
+
+          <Button 
+            type="button"
+            onClick={() => setOpenAddNumberModal(true)}
+            variant="outline"
+            className="w-full h-12 sm:h-10 px-4 rounded-[15px] sm:rounded-xl border-[1.5px] border-[#164F43] dark:border-[#34D399] text-[#164F43] dark:text-[#34D399] hover:bg-[#164F43]/10 dark:hover:bg-[#34D399]/10 font-bold text-sm sm:text-xs flex items-center justify-center gap-2 active:scale-95 transition-transform"
+          >
+            <Plus className="w-4 h-4 shrink-0" />
+            <span>Add Number</span>
           </Button>
-        </Link>
+        </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      {/* Stats Cards (2 cols on mobile, 4 cols on desktop) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
         <StatsCard
           title="WhatsApp Numbers"
           value={`${connectedAccountsCount} / ${accounts.length || 1} Connected`}
@@ -254,7 +268,9 @@ export default function WhatsAppDashboardPage() {
       <WhatsAppNumbers 
         accounts={accounts}
         campaigns={campaigns} 
-        onDataChange={fetchDashboardData} 
+        onDataChange={fetchDashboardData}
+        externalAddModalOpen={openAddNumberModal}
+        onCloseExternalAddModal={() => setOpenAddNumberModal(false)}
       />
 
       {/* 1.5 Active Auto Follow-up Live Monitor Card */}

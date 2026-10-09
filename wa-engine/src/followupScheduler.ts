@@ -131,12 +131,25 @@ function replaceVariables(
     else nameLabel = 'ভাইয়া/আপু';
   }
 
-  const hour = new Date().getHours();
+  let bdHour = 12;
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Dhaka',
+      hour: 'numeric',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(new Date());
+    const hPart = parts.find((p) => p.type === 'hour');
+    if (hPart) bdHour = parseInt(hPart.value, 10);
+  } catch {
+    bdHour = (new Date().getUTCHours() + 6) % 24;
+  }
+
   let timeStr = 'দিন';
-  if (hour >= 5 && hour < 12) timeStr = 'সকাল';
-  else if (hour >= 12 && hour < 16) timeStr = 'দুপুর';
-  else if (hour >= 16 && hour < 18) timeStr = 'বিকাল';
-  else if (hour >= 18 && hour < 20) timeStr = 'সন্ধ্যা';
+  if (bdHour >= 5 && bdHour < 12) timeStr = 'সকাল';
+  else if (bdHour >= 12 && bdHour < 16) timeStr = 'দুপুর';
+  else if (bdHour >= 16 && bdHour < 18) timeStr = 'বিকাল';
+  else if (bdHour >= 18 && bdHour < 20) timeStr = 'সন্ধ্যা';
   else timeStr = 'রাত';
 
   return template
@@ -438,12 +451,59 @@ function applyAccountCooldown(accountId: string, fup: WaFollowupConfig): void {
 }
 
 /**
+ * Check if the current time in Bangladesh (Asia/Dhaka, UTC+6) is outside quiet hours.
+ * Quiet hours: 12:00 AM (midnight, 00:00) to 8:00 AM (morning, 08:00).
+ * - 00:00 to 07:59 (12:00 AM to 07:59 AM BD Time) -> NO follow-up is allowed (returns false).
+ * - 08:00 to 23:59 (08:00 AM to 11:59 PM BD Time) -> Follow-up is allowed (returns true).
+ */
+export function isWithinAllowedFollowupHours(): boolean {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Dhaka',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(new Date());
+    let bdHour = 0;
+    for (const part of parts) {
+      if (part.type === 'hour') bdHour = parseInt(part.value, 10);
+    }
+    // Quiet window: 00:00 - 07:59 (bdHour from 0 to 7)
+    if (bdHour >= 0 && bdHour < 8) {
+      return false;
+    }
+    return true;
+  } catch {
+    // Robust fallback using UTC+6
+    const now = new Date();
+    const bdHour = (now.getUTCHours() + 6) % 24;
+    return bdHour >= 8;
+  }
+}
+
+let lastQuietHoursLog = 0;
+export function logQuietHoursNoticeOnce(): void {
+  const now = Date.now();
+  if (now - lastQuietHoursLog > 30 * 60 * 1000) {
+    lastQuietHoursLog = now;
+    log('FOLLOWUP', '🌙 [Quiet Hours: 12:00 AM - 08:00 AM BD Time] Follow-up automation is paused until 08:00 AM to avoid disturbing customers.');
+  }
+}
+
+/**
  * Process follow-ups for a single campaign with strictly staggered, non-overlapping timing.
  */
 async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
   const fup = campaign.followupConfig;
   if (!fup || !fup.followupEnabled) {
     return; // Strict safety check
+  }
+
+  // Quiet Hours Check: 12:00 AM (midnight) to 08:00 AM (morning) Bangladesh Time
+  if (!isWithinAllowedFollowupHours()) {
+    logQuietHoursNoticeOnce();
+    return; // Suppress all follow-ups during quiet hours
   }
 
   const accountId = campaign.accountId && campaign.accountId !== 'all' ? campaign.accountId : (campaign.id || 'default');
@@ -714,6 +774,11 @@ export function startFollowupScheduler(): void {
     if (isCycleRunning) return; // Prevent concurrent cycle execution
     isCycleRunning = true;
     try {
+      if (!isWithinAllowedFollowupHours()) {
+        logQuietHoursNoticeOnce();
+        return;
+      }
+
       const campaigns = await getCampaignsWithFollowup();
       if (campaigns.length === 0) return;
 

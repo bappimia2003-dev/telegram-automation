@@ -27,7 +27,7 @@ export function LoginForm() {
       })
       
       if (res.ok) {
-        router.push("/dashboard")
+        router.push("/whatsapp")
         router.refresh()
       } else {
         setError("Invalid password")
@@ -42,8 +42,8 @@ export function LoginForm() {
   return (
     <Card className="w-full max-w-md shadow-xl bg-[#FBF9F4] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] rounded-2xl">
       <CardHeader className="space-y-1 text-center">
-        <CardTitle className="text-2xl font-bold text-gray-900 dark:text-white">🤖 Telegram Automation</CardTitle>
-        <CardDescription className="text-gray-500 dark:text-gray-400 text-xs">Enter password to access dashboard</CardDescription>
+        <CardTitle className="text-2xl font-bold text-gray-900 dark:text-white">🚀 Automation Dashboard</CardTitle>
+        <CardDescription className="text-gray-500 dark:text-gray-400 text-xs">Enter password to access WhatsApp & Telegram dashboard</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">

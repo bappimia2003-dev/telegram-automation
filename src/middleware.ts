@@ -9,6 +9,22 @@ const COOKIE_NAME = 'tg-auto-session';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const session = request.cookies.get(COOKIE_NAME)?.value;
+
+  // If user visits root '/', and has active valid session, redirect directly to WhatsApp Dashboard
+  if (pathname === '/') {
+    if (session) {
+      try {
+        await jwtVerify(session, JWT_SECRET);
+        return NextResponse.redirect(new URL('/whatsapp', request.url));
+      } catch {
+        const response = NextResponse.next();
+        response.cookies.delete(COOKIE_NAME);
+        return response;
+      }
+    }
+    return NextResponse.next();
+  }
 
   // Protect dashboard routes and sub-pages
   const protectedPaths = ['/dashboard', '/bots', '/api-keys', '/whatsapp'];
@@ -17,8 +33,6 @@ export async function middleware(request: NextRequest) {
   if (!isProtected) {
     return NextResponse.next();
   }
-
-  const session = request.cookies.get(COOKIE_NAME)?.value;
 
   if (!session) {
     return NextResponse.redirect(new URL('/', request.url));
@@ -35,5 +49,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/bots/:path*', '/api-keys/:path*', '/whatsapp/:path*'],
+  matcher: ['/', '/dashboard/:path*', '/bots/:path*', '/api-keys/:path*', '/whatsapp/:path*'],
 };

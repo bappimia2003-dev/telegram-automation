@@ -29,14 +29,14 @@ export default function LoginPage() {
         >
           <div className="text-center mb-8">
             <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white mb-2">Welcome Back</h1>
-            <p className="text-sm text-[#4B5563] dark:text-[#9CA3AF]">Sign in to manage your Telegram bots</p>
+            <p className="text-sm text-[#4B5563] dark:text-[#9CA3AF]">Sign in to manage your WhatsApp & Telegram automations</p>
           </div>
           <LoginForm />
         </motion.div>
       </main>
 
       <footer className="z-10 py-6 text-center text-xs text-gray-400 dark:text-gray-600">
-        Telegram Automation System v1.0
+        Automation System v2.0 (WhatsApp & Telegram)
       </footer>
     </div>
   );

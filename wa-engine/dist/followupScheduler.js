@@ -22,6 +22,8 @@
  *    - If all media in a step fails, after 2 attempts the step is marked to prevent infinite retry loops.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.isWithinAllowedFollowupHours = isWithinAllowedFollowupHours;
+exports.logQuietHoursNoticeOnce = logQuietHoursNoticeOnce;
 exports.startFollowupScheduler = startFollowupScheduler;
 const db_js_1 = require("./db.js");
 const fileSender_js_1 = require("./fileSender.js");
@@ -118,15 +120,29 @@ function replaceVariables(template, contactName, campaignName, gender) {
         else
             nameLabel = 'ভাইয়া/আপু';
     }
-    const hour = new Date().getHours();
+    let bdHour = 12;
+    try {
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Dhaka',
+            hour: 'numeric',
+            hour12: false,
+        });
+        const parts = formatter.formatToParts(new Date());
+        const hPart = parts.find((p) => p.type === 'hour');
+        if (hPart)
+            bdHour = parseInt(hPart.value, 10);
+    }
+    catch {
+        bdHour = (new Date().getUTCHours() + 6) % 24;
+    }
     let timeStr = 'দিন';
-    if (hour >= 5 && hour < 12)
+    if (bdHour >= 5 && bdHour < 12)
         timeStr = 'সকাল';
-    else if (hour >= 12 && hour < 16)
+    else if (bdHour >= 12 && bdHour < 16)
         timeStr = 'দুপুর';
-    else if (hour >= 16 && hour < 18)
+    else if (bdHour >= 16 && bdHour < 18)
         timeStr = 'বিকাল';
-    else if (hour >= 18 && hour < 20)
+    else if (bdHour >= 18 && bdHour < 20)
         timeStr = 'সন্ধ্যা';
     else
         timeStr = 'রাত';
@@ -411,12 +427,58 @@ function applyAccountCooldown(accountId, fup) {
     }
 }
 /**
+ * Check if the current time in Bangladesh (Asia/Dhaka, UTC+6) is outside quiet hours.
+ * Quiet hours: 12:00 AM (midnight, 00:00) to 8:00 AM (morning, 08:00).
+ * - 00:00 to 07:59 (12:00 AM to 07:59 AM BD Time) -> NO follow-up is allowed (returns false).
+ * - 08:00 to 23:59 (08:00 AM to 11:59 PM BD Time) -> Follow-up is allowed (returns true).
+ */
+function isWithinAllowedFollowupHours() {
+    try {
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Dhaka',
+            hour: 'numeric',
+            minute: 'numeric',
+            hour12: false,
+        });
+        const parts = formatter.formatToParts(new Date());
+        let bdHour = 0;
+        for (const part of parts) {
+            if (part.type === 'hour')
+                bdHour = parseInt(part.value, 10);
+        }
+        // Quiet window: 00:00 - 07:59 (bdHour from 0 to 7)
+        if (bdHour >= 0 && bdHour < 8) {
+            return false;
+        }
+        return true;
+    }
+    catch {
+        // Robust fallback using UTC+6
+        const now = new Date();
+        const bdHour = (now.getUTCHours() + 6) % 24;
+        return bdHour >= 8;
+    }
+}
+let lastQuietHoursLog = 0;
+function logQuietHoursNoticeOnce() {
+    const now = Date.now();
+    if (now - lastQuietHoursLog > 30 * 60 * 1000) {
+        lastQuietHoursLog = now;
+        (0, utils_js_1.log)('FOLLOWUP', '🌙 [Quiet Hours: 12:00 AM - 08:00 AM BD Time] Follow-up automation is paused until 08:00 AM to avoid disturbing customers.');
+    }
+}
+/**
  * Process follow-ups for a single campaign with strictly staggered, non-overlapping timing.
  */
 async function processCampaignFollowups(campaign) {
     const fup = campaign.followupConfig;
     if (!fup || !fup.followupEnabled) {
         return; // Strict safety check
+    }
+    // Quiet Hours Check: 12:00 AM (midnight) to 08:00 AM (morning) Bangladesh Time
+    if (!isWithinAllowedFollowupHours()) {
+        logQuietHoursNoticeOnce();
+        return; // Suppress all follow-ups during quiet hours
     }
     const accountId = campaign.accountId && campaign.accountId !== 'all' ? campaign.accountId : (campaign.id || 'default');
     // 1. Staggered Pacing Check: If this account is in cooldown, skip this tick
@@ -674,6 +736,10 @@ function startFollowupScheduler() {
             return; // Prevent concurrent cycle execution
         isCycleRunning = true;
         try {
+            if (!isWithinAllowedFollowupHours()) {
+                logQuietHoursNoticeOnce();
+                return;
+            }
             const campaigns = await (0, db_js_1.getCampaignsWithFollowup)();
             if (campaigns.length === 0)
                 return;

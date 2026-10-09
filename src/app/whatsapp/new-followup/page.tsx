@@ -107,8 +107,8 @@ export default function NewFollowupPage() {
       total_duration_days: 30,
       min_contact_age_days: 4,
       started_date: '',
-      working_hours_start: '09:00',
-      working_hours_end: '22:00',
+      working_hours_start: '08:00',
+      working_hours_end: '23:59',
       max_daily_messages: 50,
     };
     if (typeof window !== 'undefined') {
@@ -164,8 +164,8 @@ export default function NewFollowupPage() {
             total_duration_days: json.settings.total_duration_days ?? 30,
             min_contact_age_days: json.settings.min_contact_age_days ?? 4,
             started_date: json.settings.started_date || '',
-            working_hours_start: json.settings.working_hours_start || '09:00',
-            working_hours_end: json.settings.working_hours_end || '22:00',
+            working_hours_start: json.settings.working_hours_start || '08:00',
+            working_hours_end: json.settings.working_hours_end || '23:59',
             max_daily_messages: json.settings.max_daily_messages ?? 50,
           };
           setFormSettings(updatedSettings);

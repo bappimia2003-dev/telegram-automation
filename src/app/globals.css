@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Manrope:wght@500;600;700;800&family=Hind+Siliguri:wght@500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -86,4 +88,22 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted-foreground);
+}
+
+@layer utilities {
+  .pr {
+    transition: transform 0.18s cubic-bezier(0.3, 1.6, 0.5, 1);
+  }
+  .pr:active {
+    transform: scale(0.96);
+  }
+  .font-sora {
+    font-family: 'Sora', system-ui, sans-serif;
+  }
+  .font-manrope {
+    font-family: 'Manrope', system-ui, sans-serif;
+  }
+  .font-hind {
+    font-family: 'Hind Siliguri', system-ui, sans-serif;
+  }
 }

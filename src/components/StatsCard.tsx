@@ -1,6 +1,5 @@
 import * as React from "react"
 import { LucideIcon } from "lucide-react"
-import { Card, CardContent } from "./ui/card"
 import { cn } from "@/lib/utils"
 
 interface StatsCardProps {
@@ -12,41 +11,44 @@ interface StatsCardProps {
 }
 
 export function StatsCard({ title, value, icon: Icon, trend, className }: StatsCardProps) {
+  // Extract number and possible suffix like "/ 4 Connected"
+  const valStr = String(value);
+  const match = valStr.match(/^(\d+)(.*)$/);
+  const numPart = match ? match[1] : valStr;
+  const suffixPart = match ? match[2] : "";
+
   return (
-    <Card className={cn(
-      "overflow-hidden rounded-2xl border transition-all shadow-sm",
-      "bg-[#FBF9F4] border-[#E6E2D8]",
-      "dark:bg-[#0B2820] dark:border-[#13382E]",
+    <div className={cn(
+      "rounded-[20px] border border-[#E4DFD2] dark:border-[#222B36] bg-[#FBF9F4] dark:bg-[#181A1F] p-3.5 sm:p-4 transition-all duration-200 shadow-xs hover:border-[#164E43]/40 dark:hover:border-emerald-700/50",
       className
     )}>
-      <CardContent className="p-4 sm:p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 truncate">{title}</p>
-            <div className="flex items-baseline gap-2">
-              <h4 className={cn(
-                "font-bold tracking-tight text-[#164E43] dark:text-white",
-                String(value).length > 8 ? "text-xl sm:text-2xl" : "text-2xl sm:text-3xl"
-              )}>
-                {value}
-              </h4>
-              {trend && (
-                <span className={cn(
-                  "text-xs font-semibold",
-                  trend.startsWith("+") ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
-                )}>
-                  {trend}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Icon Box */}
-          <div className="p-2.5 rounded-xl transition-colors shrink-0 bg-[#164E43] text-white dark:bg-[#3D341B] dark:text-[#F59E0B]">
-            <Icon className="h-5 w-5" />
-          </div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11.5px] sm:text-xs font-bold text-[#6B706A] dark:text-[#8A9B94] truncate">
+          {title}
+        </span>
+        <div className="w-[34px] h-[34px] rounded-[12px] bg-[#164E43] text-white flex items-center justify-center shrink-0 shadow-xs">
+          <Icon className="h-4 w-4" />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      <div className="mt-1.5 flex items-baseline flex-wrap gap-1 font-mono tabular-nums">
+        <span className="text-[24px] sm:text-[28px] font-bold tracking-tight text-[#164E43] dark:text-[#5FD1A5]">
+          {numPart}
+        </span>
+        {suffixPart && (
+          <span className="text-[11.5px] sm:text-xs font-semibold text-[#6B706A] dark:text-[#8A9B94]">
+            {suffixPart}
+          </span>
+        )}
+        {trend && (
+          <span className={cn(
+            "text-[11px] font-bold ml-auto",
+            trend.startsWith("+") ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"
+          )}>
+            {trend}
+          </span>
+        )}
+      </div>
+    </div>
   )
 }
