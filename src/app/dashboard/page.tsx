@@ -91,13 +91,22 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8 pb-12">
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white">Dashboard</h1>
+    <div className="space-y-6 pb-12">
+      {/* Quick Action Button */}
+      <div className="flex items-center justify-end">
+        <Link href="/bots/new" className="w-full sm:w-auto">
+          <button 
+            type="button"
+            className="w-full sm:w-auto flex items-center justify-center space-x-2 bg-[#164E43] hover:bg-[#124238] text-white px-5 h-11 sm:h-10 rounded-[14px] sm:rounded-xl transition-transform active:scale-95 shadow-sm font-bold text-sm sm:text-xs"
+          >
+            <Plus size={16} />
+            <span>Add New Bot</span>
+          </button>
+        </Link>
       </div>
 
-      {/* KPI Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+      {/* KPI Stats Grid (2 cols on mobile, 4 cols on desktop) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
         <StatsCard title="Total Bots" value={stats.totalBots.toString()} icon={Bot} />
         <StatsCard title="Active Bots" value={stats.activeBots.toString()} icon={Activity} />
         <StatsCard title="Total Messages" value={stats.totalMessages.toString()} icon={MessageSquare} />
@@ -105,16 +114,14 @@ export default function DashboardPage() {
       </div>
 
       {/* Bots Section */}
-      <div className="space-y-5">
+      <div className="space-y-4 pt-2 border-t border-[#E4DFD2] dark:border-[#262930]">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900 dark:text-white">Your Bots</h2>
-          <Link 
-            href="/bots/new"
-            className="flex items-center space-x-2 bg-[#164E43] hover:bg-[#124238] text-white px-5 py-2.5 rounded-xl transition-all shadow-sm font-bold text-sm"
-          >
-            <Plus size={18} />
-            <span>Add New Bot</span>
-          </Link>
+          <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white font-['Sora',sans-serif] flex items-center gap-2">
+            <span>Your Bots</span>
+            <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#E3F1EA] dark:bg-[#1E2D27] text-[#164F43] dark:text-[#5FD1A5]">
+              {bots.length}
+            </span>
+          </h2>
         </div>
 
         {bots.length === 0 ? (

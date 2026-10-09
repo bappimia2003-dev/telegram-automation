@@ -57,13 +57,14 @@ export function WhatsAppNumbers({
     return [];
   });
   const [loading, setLoading] = useState(false);
-  // Accordion state: by default, all cards are expanded on desktop, toggleable on mobile
+  // Accordion state: closed by default, toggleable on click
   const [openCards, setOpenCards] = useState<Record<string, boolean>>({});
+  const [showAllNumbers, setShowAllNumbers] = useState<boolean>(false);
 
   const toggleCard = (id: string) => {
     setOpenCards(prev => ({
       ...prev,
-      [id]: prev[id] === undefined ? false : !prev[id]
+      [id]: !prev[id]
     }));
   };
 
@@ -296,19 +297,23 @@ export function WhatsAppNumbers({
 
   return (
     <div className="space-y-4">
-      {/* Header Bar */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-[38px] h-[38px] rounded-[12px] bg-[#E3F1EA] dark:bg-[#1E2D27] text-[#164F43] dark:text-[#5FD1A5] flex items-center justify-center">
-            <Smartphone className="w-5 h-5" />
-          </div>
-          <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white font-['Sora',sans-serif]">
-            Connected WhatsApp Numbers
+      {/* Header Bar (Accordion Trigger: All numbers show ONLY on click) */}
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setShowAllNumbers(prev => !prev)}
+          className="flex items-center gap-2 group cursor-pointer text-left focus:outline-none min-w-0"
+        >
+          <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white font-['Sora',sans-serif] whitespace-nowrap flex items-center gap-2">
+            <span>Connected WhatsApp Numbers</span>
+            <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#E3F1EA] dark:bg-[#1E2D27] text-[#164F43] dark:text-[#5FD1A5]">
+              {accounts.filter(a => a.status === 'connected').length}
+            </span>
           </h2>
-          <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-[#E3F1EA] dark:bg-[#1E2D27] text-[#164F43] dark:text-[#5FD1A5]">
-            {accounts.filter(a => a.status === 'connected').length}
-          </span>
-        </div>
+          <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform duration-300 shrink-0 ${
+            showAllNumbers ? 'rotate-180' : 'rotate-0'
+          }`} />
+        </button>
 
         <Button
           onClick={() => setShowAddModal(true)}
@@ -319,173 +324,175 @@ export function WhatsAppNumbers({
         </Button>
       </div>
 
-      {/* Numbers Grid or Empty State */}
-      {accounts.length === 0 ? (
-        <div className="text-center py-12 px-4 rounded-[20px] bg-[#FBF9F4] dark:bg-[#181A1F] border border-dashed border-[#E4DFD2] dark:border-[#262930] space-y-3">
-          <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 flex items-center justify-center mx-auto">
-            <Smartphone className="w-6 h-6" />
-          </div>
-          <h3 className="text-base font-semibold text-gray-900 dark:text-white">No WhatsApp numbers added yet</h3>
-          <Button
-            onClick={() => setShowAddModal(true)}
-            className="bg-[#164E43] hover:bg-[#124238] text-white font-semibold text-xs px-5 shadow-sm mt-2 rounded-xl"
-          >
-            <Plus className="w-4 h-4 mr-1.5" />
-            Add WhatsApp Number
-          </Button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-        {accounts.filter(acc => !(acc.id === 'main' && !acc.phoneNumber && acc.status === 'disconnected' && accounts.length > 1)).map((acc) => {
-          const campCount = getAccountCampaignCount(acc.id);
-          const isConnected = acc.status === 'connected';
-          const isPending = acc.status === 'qr_pending' || acc.status === 'connecting';
-          const isOpen = openCards[acc.id] !== false; // open by default or toggleable
-
-          return (
-            <div 
-              key={acc.id} 
-              className="rounded-[20px] overflow-hidden bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E4DFD2] dark:border-[#262930] shadow-xs hover:border-[#164E43]/40 transition-all duration-200 flex flex-col justify-between"
+      {/* Numbers Grid or Empty State (Shown ONLY when clicked) */}
+      {showAllNumbers && (
+        accounts.length === 0 ? (
+          <div className="text-center py-12 px-4 rounded-[20px] bg-[#FBF9F4] dark:bg-[#181A1F] border border-dashed border-[#E4DFD2] dark:border-[#262930] space-y-3">
+            <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 flex items-center justify-center mx-auto">
+              <Smartphone className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white">No WhatsApp numbers added yet</h3>
+            <Button
+              onClick={() => setShowAddModal(true)}
+              className="bg-[#164E43] hover:bg-[#124238] text-white font-semibold text-xs px-5 shadow-sm mt-2 rounded-xl"
             >
-              {/* Accordion / Header Banner in Artboard Emerald Style */}
-              <button
-                type="button"
-                onClick={() => toggleCard(acc.id)}
-                className="w-full border-0 p-0 text-left bg-[#164E43] dark:bg-[#13443A] text-white px-4 py-3 min-h-[62px] flex items-center gap-3 active:brightness-95 transition-all select-none cursor-pointer"
+              <Plus className="w-4 h-4 mr-1.5" />
+              Add WhatsApp Number
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 pt-1">
+          {accounts.filter(acc => !(acc.id === 'main' && !acc.phoneNumber && acc.status === 'disconnected' && accounts.length > 1)).map((acc) => {
+            const campCount = getAccountCampaignCount(acc.id);
+            const isConnected = acc.status === 'connected';
+            const isPending = acc.status === 'qr_pending' || acc.status === 'connecting';
+            const isOpen = Boolean(openCards[acc.id]); // Closed by default! Opens only when clicked
+
+            return (
+              <div 
+                key={acc.id} 
+                className="rounded-[20px] overflow-hidden bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E4DFD2] dark:border-[#262930] shadow-xs hover:border-[#164E43]/40 transition-all duration-200 flex flex-col justify-between"
               >
-                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                  isConnected ? 'bg-[#4ADE9E] shadow-[0_0_8px_#4ADE9E]' : isPending ? 'bg-amber-300 animate-pulse' : 'bg-gray-400'
-                }`} />
-
-                <div className="flex-1 min-w-0 pr-2">
-                  <span className="block font-bold text-[15px] font-['Sora',sans-serif] text-white truncate">
-                    {acc.name || (acc.id === 'main' ? 'Primary WhatsApp' : `SIM ${acc.id.slice(-4)}`)}
-                  </span>
-                  <span className="block text-[12.5px] font-bold text-[#A8E6CB] mt-0.5 font-mono truncate">
-                    {acc.phoneNumber ? `+${acc.phoneNumber}` : (isConnected ? 'Device linked' : 'No phone linked')}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <Badge 
-                    variant="outline" 
-                    className={`text-[9.5px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md border-0 ${
-                      isConnected 
-                        ? 'bg-emerald-500/20 text-[#A8E6CB]' 
-                        : isPending 
-                        ? 'bg-amber-400/20 text-amber-200 animate-pulse' 
-                        : 'bg-white/10 text-gray-300'
-                    }`}
-                  >
-                    {isConnected ? 'Active' : isPending ? 'Scan QR' : 'Offline'}
-                  </Badge>
-
-                  <ChevronDown className={`w-5 h-5 text-white/90 transition-transform duration-300 ${
-                    isOpen ? 'rotate-180' : 'rotate-0'
+                {/* Accordion / Header Banner in Artboard Emerald Style */}
+                <button
+                  type="button"
+                  onClick={() => toggleCard(acc.id)}
+                  className="w-full border-0 p-0 text-left bg-[#164E43] dark:bg-[#13443A] text-white px-4 py-3 min-h-[62px] flex items-center gap-3 active:brightness-95 transition-all select-none cursor-pointer"
+                >
+                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                    isConnected ? 'bg-[#4ADE9E] shadow-[0_0_8px_#4ADE9E]' : isPending ? 'bg-amber-300 animate-pulse' : 'bg-gray-400'
                   }`} />
-                </div>
-              </button>
 
-              {/* Card Body - Expandable Accordion with smooth transition */}
-              <div className={`transition-all duration-300 overflow-hidden ${
-                isOpen ? 'max-h-[350px] opacity-100' : 'max-h-0 opacity-0 pointer-events-none'
-              }`}>
-                <div className="p-3.5 sm:p-4 space-y-3">
-                  {/* Stats Row */}
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="p-2.5 rounded-[14px] bg-[#FAF8F5] dark:bg-[#121418] border border-[#E4DFD2] dark:border-[#262930]">
-                      <p className="text-[11px] font-bold text-[#6B706A] dark:text-[#8A9B94] flex items-center gap-1.5">
-                        <Layers className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
-                        Campaigns
-                      </p>
-                      <p className="text-base font-bold font-['Sora',sans-serif] text-gray-900 dark:text-white mt-1">
-                        {campCount}
-                      </p>
-                    </div>
-
-                    <div className="p-2.5 rounded-[14px] bg-[#FAF8F5] dark:bg-[#121418] border border-[#E4DFD2] dark:border-[#262930]">
-                      <p className="text-[11px] font-bold text-[#6B706A] dark:text-[#8A9B94] flex items-center gap-1.5">
-                        <Send className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                        Status
-                      </p>
-                      <p className={`text-xs font-bold mt-1.5 ${isConnected ? 'text-[#164E43] dark:text-[#5FD1A5]' : 'text-amber-600'}`}>
-                        {isConnected ? 'Online & Active' : 'Offline'}
-                      </p>
-                    </div>
+                  <div className="flex-1 min-w-0 pr-2">
+                    <span className="block font-bold text-[15px] font-['Sora',sans-serif] text-white truncate">
+                      {acc.name || (acc.id === 'main' ? 'Primary WhatsApp' : `SIM ${acc.id.slice(-4)}`)}
+                    </span>
+                    <span className="block text-[12.5px] font-medium text-white/90 mt-0.5 font-mono truncate">
+                      {acc.phoneNumber ? `+${acc.phoneNumber}` : (isConnected ? 'Device linked' : 'No phone linked')}
+                    </span>
                   </div>
 
-                  {/* Primary: Open Dashboard */}
-                  <Link href={`/whatsapp/numbers/${acc.id}`} className="block w-full">
-                    <Button 
-                      className="w-full bg-[#164E43] hover:bg-[#124238] text-white font-bold text-[13.5px] h-11 shadow-xs flex items-center justify-center gap-2 rounded-[14px] active:scale-[0.98] transition-transform"
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge 
+                      variant="outline" 
+                      className={`text-[9.5px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md border-0 ${
+                        isConnected 
+                          ? 'bg-white/15 text-white' 
+                          : isPending 
+                          ? 'bg-amber-400/20 text-amber-200 animate-pulse' 
+                          : 'bg-white/10 text-gray-300'
+                      }`}
                     >
-                      <ExternalLink className="w-4 h-4" />
-                      Open Dashboard (ম্যানেজ করুন)
-                    </Button>
-                  </Link>
+                      {isConnected ? 'Active' : isPending ? 'Scan QR' : 'Offline'}
+                    </Badge>
 
-                  {/* Actions Row */}
-                  <div className="flex items-center gap-2 pt-0.5">
-                    {/* Disconnect / Scan QR */}
-                    {!isConnected ? (
+                    <ChevronDown className={`w-5 h-5 text-white/90 transition-transform duration-300 ${
+                      isOpen ? 'rotate-180' : 'rotate-0'
+                    }`} />
+                  </div>
+                </button>
+
+                {/* Card Body - Expandable Accordion with smooth transition */}
+                <div className={`transition-all duration-300 overflow-hidden ${
+                  isOpen ? 'max-h-[350px] opacity-100' : 'max-h-0 opacity-0 pointer-events-none'
+                }`}>
+                  <div className="p-3.5 sm:p-4 space-y-3">
+                    {/* Stats Row */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="p-2.5 rounded-[14px] bg-[#FAF8F5] dark:bg-[#121418] border border-[#E4DFD2] dark:border-[#262930]">
+                        <p className="text-[11px] font-bold text-[#6B706A] dark:text-[#8A9B94] flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                          Campaigns
+                        </p>
+                        <p className="text-base font-bold font-['Sora',sans-serif] text-gray-900 dark:text-white mt-1">
+                          {campCount}
+                        </p>
+                      </div>
+
+                      <div className="p-2.5 rounded-[14px] bg-[#FAF8F5] dark:bg-[#121418] border border-[#E4DFD2] dark:border-[#262930]">
+                        <p className="text-[11px] font-bold text-[#6B706A] dark:text-[#8A9B94] flex items-center gap-1.5">
+                          <Send className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                          Status
+                        </p>
+                        <p className={`text-xs font-bold mt-1.5 ${isConnected ? 'text-[#164E43] dark:text-[#5FD1A5]' : 'text-amber-600'}`}>
+                          {isConnected ? 'Online & Active' : 'Offline'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Primary: Open Dashboard */}
+                    <Link href={`/whatsapp/numbers/${acc.id}`} className="block w-full">
+                      <Button 
+                        className="w-full bg-[#164E43] hover:bg-[#124238] text-white font-bold text-[13.5px] h-11 shadow-xs flex items-center justify-center gap-2 rounded-[14px] active:scale-[0.98] transition-transform"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        Open Dashboard (ম্যানেজ করুন)
+                      </Button>
+                    </Link>
+
+                    {/* Actions Row */}
+                    <div className="flex items-center gap-2 pt-0.5">
+                      {/* Disconnect / Scan QR */}
+                      {!isConnected ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setQrModalAccount(acc);
+                            handleConnect(acc.id);
+                          }}
+                          className="flex-1 border-[1.5px] border-amber-400/80 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-xs font-bold h-[42px] rounded-[14px] active:scale-[0.98]"
+                        >
+                          <QrCode className="w-3.5 h-3.5 mr-1 text-amber-600" />
+                          Scan QR Code
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDisconnect(acc.id)}
+                          disabled={loading}
+                          className="flex-1 border-[1.5px] border-[#E7A3A3] dark:border-red-900/50 text-[#C93B3B] dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 text-xs font-bold h-[42px] rounded-[14px] active:scale-[0.98]"
+                        >
+                          <Power className="w-3.5 h-3.5 mr-1" />
+                          Disconnect
+                        </Button>
+                      )}
+
+                      {/* Edit Details */}
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant="ghost"
                         onClick={() => {
-                          setQrModalAccount(acc);
-                          handleConnect(acc.id);
+                          setEditModalAccount(acc);
+                          setEditName(acc.name || '');
+                          setEditPhone(acc.phoneNumber || '');
                         }}
-                        className="flex-1 border-[1.5px] border-amber-400/80 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-xs font-bold h-[42px] rounded-[14px] active:scale-[0.98]"
+                        className="h-[42px] w-[42px] rounded-[14px] border border-[#E4DFD2] dark:border-[#262930] text-[#6B706A] dark:text-[#8A9B94] hover:text-gray-900 dark:hover:text-white p-0 active:scale-95"
+                        title="Rename Account / Phone"
                       >
-                        <QrCode className="w-3.5 h-3.5 mr-1 text-amber-600" />
-                        Scan QR Code
+                        <Edit3 className="w-4 h-4" />
                       </Button>
-                    ) : (
+
+                      {/* Delete */}
                       <Button
                         size="sm"
-                        variant="outline"
-                        onClick={() => handleDisconnect(acc.id)}
+                        variant="ghost"
+                        onClick={() => handleDeleteAccount(acc.id)}
                         disabled={loading}
-                        className="flex-1 border-[1.5px] border-[#E7A3A3] dark:border-red-900/50 text-[#C93B3B] dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 text-xs font-bold h-[42px] rounded-[14px] active:scale-[0.98]"
+                        className="h-[42px] w-[42px] rounded-[14px] border border-[#E4DFD2] dark:border-[#262930] text-[#6B706A] dark:text-[#8A9B94] hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 p-0 active:scale-95"
+                        title="Delete Number"
                       >
-                        <Power className="w-3.5 h-3.5 mr-1" />
-                        Disconnect
+                        <Trash2 className="w-4 h-4" />
                       </Button>
-                    )}
-
-                    {/* Edit Details */}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setEditModalAccount(acc);
-                        setEditName(acc.name || '');
-                        setEditPhone(acc.phoneNumber || '');
-                      }}
-                      className="h-[42px] w-[42px] rounded-[14px] border border-[#E4DFD2] dark:border-[#262930] text-[#6B706A] dark:text-[#8A9B94] hover:text-gray-900 dark:hover:text-white p-0 active:scale-95"
-                      title="Rename Account / Phone"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </Button>
-
-                    {/* Delete */}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDeleteAccount(acc.id)}
-                      disabled={loading}
-                      className="h-[42px] w-[42px] rounded-[14px] border border-[#E4DFD2] dark:border-[#262930] text-[#6B706A] dark:text-[#8A9B94] hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 p-0 active:scale-95"
-                      title="Delete Number"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+        )
       )}
 
       {/* 1. Modal: Add New WhatsApp Number */}

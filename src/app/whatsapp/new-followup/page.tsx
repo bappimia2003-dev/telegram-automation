@@ -674,23 +674,6 @@ export default function NewFollowupPage() {
             <span className="text-[10px] text-gray-500 block truncate">ম্যানুয়াল চ্যাট: {stats.manualTakeover ?? 0} জন</span>
           </div>
         </div>
-
-        {/* Where to Monitor / Help Banner */}
-        <div className="mt-4 p-3.5 rounded-xl bg-[#EDE8DE]/60 dark:bg-[#1A1D23] border border-[#E6E2D8] dark:border-[#262930] flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">
-          <div className="flex items-start gap-2 text-gray-700 dark:text-gray-300">
-            <span className="font-bold text-emerald-700 dark:text-emerald-400 shrink-0">💡 কীভাবে মেসেজ মনিটর করবেন?</span>
-            <span>
-              ১. আপনার কানেক্টেড <strong>WhatsApp অ্যাপে</strong> প্রতিটি কাস্টমার চ্যাটে অটোমেটিক মেসেজ ও মিডিয়া চলে যায়।<br className="hidden sm:inline" />
-              ২. মূল <strong><Link href="/whatsapp" className="underline text-emerald-700 dark:text-emerald-400 font-bold">WhatsApp ড্যাশবোর্ডের</Link> Message Logs</strong> এ প্রতিটি পাঠানো মেসেজের ডেলিভারি রেকর্ড জমা হয়।<br className="hidden sm:inline" />
-              ৩. নিচে <strong>লিড ট্র্যাকিং টেবিলে</strong> প্রতিটি কাস্টমারের বর্তমান ধাপ (Step 1, Step 2) লাইভ আপডেট থাকে।
-            </span>
-          </div>
-          <Link href="/whatsapp" className="shrink-0 self-end md:self-auto">
-            <Button variant="outline" size="sm" className="h-8 text-xs font-bold border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30">
-              মেসেজ লগ দেখুন ➔
-            </Button>
-          </Link>
-        </div>
       </div>
 
       {/* WhatsApp Number Choice System */}

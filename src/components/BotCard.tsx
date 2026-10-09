@@ -78,12 +78,12 @@ export function BotCard({ bot, onDelete }: BotCardProps) {
         </div>
       </CardContent>
       
-      {/* Footer with Orange / Amber Action Buttons */}
-      <CardFooter className="grid grid-cols-3 gap-2 border-t border-[#E6E2D8] dark:border-[#262930] p-3 bg-transparent">
+      {/* Footer with Sleek Action Buttons matching app tokens */}
+      <CardFooter className="grid grid-cols-3 gap-2 border-t border-[#E4DFD2] dark:border-[#262930] p-3 bg-transparent">
         {/* Settings button */}
         <Link 
           href={`/bots/${bot.id}/settings`}
-          className="h-9 px-2 text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center transition-all shadow-sm bg-[#E06D10] hover:bg-[#C95F0A] text-white dark:bg-[#E5A93C] dark:hover:bg-[#D4992C] dark:text-[#1A1400]"
+          className="h-9 px-2 text-xs font-bold rounded-xl flex items-center justify-center transition-all border border-[#E4DFD2] dark:border-[#262930] bg-[#FAF8F5] dark:bg-[#1A1D24] text-gray-800 dark:text-gray-200 hover:bg-[#EDE8DE] dark:hover:bg-[#22262E] active:scale-95"
         >
           Settings
         </Link>
@@ -91,7 +91,7 @@ export function BotCard({ bot, onDelete }: BotCardProps) {
         {/* Manage button */}
         <Link 
           href={`/bots/${bot.id}`}
-          className="h-9 px-2 text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm bg-[#E06D10] hover:bg-[#C95F0A] text-white dark:bg-[#E5A93C] dark:hover:bg-[#D4992C] dark:text-[#1A1400]"
+          className="h-9 px-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs bg-[#164E43] hover:bg-[#124238] text-white active:scale-95"
         >
           <Edit2 className="h-3.5 w-3.5" />
           <span>Manage</span>

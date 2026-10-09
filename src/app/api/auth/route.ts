@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import { verifyPassword, createSession, COOKIE_NAME } from '@/lib/auth';
+import { verifyPassword, createSession, getSession, COOKIE_NAME } from '@/lib/auth';
+
+export async function GET() {
+  const isAuth = await getSession();
+  return NextResponse.json({ authenticated: isAuth });
+}
 
 export async function POST(request: Request) {
   try {

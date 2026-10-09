@@ -15,7 +15,8 @@ import {
   CheckCircle2, 
   Smartphone,
   Sparkles,
-  Phone
+  Phone,
+  ChevronDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WaCampaign, WaDashboardStats, WaConnection } from '@/lib/whatsappTypes';
@@ -85,6 +86,7 @@ export default function WhatsAppDashboardPage() {
     return true;
   });
   const [openAddNumberModal, setOpenAddNumberModal] = useState<boolean>(false);
+  const [showRunningCampaigns, setShowRunningCampaigns] = useState<boolean>(false);
 
   const fetchDashboardData = async () => {
     try {
@@ -208,36 +210,24 @@ export default function WhatsAppDashboardPage() {
 
   return (
     <div className="space-y-8 pb-16">
-      {/* Header & Quick Action Buttons (Android & Desktop Optimized) */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-white flex items-center gap-2.5">
-            <span className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 flex items-center justify-center text-[#164F43] dark:text-[#34D399] shadow-xs">
-              <Smartphone className="w-5 h-5" />
-            </span>
-            WhatsApp Automation
-          </h1>
-        </div>
-
-        {/* Quick Action Buttons (48px Android touch targets, responsive side-by-side) */}
-        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
-          <Link href="/whatsapp/campaigns/new" className="w-full sm:w-auto">
-            <Button className="w-full h-12 sm:h-10 px-4 rounded-[15px] sm:rounded-xl bg-[#164F43] hover:bg-[#124238] text-white font-bold text-sm sm:text-xs shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-transform">
-              <Plus className="w-4 h-4 shrink-0" />
-              <span>New Campaign</span>
-            </Button>
-          </Link>
-
-          <Button 
-            type="button"
-            onClick={() => setOpenAddNumberModal(true)}
-            variant="outline"
-            className="w-full h-12 sm:h-10 px-4 rounded-[15px] sm:rounded-xl border-[1.5px] border-[#164F43] dark:border-[#34D399] text-[#164F43] dark:text-[#34D399] hover:bg-[#164F43]/10 dark:hover:bg-[#34D399]/10 font-bold text-sm sm:text-xs flex items-center justify-center gap-2 active:scale-95 transition-transform"
-          >
+      {/* Quick Action Buttons */}
+      <div className="grid grid-cols-2 sm:flex sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto sm:justify-end">
+        <Link href="/whatsapp/campaigns/new" className="w-full sm:w-auto">
+          <Button className="w-full h-11 sm:h-10 px-4 rounded-[14px] sm:rounded-xl bg-[#164E43] hover:bg-[#124238] text-white font-bold text-sm sm:text-xs shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-transform">
             <Plus className="w-4 h-4 shrink-0" />
-            <span>Add Number</span>
+            <span>New Campaign</span>
           </Button>
-        </div>
+        </Link>
+
+        <Button 
+          type="button"
+          onClick={() => setOpenAddNumberModal(true)}
+          variant="outline"
+          className="w-full h-11 sm:h-10 px-4 rounded-[14px] sm:rounded-xl border-[1.5px] border-[#164F43] dark:border-[#34D399] text-[#164F43] dark:text-[#34D399] hover:bg-[#164F43]/10 dark:hover:bg-[#34D399]/10 font-bold text-sm sm:text-xs flex items-center justify-center gap-2 active:scale-95 transition-transform"
+        >
+          <Plus className="w-4 h-4 shrink-0" />
+          <span>Add Number</span>
+        </Button>
       </div>
 
       {/* Stats Cards (2 cols on mobile, 4 cols on desktop) */}
@@ -273,89 +263,25 @@ export default function WhatsAppDashboardPage() {
         onCloseExternalAddModal={() => setOpenAddNumberModal(false)}
       />
 
-      {/* 1.5 Active Auto Follow-up Live Monitor Card */}
-      <div className={cn(
-        "p-4 sm:p-5 rounded-2xl border shadow-sm transition-all",
-        followupData?.settings?.auto_followup
-          ? "bg-gradient-to-br from-emerald-500/10 via-[#FAF8F5] to-[#F5F2EB] dark:from-emerald-950/20 dark:via-[#15171C] dark:to-[#121418] border-emerald-500/30 dark:border-emerald-700/40"
-          : "bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930]"
-      )}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start sm:items-center gap-3">
-            <div className={cn(
-              "w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-xs",
-              followupData?.settings?.auto_followup
-                ? "bg-[#164E43] text-white shadow-emerald-900/20"
-                : "bg-gray-200 dark:bg-zinc-800 text-gray-500 dark:text-zinc-400"
-            )}>
-              <Sparkles className="w-5 h-5" />
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2">
-                <span className={cn(
-                  "w-2.5 h-2.5 rounded-full shrink-0",
-                  followupData?.settings?.auto_followup ? "bg-emerald-500 animate-pulse" : "bg-gray-400"
-                )} />
-                <h3 className="text-base font-extrabold text-gray-900 dark:text-white">
-                  স্মার্ট ফলো-আপ সিস্টেম (Auto Follow-up Engine)
-                </h3>
-                <span className={cn(
-                  "px-2 py-0.5 rounded-full text-[11px] font-bold border",
-                  followupData?.settings?.auto_followup
-                    ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
-                    : "bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 border-gray-200 dark:border-zinc-700"
-                )}>
-                  {followupData?.settings?.auto_followup ? 'সক্রিয় ও রানিং (ACTIVE)' : 'বন্ধ আছে (PAUSED)'}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-300 mt-1 flex-wrap font-medium">
-                <span>🔄 ভ্যারিয়েশন: <strong>{followupData?.variants?.length || 0}টি সংরক্ষিত</strong> ({followupData?.variants?.filter((v: any) => v.isActive)?.length || 0}টি রোটেশনে)</span>
-                <span>•</span>
-                <span>⏱️ বিরতি: <strong>{followupData?.settings?.min_delay_minutes || 45}-{followupData?.settings?.max_delay_minutes || 90} মি.</strong></span>
-                <span>•</span>
-                <span>👥 ব্যাচ: <strong>{followupData?.settings?.min_batch_people || 3}-{followupData?.settings?.max_batch_people || 5} জন</strong></span>
-                <span>•</span>
-                <span>📱 সিম: <strong>{followupData?.settings?.assigned_account_name || 'All Connected'}</strong></span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleToggleFollowup}
-              className={cn(
-                "h-9 px-3.5 text-xs font-bold rounded-xl border transition-colors",
-                followupData?.settings?.auto_followup
-                  ? "border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/30"
-                  : "border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
-              )}
-            >
-              {followupData?.settings?.auto_followup ? 'পজ করুন (Pause)' : '▶️ চালু করুন (Turn ON)'}
-            </Button>
-
-            <Link href="/whatsapp/new-followup">
-              <Button className="bg-[#164E43] hover:bg-[#124238] text-white font-bold text-xs h-9 px-4 rounded-xl shadow-sm">
-                ⚙️ ভ্যারিয়েশন ও সেটিংস এডিট
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. All Running Campaigns Section (Outside window overview) */}
+      {/* 2. All Running Campaigns Section (Collapsible - shows ONLY on click) */}
       <div className="space-y-3 pt-3 border-t border-[#E6E2D8] dark:border-[#262930]">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <Layers className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
-              All Running Campaigns
+        <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setShowRunningCampaigns(prev => !prev)}
+            className="flex items-center gap-2 group cursor-pointer text-left focus:outline-none"
+          >
+            <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 font-['Sora',sans-serif]">
+              <span>All Running Campaigns</span>
+              <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-[#E3F1EA] dark:bg-[#1E2D27] text-[#164F43] dark:text-[#5FD1A5]">
+                {campaigns.length}
+              </span>
             </h2>
-          </div>
+            <ChevronDown className={cn(
+              "w-5 h-5 text-gray-500 transition-transform duration-300 ml-0.5",
+              showRunningCampaigns && "rotate-180"
+            )} />
+          </button>
 
           <Link href="/whatsapp/campaigns/new">
             <Button variant="outline" size="sm" className="text-xs border-[#E6E2D8] dark:border-[#262930] text-emerald-700 dark:text-emerald-400 hover:bg-[#EDE8DE] dark:hover:bg-[#1F2228] h-8 px-3 rounded-lg">
@@ -365,76 +291,80 @@ export default function WhatsAppDashboardPage() {
           </Link>
         </div>
 
-
-        {/* Filter Tabs by Number */}
-        {accounts.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 pt-1 pb-1">
-            <button
-              onClick={() => setSelectedFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                selectedFilter === 'all'
-                  ? 'bg-[#164E43] text-white border-[#164E43] shadow-xs'
-                  : 'bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-800 dark:text-gray-200 hover:bg-[#EDE8DE] dark:hover:bg-[#22262C] hover:text-gray-900 dark:hover:text-white'
-              }`}
-            >
-              🌐 All Numbers ({campaigns.length})
-            </button>
-
-            {accounts.map(acc => {
-              const count = campaigns.filter(c => c.accountId === acc.id || (!c.accountId && acc.id === 'main') || c.accountId === 'all').length;
-              const phoneLabel = acc.phoneNumber ? ` (+${acc.phoneNumber.replace(/^\+/, '')})` : '';
-              return (
+        {/* Filter Tabs & Campaigns Grid (Shown ONLY when clicked) */}
+        {showRunningCampaigns && (
+          <div className="space-y-3 pt-1">
+            {/* Filter Tabs by Number */}
+            {accounts.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1 pb-1">
                 <button
-                  key={acc.id}
-                  onClick={() => setSelectedFilter(acc.id)}
-                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                    selectedFilter === acc.id
+                  onClick={() => setSelectedFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                    selectedFilter === 'all'
                       ? 'bg-[#164E43] text-white border-[#164E43] shadow-xs'
                       : 'bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-800 dark:text-gray-200 hover:bg-[#EDE8DE] dark:hover:bg-[#22262C] hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
-                  <Phone className="w-3 h-3 shrink-0 text-emerald-700 dark:text-emerald-400" />
-                  <span>{acc.name}{phoneLabel}</span>
-                  <span className="opacity-75">({count})</span>
+                  🌐 All Numbers ({campaigns.length})
                 </button>
-              );
-            })}
-          </div>
-        )}
 
-        {/* Campaigns Grid */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-64 rounded-xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930]" />
-            ))}
-          </div>
-        ) : filteredCampaigns.length === 0 ? (
-          <div className="text-center py-14 px-4 rounded-2xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-dashed border-[#E6E2D8] dark:border-[#262930]">
-            <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3">
-              <Sparkles className="w-6 h-6" />
-            </div>
-            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-4">
-              {selectedFilter === 'all' ? 'No campaigns created yet' : 'No campaigns for this number'}
-            </h3>
-            <Link href={selectedFilter === 'all' ? '/whatsapp/campaigns/new' : `/whatsapp/campaigns/new?accountId=${selectedFilter}`}>
-              <Button className="bg-[#164E43] hover:bg-[#124238] text-white font-semibold text-xs px-5 shadow-sm">
-                <Plus className="w-4 h-4 mr-1.5" />
-                Create New Campaign
-              </Button>
-            </Link>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredCampaigns.map((camp) => (
-              <CampaignCard
-                key={camp.id}
-                campaign={camp}
-                accounts={accounts}
-                onToggleActive={fetchDashboardData}
-                onDelete={handleDeleteCampaign}
-              />
-            ))}
+                {accounts.map(acc => {
+                  const count = campaigns.filter(c => c.accountId === acc.id || (!c.accountId && acc.id === 'main') || c.accountId === 'all').length;
+                  const phoneLabel = acc.phoneNumber ? ` (+${acc.phoneNumber.replace(/^\+/, '')})` : '';
+                  return (
+                    <button
+                      key={acc.id}
+                      onClick={() => setSelectedFilter(acc.id)}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                        selectedFilter === acc.id
+                          ? 'bg-[#164E43] text-white border-[#164E43] shadow-xs'
+                          : 'bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-800 dark:text-gray-200 hover:bg-[#EDE8DE] dark:hover:bg-[#22262C] hover:text-gray-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <Phone className="w-3 h-3 shrink-0 text-emerald-700 dark:text-emerald-400" />
+                      <span>{acc.name}{phoneLabel}</span>
+                      <span className="opacity-75">({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Campaigns Grid */}
+            {loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-64 rounded-xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930]" />
+                ))}
+              </div>
+            ) : filteredCampaigns.length === 0 ? (
+              <div className="text-center py-14 px-4 rounded-2xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-dashed border-[#E6E2D8] dark:border-[#262930]">
+                <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-4">
+                  {selectedFilter === 'all' ? 'No campaigns created yet' : 'No campaigns for this number'}
+                </h3>
+                <Link href={selectedFilter === 'all' ? '/whatsapp/campaigns/new' : `/whatsapp/campaigns/new?accountId=${selectedFilter}`}>
+                  <Button className="bg-[#164E43] hover:bg-[#124238] text-white font-semibold text-xs px-5 shadow-sm">
+                    <Plus className="w-4 h-4 mr-1.5" />
+                    Create New Campaign
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredCampaigns.map((camp) => (
+                  <CampaignCard
+                    key={camp.id}
+                    campaign={camp}
+                    accounts={accounts}
+                    onToggleActive={fetchDashboardData}
+                    onDelete={handleDeleteCampaign}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

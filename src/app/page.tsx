@@ -1,10 +1,24 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { LoginForm } from '@/components/LoginForm';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { motion } from 'framer-motion';
 
 export default function LoginPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    fetch('/api/auth')
+      .then(res => res.json())
+      .then(data => {
+        if (data.authenticated) {
+          router.replace('/whatsapp');
+        }
+      })
+      .catch(() => {});
+  }, [router]);
   return (
     <div className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden bg-[#F4F1EB] dark:bg-[#111215] transition-colors duration-200">
       {/* Top right Theme Toggle */}
