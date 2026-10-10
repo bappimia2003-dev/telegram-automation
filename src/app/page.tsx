@@ -36,22 +36,14 @@ export default function LoginPage() {
       
       <main className="z-10 flex-1 flex flex-col items-center justify-center w-full px-4">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="w-full max-w-md"
+          transition={{ duration: 0.4, ease: 'easeOut' }}
+          className="w-full max-w-[400px]"
         >
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white mb-2">Welcome Back</h1>
-            <p className="text-sm text-[#4B5563] dark:text-[#9CA3AF]">Sign in to manage your WhatsApp & Telegram automations</p>
-          </div>
           <LoginForm />
         </motion.div>
       </main>
-
-      <footer className="z-10 py-6 text-center text-xs text-gray-400 dark:text-gray-600">
-        Automation System v2.0 (WhatsApp & Telegram)
-      </footer>
     </div>
   );
 }

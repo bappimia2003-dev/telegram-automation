@@ -22,11 +22,22 @@ if (SUPABASE_URL && SUPABASE_KEY) {
   errLog('DB', 'SUPABASE_URL or SUPABASE_KEY missing in environment!');
 }
 
-function parseDescriptionTags(rawDesc: string): { accountId: string; variants: any[]; followupConfig: WaFollowupConfig | undefined; description: string } {
+function parseDescriptionTags(rawDesc: string): { accountId: string; clientId: string; variants: any[]; followupConfig: WaFollowupConfig | undefined; description: string } {
   let description = rawDesc || '';
   let accountId = 'all';
+  let clientId = 'admin';
   let variants: any[] = [];
   let followupConfig: WaFollowupConfig | undefined = undefined;
+
+  // Extract [cli:...]
+  if (description.includes('[cli:')) {
+    const start = description.indexOf('[cli:');
+    const end = description.indexOf(']', start);
+    if (end !== -1) {
+      clientId = description.substring(start + 5, end) || 'admin';
+      description = (description.substring(0, start) + description.substring(end + 1)).trim();
+    }
+  }
 
   // Extract [acc:...]
   if (description.includes('[acc:')) {
@@ -79,11 +90,11 @@ function parseDescriptionTags(rawDesc: string): { accountId: string; variants: a
     }
   }
 
-  return { accountId, variants, followupConfig, description };
+  return { accountId, clientId, variants, followupConfig, description };
 }
 
 function rowToCampaign(r: any): WaCampaign {
-  const { accountId, variants: parsedVariants, followupConfig, description } = parseDescriptionTags(r.description || '');
+  const { accountId, clientId, variants: parsedVariants, followupConfig, description } = parseDescriptionTags(r.description || '');
 
   let variants = parsedVariants;
   if (!variants || variants.length === 0) {
@@ -107,6 +118,7 @@ function rowToCampaign(r: any): WaCampaign {
     name: r.name,
     description,
     accountId,
+    clientId,
     keywords: r.keywords || '',
     isDefault: Boolean(r.is_default),
     welcomeMessage: r.welcome_message || '',
@@ -130,17 +142,56 @@ function rowToCampaign(r: any): WaCampaign {
 export async function getActiveCampaigns(): Promise<WaCampaign[]> {
   if (!supabase) return [];
   try {
-    const { data, error } = await supabase
-      .from('wa_campaigns')
-      .select('*')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false });
+    const [{ data, error }, { data: sysClientsRow }] = await Promise.all([
+      supabase
+        .from('wa_campaigns')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('wa_campaigns')
+        .select('description')
+        .eq('id', 'system_clients')
+        .maybeSingle(),
+    ]);
 
     if (error) {
       errLog('DB', 'Error getting active campaigns:', error.message);
       return [];
     }
-    return (data || []).filter((r: any) => !r.id?.startsWith('system_')).map(rowToCampaign);
+
+    const expiredClientIds = new Set<string>();
+    if (sysClientsRow?.description) {
+      try {
+        let raw = sysClientsRow.description.trim();
+        if (!raw.startsWith('[')) {
+          raw = Buffer.from(raw, 'base64').toString('utf-8');
+        }
+        const clients = JSON.parse(raw);
+        if (Array.isArray(clients)) {
+          for (const cli of clients) {
+            const isExp = !cli.isActive || (cli.expiresAt && Date.now() >= new Date(cli.expiresAt).getTime());
+            if (isExp) {
+              expiredClientIds.add(cli.id);
+            }
+          }
+        }
+      } catch {}
+    }
+
+    const activeCampaigns: WaCampaign[] = [];
+    for (const r of data || []) {
+      if (r.id?.startsWith('system_')) continue;
+      const camp = rowToCampaign(r);
+      if (camp.clientId && camp.clientId !== 'admin' && expiredClientIds.has(camp.clientId)) {
+        log('DB', `⏳ Auto-disabling campaign "${camp.name}" (${camp.id}) because client ${camp.clientId} subscription expired.`);
+        supabase.from('wa_campaigns').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', camp.id).then(() => {});
+        continue;
+      }
+      activeCampaigns.push(camp);
+    }
+
+    return activeCampaigns;
   } catch (e: any) {
     errLog('DB', 'Exception getting active campaigns:', e.message);
     return [];
@@ -234,10 +285,21 @@ export async function updateWaConnectionState(accountId: string, updates: Partia
 
     let existingName = targetId === 'main' ? 'Primary WhatsApp' : `SIM ${targetId.slice(-4)}`;
     let existingPhone = '';
+    let existingClientId = 'admin';
 
     const { data: existing } = await supabase.from('wa_connection').select('phone_number').eq('id', targetId).maybeSingle();
-    if (existing?.phone_number && existing.phone_number.includes('|')) {
-      const parts = existing.phone_number.split('|');
+    let rawPhoneField = existing?.phone_number || '';
+    if (rawPhoneField.includes('[cli:')) {
+      const start = rawPhoneField.indexOf('[cli:');
+      const end = rawPhoneField.indexOf(']', start);
+      if (end !== -1) {
+        existingClientId = rawPhoneField.substring(start + 5, end) || 'admin';
+        rawPhoneField = (rawPhoneField.substring(0, start) + rawPhoneField.substring(end + 1)).trim();
+      }
+    }
+
+    if (rawPhoneField && rawPhoneField.includes('|')) {
+      const parts = rawPhoneField.split('|');
       existingName = parts[0] || existingName;
       existingPhone = parts.slice(1).join('|');
     }
@@ -253,7 +315,9 @@ export async function updateWaConnectionState(accountId: string, updates: Partia
     }
 
     const finalPhone = (updates.phoneNumber !== undefined && updates.phoneNumber !== '') ? updates.phoneNumber : existingPhone;
-    row.phone_number = `${finalName}|${finalPhone}`;
+    const finalClientId = updates.clientId !== undefined ? updates.clientId : existingClientId;
+    const cliPrefix = finalClientId && finalClientId !== 'admin' ? `[cli:${finalClientId}]` : '';
+    row.phone_number = `${cliPrefix}${finalName}|${finalPhone}`;
 
     if (updates.status !== undefined) row.status = updates.status;
     if (updates.qrCode !== undefined) row.qr_code = updates.qrCode;
@@ -284,6 +348,15 @@ export async function getAllDbAccounts(): Promise<WaConnection[]> {
     return (data || []).map((r: any) => {
       let name = r.id === 'main' ? 'Primary WhatsApp' : `SIM ${r.id.slice(-4)}`;
       let phoneNumber = r.phone_number || '';
+      let clientId = 'admin';
+      if (phoneNumber.includes('[cli:')) {
+        const start = phoneNumber.indexOf('[cli:');
+        const end = phoneNumber.indexOf(']', start);
+        if (end !== -1) {
+          clientId = phoneNumber.substring(start + 5, end) || 'admin';
+          phoneNumber = (phoneNumber.substring(0, start) + phoneNumber.substring(end + 1)).trim();
+        }
+      }
       if (phoneNumber.includes('|')) {
         const parts = phoneNumber.split('|');
         name = parts[0];
@@ -297,6 +370,7 @@ export async function getAllDbAccounts(): Promise<WaConnection[]> {
         qrCode: '',
         lastConnected: r.last_connected,
         createdAt: r.created_at,
+        clientId,
       };
     });
   } catch (e: any) {
@@ -446,7 +520,11 @@ export async function restoreMediaBackup(filename: string): Promise<{ buffer: Bu
  */
 export async function getCampaignsWithFollowup(): Promise<WaCampaign[]> {
   const all = await getActiveCampaigns();
-  return all.filter((c) => c.isActive && c.followupConfig?.followupEnabled === true);
+  return all.filter(
+    (c) =>
+      c.isActive &&
+      (c.followupConfig?.followupEnabled === true || c.followupConfig?.postChatFollowupEnabled === true)
+  );
 }
 
 /**
@@ -500,7 +578,7 @@ export async function getRecentContactedUsers(
       .from('wa_message_logs')
       .select('id, phone_number, contact_name, sent_at')
       .eq('campaign_id', campaignId)
-      .in('message_type', ['text', 'image', 'video', 'audio', 'document'])
+      .in('message_type', ['text', 'image', 'video', 'audio', 'document', 'postchat_trigger'])
       .eq('status', 'sent')
       .lte('sent_at', maxEligibleDate)
       .gte('sent_at', minEligibleDate)
@@ -601,14 +679,93 @@ export async function logInboundMessage(
 export async function clearContactInboundReplies(campaignId: string, phoneNumber: string): Promise<void> {
   if (!supabase) return;
   try {
+    // 1. Delete all previous incoming logs for this phone number across any campaign_id
+    await supabase
+      .from('wa_message_logs')
+      .delete()
+      .eq('phone_number', phoneNumber)
+      .eq('message_type', 'incoming');
+
+    // 2. Delete previous follow-up & post-chat step logs for this specific campaign + phone number
     await supabase
       .from('wa_message_logs')
       .delete()
       .eq('campaign_id', campaignId)
       .eq('phone_number', phoneNumber)
-      .in('message_type', ['incoming', 'followup_step1', 'followup_step2', 'followup_step3', 'followup']);
+      .or('message_type.like.followup%,message_type.like.postchat%');
   } catch (err: any) {
     // non-fatal
+  }
+}
+
+/**
+ * Trigger Post-Chat Follow-up when Admin writes a closing keyword (e.g., "okay", "Thank You", "আবার কথা হবে").
+ */
+export async function triggerPostChatFollowup(
+  campaignId: string,
+  phoneNumber: string,
+  contactName: string,
+  keywordUsed: string
+): Promise<void> {
+  if (!supabase) return;
+  try {
+    const nowIso = new Date().toISOString();
+
+    // 1. Clear prior incoming & postchat logs so the post-chat timer starts cleanly
+    await supabase
+      .from('wa_message_logs')
+      .delete()
+      .eq('phone_number', phoneNumber)
+      .eq('message_type', 'incoming');
+
+    await supabase
+      .from('wa_message_logs')
+      .delete()
+      .eq('campaign_id', campaignId)
+      .eq('phone_number', phoneNumber)
+      .like('message_type', 'postchat%');
+
+    // 2. Ensure contact is recorded/updated in wa_contacted_users with fresh sent_at
+    const { data: existing } = await supabase
+      .from('wa_contacted_users')
+      .select('id, contact_name')
+      .eq('campaign_id', campaignId)
+      .eq('phone_number', phoneNumber)
+      .maybeSingle();
+
+    const finalName = existing?.contact_name || contactName || 'Customer';
+    if (existing?.id) {
+      await supabase
+        .from('wa_contacted_users')
+        .update({ sent_at: nowIso, status: 'sent' })
+        .eq('id', existing.id);
+    } else {
+      await supabase.from('wa_contacted_users').insert({
+        id: `pc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        campaign_id: campaignId,
+        phone_number: phoneNumber,
+        contact_name: finalName,
+        status: 'sent',
+        sent_at: nowIso,
+      });
+    }
+
+    // 3. Log postchat_trigger event
+    await supabase.from('wa_message_logs').insert({
+      id: `pct_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      campaign_id: campaignId,
+      phone_number: phoneNumber,
+      contact_name: finalName,
+      message_type: 'postchat_trigger',
+      file_url: keywordUsed,
+      status: 'sent',
+      error_message: `Admin closing keyword: ${keywordUsed}`,
+      sent_at: nowIso,
+    });
+
+    log('DB', `🎯 Post-Chat Follow-up ARMED for ${phoneNumber} on campaign ${campaignId} (keyword: "${keywordUsed}")`);
+  } catch (err: any) {
+    errLog('DB', 'Error triggering post-chat followup:', err.message);
   }
 }
 
@@ -652,9 +809,10 @@ export async function logFollowupStep(
   campaignId: string,
   phoneNumber: string,
   contactName: string,
-  step: 1 | 2 | 3,
+  step: number,
   messageType: 'text' | 'image' | 'audio' | 'video' | 'document',
-  fileUrl = ''
+  fileUrl = '',
+  customMessageType?: string
 ): Promise<void> {
   if (!supabase) return;
   try {
@@ -663,7 +821,7 @@ export async function logFollowupStep(
       campaign_id: campaignId,
       phone_number: phoneNumber,
       contact_name: contactName,
-      message_type: `followup_step${step}`,
+      message_type: customMessageType || `followup_step${step}`,
       file_url: fileUrl,
       status: 'sent',
       error_message: '',

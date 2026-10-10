@@ -11,10 +11,17 @@ export interface WaCampaignVariant {
 }
 
 export interface WaFollowupStep {
-  stepNumber: number; // 1, 2, 3
+  stepNumber: number; // 1, 2, 3, 4... unlimited
   title?: string;
   delayText?: string;
+  delayValue?: number;
+  delayUnit?: 'minutes' | 'hours' | 'days' | 'weeks' | 'months';
+  repeatable?: boolean;
+  repeatEveryValue?: number;
+  repeatEveryUnit?: 'days' | 'weeks' | 'months';
+  maxRepeats?: number; // 0 or undefined = unlimited
   message?: string;
+  alternateMessages?: string[];
   imageUrl?: string;
   audioUrl?: string;
   videoUrl?: string;
@@ -31,7 +38,7 @@ export interface WaFollowupConfig {
   understandingText?: string;
   followupEnabled: boolean;
   followupDelayValue?: number;
-  followupDelayUnit?: 'minutes' | 'hours' | 'days';
+  followupDelayUnit?: 'minutes' | 'hours' | 'days' | 'weeks' | 'months';
   followupCondition?: 'no_reply' | 'unconfirmed' | 'always';
   antiBanJitter?: boolean;
   minDelayMinutes?: number;
@@ -42,6 +49,9 @@ export interface WaFollowupConfig {
   totalDurationDays?: number;
   followupVariants?: WaCampaignVariant[];
   steps?: WaFollowupStep[];
+  postChatFollowupEnabled?: boolean;
+  postChatTriggerKeywords?: string;
+  postChatSteps?: WaFollowupStep[];
   followupMessage?: string;
   followupImageUrl?: string;
   followupVideoUrl?: string;
@@ -67,6 +77,7 @@ export interface WaCampaign {
   sendOrder: string;
   delayBetweenSends: number;
   accountId?: string;
+  clientId?: string;
   followupConfig?: WaFollowupConfig;
   isActive: boolean;
   chatReplyEnabled: boolean;
@@ -104,6 +115,21 @@ export interface WaConnection {
   qrCode: string;
   lastConnected: string;
   createdAt: string;
+  clientId?: string;
 }
 
 export type WaAccount = WaConnection;
+
+export interface WaClientProfile {
+  id: string;
+  name: string;
+  password: string;
+  maxWhatsappNumbers: number;
+  maxCampaigns: number;
+  durationDays: number;
+  expiresAt: string | null;
+  isActive: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}

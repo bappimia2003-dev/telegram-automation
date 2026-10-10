@@ -86,6 +86,13 @@ const lastVariantIndexMap = new Map<string, number>();
 let lastFirstDelayMs = 0;
 let lastSubsequentDelayMs = 0;
 
+// Track active auto-reply deliveries so quick 2nd messages during initial auto-reply don't kill follow-up
+const activeAutoReplySet = new Set<string>();
+
+export function isAutoReplyInProgress(sender: string, accountId?: string): boolean {
+  return activeAutoReplySet.has(`${accountId || 'all'}:${sender}`) || activeAutoReplySet.has(`all:${sender}`);
+}
+
 function getRandomDelay(minMs: number, maxMs: number, previousDelay: number): number {
   let delay: number;
   let attempts = 0;
@@ -104,6 +111,12 @@ export async function processIncomingMessage(
   accountId?: string,
   messageKey?: any
 ): Promise<void> {
+  const deliveryKey = `${accountId || 'all'}:${sender}`;
+  if (activeAutoReplySet.has(deliveryKey)) {
+    log('CAMPAIGN', `[Acc: ${accountId || 'all'}] Auto-reply already in progress for ${sender}. Skipping duplicate trigger.`);
+    return;
+  }
+  activeAutoReplySet.add(deliveryKey);
   try {
     const campaign = await matchCampaign(messageText, accountId);
     if (!campaign) {
@@ -208,6 +221,7 @@ export async function processIncomingMessage(
     await sleep(firstDelay);
 
     let allSuccessful = true;
+    let deliveredCount = 0;
 
     for (let i = 0; i < itemsToSend.length; i++) {
       const item = itemsToSend[i];
@@ -224,6 +238,7 @@ export async function processIncomingMessage(
       try {
         if (item === 'message') {
           await sendTextMessage(sock, sender, effectiveMessage);
+          deliveredCount++;
           await addMessageLog({
             id: uuidv4(),
             campaignId: campaign.id,
@@ -237,6 +252,7 @@ export async function processIncomingMessage(
           });
         } else if (item === 'image') {
           await sendImageMessage(sock, sender, effectiveImageUrl);
+          deliveredCount++;
           const cleanLogUrl = effectiveImageUrl.startsWith('data:') ? 'photo.jpg' : effectiveImageUrl;
           await addMessageLog({
             id: uuidv4(),
@@ -251,6 +267,7 @@ export async function processIncomingMessage(
           });
         } else if (item === 'video') {
           await sendVideoMessage(sock, sender, effectiveVideoUrl);
+          deliveredCount++;
           const cleanLogUrl = effectiveVideoUrl.startsWith('data:') ? 'video.mp4' : effectiveVideoUrl;
           await addMessageLog({
             id: uuidv4(),
@@ -265,6 +282,7 @@ export async function processIncomingMessage(
           });
         } else if (item === 'audio') {
           await sendAudioMessage(sock, sender, effectiveAudioUrl);
+          deliveredCount++;
           const cleanLogUrl = effectiveAudioUrl.startsWith('data:') ? 'voice_note.mp3' : effectiveAudioUrl;
           await addMessageLog({
             id: uuidv4(),
@@ -279,6 +297,7 @@ export async function processIncomingMessage(
           });
         } else if (item === 'document') {
           await sendDocumentMessage(sock, sender, effectiveDocumentUrl, effectiveDocumentName);
+          deliveredCount++;
           const cleanLogUrl = effectiveDocumentUrl.startsWith('data:') ? effectiveDocumentName : effectiveDocumentUrl;
           await addMessageLog({
             id: uuidv4(),
@@ -335,7 +354,7 @@ export async function processIncomingMessage(
       phoneNumber: sender,
       contactName: pushName,
       sentAt: new Date().toISOString(),
-      status: allSuccessful ? 'sent' : 'failed',
+      status: allSuccessful || deliveredCount > 0 ? 'sent' : 'failed',
     });
 
     // Increment sent count
@@ -344,5 +363,7 @@ export async function processIncomingMessage(
     log('CAMPAIGN', `✅ Delivery completed for ${sender}. Follow-up timer is now ON (Step 1 in 2 mins if no reply).`);
   } catch (err: any) {
     errLog('CAMPAIGN', 'Exception in processIncomingMessage:', err.message);
+  } finally {
+    activeAutoReplySet.delete(deliveryKey);
   }
 }

@@ -290,11 +290,12 @@ export async function generateFollowupText(params: {
   gender: 'apu' | 'vai' | 'apni';
   campaignName: string;
   understandingText?: string;
+  aiSystemPrompt?: string;
   baseTemplate?: string;
   apiKeyOrId?: string;
   preferredModel?: string;
 }): Promise<string> {
-  const { step, contactName, gender, campaignName, understandingText, baseTemplate, apiKeyOrId, preferredModel } = params;
+  const { step, contactName, gender, campaignName, understandingText, aiSystemPrompt, baseTemplate, apiKeyOrId, preferredModel } = params;
 
   // Format natural, culturally fluent Bengali greeting/honorific (NEVER output "Name আপনি"!)
   const cleanName = (contactName || '').trim();
@@ -339,8 +340,9 @@ export async function generateFollowupText(params: {
     fallback = `${greeting} আপনি আজকে যোগাযোগ করতে বলেছিলেন। অফারটি এখনো আপনার জন্য এভেইলেবল আছে, কোনো প্রশ্ন থাকলে জানাতে পারেন!`;
   }
 
-  if (baseTemplate && baseTemplate.trim()) {
-    fallback = baseTemplate
+  const hasCustomDraft = Boolean(baseTemplate && baseTemplate.trim());
+  if (hasCustomDraft) {
+    fallback = baseTemplate!
       .replace(/\{name\}/g, greetingName || 'ভাইয়া/আপু')
       .replace(/\{honorific\}/g, gender === 'apu' ? 'আপু' : gender === 'vai' ? 'ভাইয়া' : '');
   }
@@ -351,19 +353,20 @@ export async function generateFollowupText(params: {
   }
 
   try {
+    const combinedContext = [aiSystemPrompt, understandingText].filter(Boolean).join('\n');
     const prompt = `
 You are a warm, polite, and courteous Bangladeshi sales assistant chatting with a customer on WhatsApp.
 Customer Name / Honorific: "${greetingName || 'সম্মানিত কাস্টমার'}"
-Product Details / Notes: "${understandingText || 'আমাদের অফার'}"
+Product Context & Instructions: "${combinedContext || 'আমাদের অফার'}"
 Follow-up Stage: ${step} (1 = 2-min gentle check, 2 = 3-hour friendly check, 3 = next-day courteous closing, promise = promised date reminder)
 Base Draft: "${fallback}"
 
 Strict Instructions:
-1. Write 1 to 2 short sentences in 100% natural, polite, everyday Bangladeshi Bangla/Banglish.
-2. Address the customer respectfully (e.g. "${greetingName ? greetingName : ''}"). NEVER write awkward expressions like "নাম আপনি".
-3. Sound like a real, helpful human typing in WhatsApp — NOT a robot or corporate automated system.
-4. STRICT: NEVER mention internal campaign names, codes, or labels (such as "${campaignName}", "T1", "Camp 1", etc.). Customers must NEVER hear internal admin codes! Instead, refer to it naturally as "আমাদের অফারটি" (our offer), "প্যাকেজটি", or "প্রোডাক্টটি".
-5. If product details/price are mentioned in Product Details ("${understandingText || ''}"), reference them naturally (e.g. price 350 taka) without sounding pushy.
+1. Write a concise (1 to 3 sentences) message in 100% natural, polite, everyday Bangladeshi Bangla.
+2. ${hasCustomDraft ? 'CRITICAL: Preserve the core meaning, specific points, and call-to-action of the Base Draft (for example, if the Base Draft mentions checking shared review images or asking for Name, Phone Number, and Address for Cash on Delivery, you MUST keep those exact points in your message!). Gently polish the wording so it sounds warm and human.' : 'Write a warm, helpful follow-up message based on the Product Context & Instructions.'}
+3. Address the customer respectfully (e.g. "${greetingName ? greetingName : ''}"). NEVER write awkward expressions like "নাম আপনি".
+4. Sound like a real, helpful human typing in WhatsApp — NOT a robot or corporate automated system.
+5. STRICT: NEVER mention internal campaign names, codes, or labels (such as "${campaignName}", "T1", "Camp 1", etc.). Customers must NEVER hear internal admin codes!
 6. Output ONLY the plain message text to send directly to the customer. No quotes, no intro notes, no markdown explanations.
 `;
 

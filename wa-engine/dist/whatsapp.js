@@ -218,11 +218,16 @@ async function startWhatsApp(accountId = 'main', accountName) {
             if (event.type !== 'notify')
                 return;
             for (const msg of event.messages) {
-                if (!msg.key || msg.key.fromMe)
+                if (!msg.key)
                     continue;
                 const remoteJid = msg.key.remoteJid;
-                if (!remoteJid || remoteJid === 'status@broadcast' || remoteJid.endsWith('@g.us'))
+                if (!remoteJid ||
+                    remoteJid === 'status@broadcast' ||
+                    remoteJid.endsWith('@g.us') ||
+                    remoteJid.endsWith('@newsletter') ||
+                    remoteJid.endsWith('@broadcast')) {
                     continue;
+                }
                 const sender = remoteJid;
                 const pushName = msg.pushName || 'Customer';
                 const rawText = msg.message?.conversation ||
@@ -237,6 +242,50 @@ async function startWhatsApp(accountId = 'main', accountName) {
                     msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
                     msg.message?.interactiveResponseMessage?.body?.text ||
                     '';
+                // ── Check if Admin sent a Closing Keyword (fromMe === true) to trigger Post-Chat Follow-up ──
+                if (msg.key.fromMe) {
+                    const outText = rawText.trim();
+                    if (!outText || outText.length > 180 || (0, campaigns_js_1.isAutoReplyInProgress)(sender, accountId)) {
+                        continue;
+                    }
+                    (0, db_js_1.getActiveCampaigns)()
+                        .then(async (activeCamps) => {
+                        const accountCamps = activeCamps.filter((c) => c.isActive &&
+                            c.followupConfig?.postChatFollowupEnabled === true &&
+                            (!c.accountId || c.accountId === 'all' || c.accountId === accountId));
+                        if (accountCamps.length === 0)
+                            return;
+                        const existingCampId = await (0, db_js_1.findContactCampaign)(sender, accountId);
+                        const orderedCamps = existingCampId
+                            ? [
+                                ...accountCamps.filter((c) => c.id === existingCampId),
+                                ...accountCamps.filter((c) => c.id !== existingCampId),
+                            ]
+                            : accountCamps;
+                        const lowerOut = outText.toLowerCase();
+                        for (const camp of orderedCamps) {
+                            const kwRaw = camp.followupConfig?.postChatTriggerKeywords || 'okay, Thank You, আবার কথা হবে';
+                            const kwList = kwRaw
+                                .split(',')
+                                .map((k) => k.trim())
+                                .filter(Boolean);
+                            const matchedKw = kwList.find((kw) => {
+                                const lkw = kw.toLowerCase();
+                                return (lowerOut === lkw ||
+                                    lowerOut.endsWith(lkw) ||
+                                    lowerOut.startsWith(lkw) ||
+                                    lowerOut.includes(lkw));
+                            });
+                            if (matchedKw) {
+                                (0, utils_js_1.log)('WA', `🎯 [${session.name}] Admin sent closing keyword "${matchedKw}" to ${sender}. Arming Post-Chat Follow-up for "${camp.name}"!`);
+                                await (0, db_js_1.triggerPostChatFollowup)(camp.id, sender, 'Customer', matchedKw);
+                                break;
+                            }
+                        }
+                    })
+                        .catch((e) => (0, utils_js_1.errLog)('WA', `Post-chat keyword check error:`, e.message));
+                    continue;
+                }
                 const hasAudio = !!msg.message?.audioMessage;
                 const hasMedia = !!(msg.message?.imageMessage || msg.message?.videoMessage || msg.message?.documentMessage);
                 let messageText = rawText.trim();
@@ -257,12 +306,19 @@ async function startWhatsApp(accountId = 'main', accountName) {
                         await (0, campaigns_js_1.processIncomingMessage)(sock, sender, pushName, messageText, accountId, msg.key);
                     }
                     else {
+                        // If an initial auto-reply is currently being delivered to this customer,
+                        // don't let a quick second message ("hi", "?") prematurely kill the follow-up timer!
+                        if ((0, campaigns_js_1.isAutoReplyInProgress)(sender, accountId)) {
+                            (0, utils_js_1.log)('WA', `ℹ️ [${session.name}] Ignoring quick message "${messageText}" from ${sender} while initial auto-reply is still delivering.`);
+                            return;
+                        }
                         // B. CUSTOMER REPLY! (Customer replied to our message)
                         // Follow-up is turned OFF IMMEDIATELY for this customer!
                         let campaignId = await (0, db_js_1.findContactCampaign)(sender, accountId);
                         if (!campaignId) {
                             const activeCamps = await (0, db_js_1.getActiveCampaigns)();
-                            campaignId = activeCamps[0]?.id || 'general';
+                            const accountCamps = activeCamps.filter((c) => !c.accountId || c.accountId === 'all' || c.accountId === accountId);
+                            campaignId = accountCamps[0]?.id || activeCamps[0]?.id || 'general';
                         }
                         (0, utils_js_1.log)('WA', `🛑 Customer ${sender} replied: "${messageText}". Follow-up turned OFF immediately!`);
                         await (0, db_js_1.logInboundMessage)(campaignId, sender, pushName, messageText);

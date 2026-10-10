@@ -41,6 +41,9 @@ export interface WaCampaign {
   // WhatsApp Account Assignment
   accountId?: string; // 'all' or specific account id
 
+  // Client Ownership ('admin' or specific clientId)
+  clientId?: string;
+
   // AI Automation & Intelligent Follow-up Configuration
   followupConfig?: WaFollowupConfig;
 
@@ -76,10 +79,17 @@ export interface WaFollowupMediaFile {
 }
 
 export interface WaFollowupStep {
-  stepNumber: number; // 1, 2, 3
+  stepNumber: number; // 1, 2, 3, 4... unlimited
   title?: string;
   delayText?: string;
+  delayValue?: number;
+  delayUnit?: 'minutes' | 'hours' | 'days' | 'weeks' | 'months';
+  repeatable?: boolean;
+  repeatEveryValue?: number;
+  repeatEveryUnit?: 'days' | 'weeks' | 'months';
+  maxRepeats?: number; // 0 or undefined = unlimited
   message?: string;
+  alternateMessages?: string[]; // message variations for repeatable steps (rule-based rotation)
   imageUrl?: string;
   audioUrl?: string;
   videoUrl?: string;
@@ -101,7 +111,7 @@ export interface WaFollowupConfig {
   // Timing & Schedule ("some time later follow up")
   followupEnabled: boolean;
   followupDelayValue?: number;
-  followupDelayUnit?: 'minutes' | 'hours' | 'days';
+  followupDelayUnit?: 'minutes' | 'hours' | 'days' | 'weeks' | 'months';
   followupCondition?: 'no_reply' | 'unconfirmed' | 'always';
   antiBanJitter?: boolean;
   minDelayMinutes?: number;
@@ -112,8 +122,13 @@ export interface WaFollowupConfig {
   totalDurationDays?: number;
   followupVariants?: WaCampaignVariant[];
 
-  // 3-step follow-up system (Step 1: 3-5 min random, Step 2: 3-4h, Step 3: next day)
+  // Multi-step extendable & repeatable follow-up system
   steps?: WaFollowupStep[];
+
+  // Post-Chat Closing Keyword Follow-up (100% Rule-Based, when admin chats with customer who didn't buy)
+  postChatFollowupEnabled?: boolean;
+  postChatTriggerKeywords?: string; // e.g. "okay,Thank You,আবার কথা হবে"
+  postChatSteps?: WaFollowupStep[];
 
   // Given follow-up message & multiple files (legacy/fallback)
   followupMessage?: string;
@@ -154,6 +169,7 @@ export interface WaConnection {
   qrCode: string;
   lastConnected: string;
   createdAt: string;
+  clientId?: string;
 }
 
 export type WaAccount = WaConnection;
@@ -164,4 +180,18 @@ export interface WaDashboardStats {
   totalSent: number;
   uniqueUsers: number;
   connectionStatus: WaConnection['status'];
+}
+
+export interface WaClientProfile {
+  id: string;
+  name: string;
+  password: string;
+  maxWhatsappNumbers: number;
+  maxCampaigns: number;
+  durationDays: number;
+  expiresAt: string | null;
+  isActive: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
 }

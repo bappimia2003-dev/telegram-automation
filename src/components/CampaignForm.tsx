@@ -59,13 +59,43 @@ async function parseJsonSafely(res: Response, defaultAction = 'Action'): Promise
   }
 }
 
+function formatStepDelayBadge(step: WaFollowupStep): string {
+  if (step.repeatable) {
+    const rVal = step.repeatEveryValue || 1;
+    const rUnit = step.repeatEveryUnit || 'weeks';
+    const unitLabel = rUnit === 'months' ? 'মাস' : rUnit === 'weeks' ? 'সপ্তাহ' : 'দিন';
+    return `🔁 প্রতি ${rVal} ${unitLabel} পর পর`;
+  }
+  if (step.delayValue && step.delayUnit) {
+    const uMap: Record<string, string> = {
+      minutes: 'মি. পর',
+      hours: 'ঘণ্টা পর',
+      days: 'দিন পর',
+      weeks: 'সপ্তাহ পর',
+      months: 'মাস পর',
+    };
+    return `${step.delayValue} ${uMap[step.delayUnit] || step.delayUnit}`;
+  }
+  if (step.delayText) return step.delayText;
+  if (step.stepNumber === 1) return '৩-৫ মি. (র্যান্ডম)';
+  if (step.stepNumber === 2) return '৩-৪ ঘণ্টা পর';
+  if (step.stepNumber === 3) return 'পরের দিন (২৪h)';
+  return `${step.stepNumber - 1} দিন পর`;
+}
+
 function ensureThreeSteps(steps?: WaFollowupStep[], legacy?: WaFollowupConfig): WaFollowupStep[] {
   const defaults: WaFollowupStep[] = [
     {
       stepNumber: 1,
       title: '১ম ফলো-আপ',
       delayText: '৩-৫ মিনিট পর (র্যান্ডম)',
+      delayValue: 3,
+      delayUnit: 'minutes',
+      repeatable: false,
+      repeatEveryValue: 1,
+      repeatEveryUnit: 'weeks',
       message: legacy?.followupMessage || 'আসসালামু আলাইকুম {name}! আমাদের প্যাকেজ বা অফারটি নিয়ে কোনো প্রশ্ন থাকলে নির্দ্বিধায় জানাতে পারেন। আমরা আপনাকে সহায়তার জন্য প্রস্তুত আছি!',
+      alternateMessages: [],
       imageUrl: legacy?.followupImageUrl || '',
       audioUrl: legacy?.followupAudioUrl || '',
       videoUrl: legacy?.followupVideoUrl || '',
@@ -77,7 +107,13 @@ function ensureThreeSteps(steps?: WaFollowupStep[], legacy?: WaFollowupConfig): 
       stepNumber: 2,
       title: '২য় ফলো-আপ',
       delayText: '৩-৪ ঘণ্টা পর',
+      delayValue: 3,
+      delayUnit: 'hours',
+      repeatable: false,
+      repeatEveryValue: 1,
+      repeatEveryUnit: 'weeks',
       message: '{name}, আশা করি ভালো আছেন! অফারটি কিন্তু সীমিত সময়ের জন্য চালু আছে। আপনার প্রয়োজন হলে এখনই জানিয়ে রাখতে পারেন।',
+      alternateMessages: [],
       imageUrl: '',
       audioUrl: '',
       videoUrl: '',
@@ -89,7 +125,13 @@ function ensureThreeSteps(steps?: WaFollowupStep[], legacy?: WaFollowupConfig): 
       stepNumber: 3,
       title: '৩য় ফলো-আপ',
       delayText: 'পরের দিন (২৪ ঘণ্টা পর)',
+      delayValue: 1,
+      delayUnit: 'days',
+      repeatable: false,
+      repeatEveryValue: 1,
+      repeatEveryUnit: 'weeks',
       message: 'শুভ সকাল {name}! আপনার কি এই প্যাকেজটির প্রয়োজন আছে? আপনার মতামত জানালে সুবিধা হতো। ধন্যবাদ!',
+      alternateMessages: [],
       imageUrl: '',
       audioUrl: '',
       videoUrl: '',
@@ -101,17 +143,101 @@ function ensureThreeSteps(steps?: WaFollowupStep[], legacy?: WaFollowupConfig): 
 
   if (!steps || !Array.isArray(steps) || steps.length === 0) return defaults;
 
-  return [1, 2, 3].map((num) => {
+  const baseThree = [1, 2, 3].map((num) => {
     const existing = steps.find((s) => s.stepNumber === num);
     if (existing) {
       return {
         ...defaults[num - 1],
         ...existing,
         files: existing.files || [],
+        alternateMessages: Array.isArray(existing.alternateMessages) ? existing.alternateMessages : [],
       };
     }
     return defaults[num - 1];
   });
+
+  // Preserve any extra steps (Step 4, 5, 6, ... unlimited)
+  const extraSteps = steps
+    .filter((s) => s.stepNumber > 3)
+    .sort((a, b) => a.stepNumber - b.stepNumber)
+    .map((s, idx) => ({
+      stepNumber: 4 + idx,
+      title: s.title || `${4 + idx}ম ফলো-আপ`,
+      delayText: s.delayText || '৭ দিন পর',
+      delayValue: s.delayValue ?? 1,
+      delayUnit: s.delayUnit || 'weeks',
+      repeatable: Boolean(s.repeatable),
+      repeatEveryValue: s.repeatEveryValue ?? 1,
+      repeatEveryUnit: s.repeatEveryUnit || 'weeks',
+      maxRepeats: s.maxRepeats ?? 0,
+      message: s.message || '',
+      alternateMessages: Array.isArray(s.alternateMessages) ? s.alternateMessages : [],
+      imageUrl: s.imageUrl || '',
+      audioUrl: s.audioUrl || '',
+      videoUrl: s.videoUrl || '',
+      documentUrl: s.documentUrl || '',
+      documentName: s.documentName || '',
+      files: s.files || [],
+    }));
+
+  return [...baseThree, ...extraSteps];
+}
+
+function ensurePostChatSteps(steps?: WaFollowupStep[]): WaFollowupStep[] {
+  const defaults: WaFollowupStep[] = [
+    {
+      stepNumber: 1,
+      title: 'কেমন আছেন / খোঁজ নেওয়া',
+      delayValue: 3,
+      delayUnit: 'days',
+      repeatable: false,
+      repeatEveryValue: 1,
+      repeatEveryUnit: 'weeks',
+      message: 'আসসালামু আলাইকুম {name}! কেমন আছেন? সেদিন আমাদের {product} নিয়ে কথা হয়েছিল, আপনার কি কোনো সিদ্ধান্ত নেওয়া হয়েছে? কোনো প্রশ্ন থাকলে জানাতে পারেন।',
+      alternateMessages: [],
+      files: [],
+    },
+    {
+      stepNumber: 2,
+      title: 'অফার শেষ হওয়ার রিমাইন্ডার',
+      delayValue: 7,
+      delayUnit: 'days',
+      repeatable: false,
+      repeatEveryValue: 1,
+      repeatEveryUnit: 'weeks',
+      message: '{name}, আমাদের চলমান ডিসকাউন্ট অফারটি খুব শীঘ্রই শেষ হয়ে যাচ্ছে! আপনি নিলে এখনই অর্ডার বা বুকিং কনফার্ম করে রাখতে পারেন।',
+      alternateMessages: [],
+      files: [],
+    },
+    {
+      stepNumber: 3,
+      title: 'নতুন অফার ও রিপিটেবল ফলো-আপ',
+      delayValue: 1,
+      delayUnit: 'weeks',
+      repeatable: true,
+      repeatEveryValue: 1,
+      repeatEveryUnit: 'months',
+      message: 'হ্যালো {name}! আশা করি ভালো আছেন। আমাদের {product}-এ নতুন স্পেশাল অফার অ্যাড হলো! বিস্তারিত জানতে চাইলে মেসেজ দিন।',
+      alternateMessages: [
+        'আসসালামু আলাইকুম {name}! কেমন আছেন? আমাদের নতুন মাসের স্পেশাল ডিসকাউন্ট অফার শুরু হয়েছে, আপনার প্রয়োজন হলে জানাতে পারেন।',
+      ],
+      files: [],
+    },
+  ];
+
+  if (!steps || !Array.isArray(steps) || steps.length === 0) return defaults;
+  return steps.map((s, idx) => ({
+    stepNumber: idx + 1,
+    title: s.title || `পোস্ট-চ্যাট ফলো-আপ ${idx + 1}`,
+    delayValue: s.delayValue ?? 7,
+    delayUnit: s.delayUnit || 'days',
+    repeatable: Boolean(s.repeatable),
+    repeatEveryValue: s.repeatEveryValue ?? 1,
+    repeatEveryUnit: s.repeatEveryUnit || 'weeks',
+    message: s.message || '',
+    alternateMessages: Array.isArray(s.alternateMessages) ? s.alternateMessages : [],
+    files: s.files || [],
+  }));
 }
 
 export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormProps) {
@@ -186,6 +312,7 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
     }
     const initialFup = initialData?.followupConfig;
     const initialSteps = ensureThreeSteps(initialFup?.steps, initialFup);
+    const initialPostChatSteps = ensurePostChatSteps(initialFup?.postChatSteps);
     const hasAiExplicit = initialFup?.aiEnabled !== undefined;
     const isAi = hasAiExplicit ? Boolean(initialFup.aiEnabled) : defaultAi;
     return {
@@ -196,11 +323,22 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
       understandingFiles: initialFup?.understandingFiles || [],
       understandingText: initialFup?.understandingText || '',
       followupEnabled: initialFup?.followupEnabled ?? defaultFollowup,
-      followupDelayValue: initialFup?.followupDelayValue ?? 3,
-      followupDelayUnit: initialFup?.followupDelayUnit || 'hours',
+      followupDelayValue:
+        initialFup?.followupDelayUnit === 'hours' && initialFup?.followupDelayValue === 3
+          ? 2
+          : (initialFup?.followupDelayValue ?? 2),
+      followupDelayUnit:
+        initialFup?.followupDelayUnit === 'hours' && initialFup?.followupDelayValue === 3
+          ? 'minutes'
+          : (initialFup?.followupDelayUnit || 'minutes'),
+      minDelayMinutes: initialFup?.minDelayMinutes || 2,
+      maxDelayMinutes: initialFup?.maxDelayMinutes || 4,
       followupCondition: initialFup?.followupCondition || 'no_reply',
       antiBanJitter: initialFup?.antiBanJitter ?? true,
       steps: initialSteps,
+      postChatFollowupEnabled: initialFup?.postChatFollowupEnabled ?? false,
+      postChatTriggerKeywords: initialFup?.postChatTriggerKeywords || 'okay, Thank You, আবার কথা হবে',
+      postChatSteps: initialPostChatSteps,
       followupMessage: initialSteps[0]?.message || '',
       followupFiles: initialSteps[0]?.files || [],
       followupImageUrl: initialSteps[0]?.imageUrl || '',
@@ -214,21 +352,32 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
   useEffect(() => {
     if (initialData?.followupConfig) {
       setFupConfig((prev) => {
-        const nextSteps = ensureThreeSteps(initialData.followupConfig?.steps, initialData.followupConfig);
-        const hasAi = initialData.followupConfig?.aiEnabled !== undefined;
-        const isAi = hasAi ? Boolean(initialData.followupConfig?.aiEnabled) : prev.aiEnabled;
+        const initFup = initialData.followupConfig!;
+        const nextSteps = ensureThreeSteps(initFup.steps, initFup);
+        const nextPostChatSteps = ensurePostChatSteps(initFup.postChatSteps);
+        const hasAi = initFup.aiEnabled !== undefined;
+        const isAi = hasAi ? Boolean(initFup.aiEnabled) : prev.aiEnabled;
+        const isLegacyThreeHours = initFup.followupDelayUnit === 'hours' && initFup.followupDelayValue === 3;
         return {
           ...prev,
-          ...initialData.followupConfig,
+          ...initFup,
+          followupDelayValue: isLegacyThreeHours ? 2 : (initFup.followupDelayValue ?? 2),
+          followupDelayUnit: isLegacyThreeHours ? 'minutes' : (initFup.followupDelayUnit || 'minutes'),
+          minDelayMinutes: initFup.minDelayMinutes || 2,
+          maxDelayMinutes: initFup.maxDelayMinutes || 4,
           aiEnabled: isAi,
-          aiApiKey: initialData.followupConfig?.aiApiKey || (isAi ? (prev.aiApiKey === 'none' ? '' : prev.aiApiKey) : 'none'),
+          aiApiKey: initFup.aiApiKey || (isAi ? (prev.aiApiKey === 'none' ? '' : prev.aiApiKey) : 'none'),
           steps: nextSteps,
+          postChatFollowupEnabled: initFup.postChatFollowupEnabled ?? prev.postChatFollowupEnabled ?? false,
+          postChatTriggerKeywords: initFup.postChatTriggerKeywords || prev.postChatTriggerKeywords || 'okay, Thank You, আবার কথা হবে',
+          postChatSteps: nextPostChatSteps,
         };
       });
     }
   }, [initialData?.followupConfig]);
 
   const [activeStepTab, setActiveStepTab] = useState<number>(1);
+  const [activePostChatTab, setActivePostChatTab] = useState<number>(1);
   const [isUploadingStepMedia, setIsUploadingStepMedia] = useState<{ stepNumber: number; type: string } | null>(null);
 
   const [apiKeys, setApiKeys] = useState<Array<{ id: string; label: string; gmail: string; status?: string }>>([]);
@@ -396,6 +545,108 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
         ...(stepNumber === 1 && field === 'documentUrl' ? { followupDocumentUrl: value } : {}),
         ...(stepNumber === 1 && field === 'documentName' ? { followupDocumentName: value } : {}),
         ...(stepNumber === 1 && field === 'files' ? { followupFiles: value } : {}),
+      };
+    });
+  };
+
+  const handleAddFollowupStep = () => {
+    setFupConfig((prev) => {
+      const currentSteps = ensureThreeSteps(prev.steps, prev);
+      const nextNum = currentSteps.length + 1;
+      const newStep: WaFollowupStep = {
+        stepNumber: nextNum,
+        title: `${nextNum}ম ফলো-আপ`,
+        delayText: '১ সপ্তাহ পর',
+        delayValue: 1,
+        delayUnit: 'weeks',
+        repeatable: false,
+        repeatEveryValue: 1,
+        repeatEveryUnit: 'weeks',
+        maxRepeats: 0,
+        message: '',
+        alternateMessages: [],
+        imageUrl: '',
+        audioUrl: '',
+        videoUrl: '',
+        documentUrl: '',
+        documentName: '',
+        files: [],
+      };
+      setActiveStepTab(nextNum);
+      return {
+        ...prev,
+        steps: [...currentSteps, newStep],
+      };
+    });
+  };
+
+  const handleDeleteFollowupStep = (stepNumber: number) => {
+    if (stepNumber <= 3) return;
+    setFupConfig((prev) => {
+      const currentSteps = ensureThreeSteps(prev.steps, prev);
+      const filtered = currentSteps
+        .filter((s) => s.stepNumber !== stepNumber)
+        .map((s, idx) => ({
+          ...s,
+          stepNumber: idx + 1,
+          title: s.stepNumber > 3 ? `${idx + 1}ম ফলো-আপ` : s.title,
+        }));
+      setActiveStepTab((curr) => Math.min(curr, filtered.length));
+      return {
+        ...prev,
+        steps: filtered,
+      };
+    });
+  };
+
+  const updatePostChatStepField = (stepNumber: number, field: keyof WaFollowupStep, value: any) => {
+    setFupConfig((prev) => {
+      const currentSteps = ensurePostChatSteps(prev.postChatSteps);
+      const updatedSteps = currentSteps.map((step) =>
+        step.stepNumber === stepNumber ? { ...step, [field]: value } : step
+      );
+      return {
+        ...prev,
+        postChatSteps: updatedSteps,
+      };
+    });
+  };
+
+  const handleAddPostChatStep = () => {
+    setFupConfig((prev) => {
+      const currentSteps = ensurePostChatSteps(prev.postChatSteps);
+      const nextNum = currentSteps.length + 1;
+      const newStep: WaFollowupStep = {
+        stepNumber: nextNum,
+        title: `পোস্ট-চ্যাট ফলো-আপ ${nextNum}`,
+        delayValue: 1,
+        delayUnit: 'months',
+        repeatable: true,
+        repeatEveryValue: 1,
+        repeatEveryUnit: 'months',
+        message: '',
+        alternateMessages: [],
+        files: [],
+      };
+      setActivePostChatTab(nextNum);
+      return {
+        ...prev,
+        postChatSteps: [...currentSteps, newStep],
+      };
+    });
+  };
+
+  const handleDeletePostChatStep = (stepNumber: number) => {
+    setFupConfig((prev) => {
+      const currentSteps = ensurePostChatSteps(prev.postChatSteps);
+      if (currentSteps.length <= 1) return prev;
+      const filtered = currentSteps
+        .filter((s) => s.stepNumber !== stepNumber)
+        .map((s, idx) => ({ ...s, stepNumber: idx + 1 }));
+      setActivePostChatTab((curr) => Math.min(curr, filtered.length));
+      return {
+        ...prev,
+        postChatSteps: filtered,
       };
     });
   };
@@ -672,13 +923,22 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
     const primary = variants.find((v) => v.isActive) || variants[0];
 
     const finalSteps = ensureThreeSteps(fupConfig.steps, fupConfig);
+    const finalPostChatSteps = ensurePostChatSteps(fupConfig.postChatSteps);
     const isAiActive = Boolean(fupConfig.aiEnabled && fupConfig.aiApiKey && fupConfig.aiApiKey !== 'none' && fupConfig.aiApiKey !== 'off');
     const finalFupConfig = {
       ...fupConfig,
       steps: finalSteps,
+      postChatFollowupEnabled: Boolean(fupConfig.postChatFollowupEnabled),
+      postChatTriggerKeywords: fupConfig.postChatTriggerKeywords || 'okay, Thank You, আবার কথা হবে',
+      postChatSteps: finalPostChatSteps,
       aiEnabled: isAiActive,
       aiApiKey: isAiActive ? (fupConfig.aiApiKey || '') : 'none',
+      followupDelayValue: 2,
+      followupDelayUnit: 'minutes' as const,
+      minDelayMinutes: fupConfig.minDelayMinutes || 2,
+      maxDelayMinutes: fupConfig.maxDelayMinutes || 4,
       followupMessage: finalSteps[0]?.message || '',
+      followupFiles: finalSteps[0]?.files || [],
       followupImageUrl: finalSteps[0]?.imageUrl || '',
       followupAudioUrl: finalSteps[0]?.audioUrl || '',
       followupVideoUrl: finalSteps[0]?.videoUrl || '',
@@ -690,6 +950,7 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
       name: name.trim(),
       description,
       accountId,
+      clientId: initialData?.clientId,
       keywords,
       isDefault,
       welcomeMessage: primary?.welcomeMessage || '',
@@ -1517,7 +1778,7 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
                 </div>
               </div>
 
-              {/* 3-Step Follow-up System */}
+              {/* Extendable & Repeatable Multi-Step Follow-up System */}
               {(() => {
                 const currentSteps = ensureThreeSteps(fupConfig.steps, fupConfig);
                 const activeStep = currentSteps.find((s) => s.stepNumber === activeStepTab) || currentSteps[0];
@@ -1530,48 +1791,58 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
                 return (
                   <div className="p-4 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] space-y-4">
                     {/* Header */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2 border-b border-[#E6E2D8] dark:border-[#262930]">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[#E6E2D8] dark:border-[#262930]">
                       <div className="flex items-center gap-2">
                         <Send className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                         <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
-                          ৩-ধাপের স্মার্ট ফলো-আপ (3-Step Follow-up System)
+                          আনলিমিটেড ও রিপিটেবল ফলো-আপ সিস্টেম ({currentSteps.length} Steps)
                         </h4>
                       </div>
-                      <span className="text-[11px] text-gray-500 font-medium">
-                        প্রতিটি ধাপ স্বাধীন • টেক্সট / ইমেজ / অডিও
-                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleAddFollowupStep}
+                        className="h-7 px-2.5 text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg"
+                      >
+                        <Plus className="w-3.5 h-3.5 mr-1" />
+                        + নতুন ফলো-আপ যোগ করুন
+                      </Button>
                     </div>
 
-                    {/* Step Tabs: Step 1 (3-5 min random), Step 2 (3-4h), Step 3 (Next Day) */}
-                    <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-[#EDE8DE] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930]">
-                      {[
-                        { num: 1, title: '১ম ফলো-আপ', delay: '৩-৫ মি. (র্যান্ডম)' },
-                        { num: 2, title: '২য় ফলো-আপ', delay: '৩-৪ ঘণ্টা পর' },
-                        { num: 3, title: '৩য় ফলো-আপ', delay: 'পরের দিন (২৪h)' },
-                      ].map((tab) => {
-                        const stepData = currentSteps.find((s) => s.stepNumber === tab.num);
+                    {/* Dynamic Step Tabs */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-1.5 rounded-xl bg-[#EDE8DE] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930]">
+                      {currentSteps.map((stepData) => {
                         const sHasText = Boolean(stepData?.message && stepData.message.trim());
                         const sHasImg = Boolean(stepData?.imageUrl || stepData?.files?.some((f) => f.type === 'image'));
                         const sHasAud = Boolean(stepData?.audioUrl || stepData?.files?.some((f) => f.type === 'audio'));
                         const sHasVid = Boolean(stepData?.videoUrl || stepData?.files?.some((f) => f.type === 'video'));
                         const sHasDoc = Boolean(stepData?.documentUrl || stepData?.files?.some((f) => f.type === 'document'));
-                        const isCurrent = activeStepTab === tab.num;
+                        const isCurrent = activeStepTab === stepData.stepNumber;
 
                         return (
                           <button
-                            key={tab.num}
+                            key={stepData.stepNumber}
                             type="button"
-                            onClick={() => setActiveStepTab(tab.num)}
+                            onClick={() => setActiveStepTab(stepData.stepNumber)}
                             className={cn(
-                              "flex flex-col items-center justify-center py-2 px-1.5 rounded-lg text-center transition-all",
+                              "flex flex-col items-center justify-center py-2 px-1.5 rounded-lg text-center transition-all relative",
                               isCurrent
                                 ? "bg-[#FAF8F5] dark:bg-[#121418] text-green-800 dark:text-emerald-400 font-semibold shadow-sm border border-[#E6E2D8] dark:border-[#262930]"
                                 : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                             )}
                           >
-                            <span className="text-xs font-semibold leading-tight">{tab.title}</span>
-                            <span className="text-[10px] text-gray-500 font-normal leading-tight mt-0.5">{tab.delay}</span>
+                            <span className="text-xs font-semibold leading-tight">
+                              {stepData.title || `${stepData.stepNumber}ম ফলো-আপ`}
+                            </span>
+                            <span className="text-[10px] text-gray-500 font-normal leading-tight mt-0.5">
+                              {formatStepDelayBadge(stepData)}
+                            </span>
                             <div className="flex items-center gap-1 mt-1 flex-wrap justify-center">
+                              {stepData.repeatable && (
+                                <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-semibold">
+                                  Repeat
+                                </span>
+                              )}
                               {sHasText && (
                                 <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-medium">
                                   Text
@@ -1603,35 +1874,105 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
                       })}
                     </div>
 
-                    {/* Quick Guidance Alert */}
-                    <div className="p-2.5 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-start gap-2">
-                      <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-semibold">টিপস: </span>
-                        আপনি চাইলে <strong>শুধু টেক্সট</strong> দিতে পারেন, অথবা <strong>শুধু ইমেজ</strong>, অথবা <strong>শুধু অডিও/ভয়েস নোট</strong> দিতে পারেন। কোনো কিছু বাধ্যতামূলক নয় — যা রাখবেন ঠিক সেটাই কাস্টমারকে পাঠানো হবে।
-                      </div>
-                    </div>
-
-                    {/* Step Title & Delay Badge */}
+                    {/* Step Title & Delete Button */}
                     <div className="flex items-center justify-between pt-1">
                       <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-emerald-500" />
                         <h5 className="text-xs font-semibold text-gray-900 dark:text-white">
-                          {activeStepTab === 1 && '১ম ফলো-আপ কনফিগারেশন (৩ থেকে ৫ মিনিট পর - র্যান্ডম)'}
-                          {activeStepTab === 2 && '২য় ফলো-আপ কনফিগারেশন (৩ থেকে ৪ ঘণ্টা পর)'}
-                          {activeStepTab === 3 && '৩য় ফলো-আপ কনফিগারেশন (পরের দিন - ২৪ ঘণ্টা পর)'}
+                          ধাপ #{activeStepTab}: {activeStep?.title || `${activeStepTab}ম ফলো-আপ`} ({formatStepDelayBadge(activeStep)})
                         </h5>
                       </div>
-                      <Badge variant="outline" className="text-[10px] bg-[#EDE8DE] dark:bg-[#181A1F] text-gray-600 dark:text-gray-300 border-[#E6E2D8] dark:border-[#262930]">
-                        Step {activeStepTab} of 3
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[10px] bg-[#EDE8DE] dark:bg-[#181A1F] text-gray-600 dark:text-gray-300 border-[#E6E2D8] dark:border-[#262930]">
+                          Step {activeStepTab} of {currentSteps.length}
+                        </Badge>
+                        {activeStepTab > 3 && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFollowupStep(activeStepTab)}
+                            className="p-1 px-2 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-[11px] font-medium flex items-center gap-1 transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" /> মুছে ফেলুন
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Custom Timing & Repeatable Schedule Box */}
+                    <div className="p-3 rounded-xl bg-[#EDE8DE]/60 dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 block mb-1">
+                            কখন ফলো-আপ যাবে? (সময় নির্ধারণ)
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min={1}
+                              value={activeStep?.delayValue ?? (activeStepTab === 1 ? 3 : activeStepTab === 2 ? 3 : 1)}
+                              onChange={(e) => updateStepField(activeStepTab, 'delayValue', Math.max(1, Number(e.target.value) || 1))}
+                              className="h-8 w-20 bg-[#FAF8F5] dark:bg-[#121418] border-[#E6E2D8] dark:border-[#262930] text-xs font-semibold"
+                            />
+                            <select
+                              value={activeStep?.delayUnit || (activeStepTab === 1 ? 'minutes' : activeStepTab === 2 ? 'hours' : 'days')}
+                              onChange={(e) => updateStepField(activeStepTab, 'delayUnit', e.target.value)}
+                              className="h-8 flex-1 rounded-md px-2.5 bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] text-xs text-gray-900 dark:text-white"
+                            >
+                              <option value="minutes">মিনিট পর (Minutes)</option>
+                              <option value="hours">ঘণ্টা পর (Hours)</option>
+                              <option value="days">দিন পর (Days)</option>
+                              <option value="weeks">সপ্তাহ পর (Weeks)</option>
+                              <option value="months">মাস পর (Months)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Repeatable / Recurring Toggle */}
+                        <div className="flex flex-col justify-between">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-1">
+                              <RotateCcw className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                              বারবার রিপিট হবে? (Repeatable)
+                            </label>
+                            <Switch
+                              checked={Boolean(activeStep?.repeatable)}
+                              onCheckedChange={(val) => updateStepField(activeStepTab, 'repeatable', val)}
+                            />
+                          </div>
+                          {activeStep?.repeatable ? (
+                            <div className="flex items-center gap-1.5 mt-1.5">
+                              <span className="text-[11px] text-gray-600 dark:text-gray-400 shrink-0">প্রতি</span>
+                              <Input
+                                type="number"
+                                min={1}
+                                value={activeStep?.repeatEveryValue ?? 1}
+                                onChange={(e) => updateStepField(activeStepTab, 'repeatEveryValue', Math.max(1, Number(e.target.value) || 1))}
+                                className="h-7 w-14 bg-[#FAF8F5] dark:bg-[#121418] border-[#E6E2D8] dark:border-[#262930] text-xs font-semibold px-2"
+                              />
+                              <select
+                                value={activeStep?.repeatEveryUnit || 'weeks'}
+                                onChange={(e) => updateStepField(activeStepTab, 'repeatEveryUnit', e.target.value)}
+                                className="h-7 flex-1 rounded-md px-2 bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] text-[11px] text-gray-900 dark:text-white"
+                              >
+                                <option value="days">দিন পর পর (Every X Days)</option>
+                                <option value="weeks">সপ্তাহে একবার (Every Week)</option>
+                                <option value="months">মাসে একবার (Every Month)</option>
+                              </select>
+                            </div>
+                          ) : (
+                            <p className="text-[10px] text-gray-500 mt-1">
+                              চালু করলে এই ধাপটি প্রতি সপ্তাহে বা প্রতি মাসে অটোমেটিক বারবার যেতে থাকবে।
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Step Message Text */}
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between flex-wrap gap-1">
                         <label className="text-xs font-medium text-gray-900 dark:text-white">
-                          ফলো-আপ মেসেজ টেক্সট (অপশনাল)
+                          ফলো-আপ মেসেজ টেক্সট (AI ছাড়া সরাসরি এই মেসেজই যাবে)
                         </label>
                         <div className="flex items-center gap-1">
                           {['{name}', '{product}', '{time}'].map((chip) => (
@@ -1655,14 +1996,60 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
                         onChange={(e) => updateStepField(activeStepTab, 'message', e.target.value)}
                         placeholder={
                           activeStepTab === 1
-                            ? "যেমন: আসসালামু আলাইকুম {name}! আমাদের {product} সম্পর্কিত কোনো প্রশ্ন থাকলে জানাতে পারেন। (খালি রাখলে শুধু নিচের ইমেজ বা অডিও যাবে)"
+                            ? "যেমন: আসসালামু আলাইকুম {name}! আমাদের {product} সম্পর্কিত কোনো প্রশ্ন থাকলে জানাতে পারেন।"
                             : activeStepTab === 2
-                            ? "যেমন: {name}, আশা করি ভালো আছেন! অফারটি কিন্তু সীমিত সময়ের জন্য চালু আছে। আপনার প্রয়োজন হলে এখনই জানিয়ে রাখতে পারেন।"
-                            : "যেমন: শুভ সকাল {name}! আপনার কি এই প্যাকেজটির প্রয়োজন আছে? আপনার মতামত জানালে সুবিধা হতো।"
+                            ? "যেমন: {name}, আশা করি ভালো আছেন! অফারটি কিন্তু সীমিত সময়ের জন্য চালু আছে।"
+                            : "যেমন: হ্যালো {name}! কেমন আছেন? আমাদের নতুন অফার বা প্যাকেজ সম্পর্কে জানতে চাইলে মেসেজ দিন।"
                         }
                         rows={3}
                         className="bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-900 dark:text-white text-xs"
                       />
+
+                      {/* Optional Alternate Rotating Messages when Repeatable is ON */}
+                      {activeStep?.repeatable && (
+                        <div className="pt-2 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                              🔄 রোটেশন মেসেজ ভ্যারিয়েশন (প্রতি সপ্তাহে/মাসে ঘুরিয়ে ঘুরিয়ে পাঠানোর জন্য - অপশনাল)
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const prevAlt = activeStep?.alternateMessages || [];
+                                updateStepField(activeStepTab, 'alternateMessages', [...prevAlt, '']);
+                              }}
+                              className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-semibold"
+                            >
+                              + ভ্যারিয়েশন যোগ করুন
+                            </button>
+                          </div>
+                          {(activeStep?.alternateMessages || []).map((altMsg, altIdx) => (
+                            <div key={altIdx} className="flex items-start gap-1.5">
+                              <Textarea
+                                value={altMsg}
+                                onChange={(e) => {
+                                  const nextAlt = [...(activeStep?.alternateMessages || [])];
+                                  nextAlt[altIdx] = e.target.value;
+                                  updateStepField(activeStepTab, 'alternateMessages', nextAlt);
+                                }}
+                                placeholder={`রোটেশন মেসেজ #${altIdx + 2} (যেমন: আমাদের নতুন অফার শুরু হয়েছে...)`}
+                                rows={2}
+                                className="bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-900 dark:text-white text-xs flex-1"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextAlt = (activeStep?.alternateMessages || []).filter((_, i) => i !== altIdx);
+                                  updateStepField(activeStepTab, 'alternateMessages', nextAlt);
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-red-500 rounded"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* Step Media Upload Buttons */}
@@ -1672,7 +2059,7 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
                           মিডিয়া ফাইল (ইমেজ, অডিও, ভিডিও, ডকুমেন্ট)
                         </label>
                         <span className="text-[10px] text-gray-500">
-                          {activeStepTab === 1 ? '৩-৫ মিনিট পর যাবে' : activeStepTab === 2 ? '৩-৪ ঘণ্টা পর যাবে' : 'পরের দিন যাবে'}
+                          {formatStepDelayBadge(activeStep)}
                         </span>
                       </div>
 
@@ -1848,8 +2235,227 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
                           <span className="text-rose-700 dark:text-rose-400">🎥📝 ভিডিও + ক্যাপশন টেক্সট</span>
                         )}
                         {!hasText && !hasImg && !hasAud && !hasVid && !hasDoc && (
-                          <span className="text-amber-600 dark:text-amber-400">⚠️ কিছু সিলেক্ট করা নেই (ডিফল্ট AI টেক্সট যাবে)</span>
+                          <span className="text-amber-600 dark:text-amber-400">⚠️ কিছু সিলেক্ট করা নেই (এই ধাপে মেসেজ লিখুন)</span>
                         )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+
+          {/* NEW CARD: Post-Chat Closing Keyword Trigger Follow-up (কাস্টমার কথা বলে না কিনলে কীওয়ার্ড দিয়ে ফলো-আপ) */}
+          <Card className="bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] shadow-lg overflow-hidden">
+            <CardHeader className="pb-4 border-b border-[#E6E2D8] dark:border-[#262930] bg-gradient-to-r from-amber-500/10 via-emerald-500/5 to-transparent">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                    <RotateCcw className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base text-gray-900 dark:text-white flex items-center gap-2">
+                      কথা বলার পর না কিনলে ফলো-আপ (Post-Chat Keyword Follow-up)
+                      <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px]">
+                        100% Rule-Based
+                      </Badge>
+                    </CardTitle>
+                    <CardDescription className="text-xs text-gray-500 mt-0.5">
+                      কাস্টমার কথা বলার পর না কিনলে আপনি চ্যাটের শেষে নির্দিষ্ট কীওয়ার্ড লিখলেই বট তাকে বারবার ফলো-আপ করবে
+                    </CardDescription>
+                  </div>
+                </div>
+                <Switch
+                  checked={Boolean(fupConfig.postChatFollowupEnabled)}
+                  onCheckedChange={(val) => updateFup('postChatFollowupEnabled', val)}
+                />
+              </div>
+            </CardHeader>
+
+            <CardContent className="pt-5 space-y-4">
+              {/* Explanation Box */}
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                <p className="font-semibold">কিভাবে কাজ করবে?</p>
+                <p className="text-[11px] opacity-90 leading-relaxed">
+                  একজন কাস্টমার নক দিল, কথা হলো কিন্তু সে কিনলো না। আপনি চ্যাটের শেষে যখনই নিচের যেকোনো একটি কীওয়ার্ড (যেমন: <strong>okay</strong>, <strong>Thank You</strong>, <strong>আবার কথা হবে</strong>) লিখে মেসেজ পাঠাবেন, বট অটোমেটিক বুঝে যাবে এবং ওই কাস্টমারকে নিচের সিডিউল অনুযায়ী (কেমন আছে, অফার শেষ, অথবা নতুন অফার অ্যাড হলো) বারবার ফলো-আপ দিতে থাকবে।
+                </p>
+              </div>
+
+              {/* Admin Closing Keywords Input */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-gray-900 dark:text-white block">
+                  আপনার ক্লোজিং কীওয়ার্ডসমূহ (কমা দিয়ে আলাদা করুন)
+                </label>
+                <Input
+                  value={fupConfig.postChatTriggerKeywords || ''}
+                  onChange={(e) => updateFup('postChatTriggerKeywords', e.target.value)}
+                  placeholder="okay, Thank You, আবার কথা হবে, ধন্যবাদ"
+                  className="bg-[#FAF8F5] dark:bg-[#121418] border-[#E6E2D8] dark:border-[#262930] text-gray-900 dark:text-white text-xs font-medium"
+                />
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  <span className="text-[10px] text-gray-500">কুইক কীওয়ার্ড যোগ করুন:</span>
+                  {['okay', 'Thank You', 'আবার কথা হবে', 'ধন্যবাদ', 'পরে কথা হবে', 'জানাবেন'].map((kw) => (
+                    <button
+                      key={kw}
+                      type="button"
+                      onClick={() => {
+                        const cur = (fupConfig.postChatTriggerKeywords || '')
+                          .split(',')
+                          .map((s) => s.trim())
+                          .filter(Boolean);
+                        if (!cur.some((c) => c.toLowerCase() === kw.toLowerCase())) {
+                          updateFup('postChatTriggerKeywords', [...cur, kw].join(', '));
+                        }
+                      }}
+                      className="px-2 py-0.5 rounded-md text-[10px] bg-[#EDE8DE] dark:bg-[#121418] hover:bg-amber-500/20 text-gray-700 dark:text-gray-300 border border-[#E6E2D8] dark:border-[#262930] transition-colors font-medium"
+                    >
+                      + {kw}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Post-Chat Follow-up Steps */}
+              {(() => {
+                const pcSteps = ensurePostChatSteps(fupConfig.postChatSteps);
+                const activePcStep = pcSteps.find((s) => s.stepNumber === activePostChatTab) || pcSteps[0];
+
+                return (
+                  <div className="p-3.5 rounded-xl bg-[#EDE8DE]/40 dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] space-y-3.5">
+                    <div className="flex items-center justify-between gap-2 pb-2 border-b border-[#E6E2D8] dark:border-[#262930]">
+                      <span className="text-xs font-semibold text-gray-900 dark:text-white">
+                        পোস্ট-চ্যাট ফলো-আপ মেসেজসমূহ ({pcSteps.length} Steps)
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleAddPostChatStep}
+                        className="h-7 px-2.5 text-[11px] bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-lg"
+                      >
+                        <Plus className="w-3.5 h-3.5 mr-1" />
+                        + ধাপ যোগ করুন
+                      </Button>
+                    </div>
+
+                    {/* Post-Chat Step Tabs */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-1 rounded-xl bg-[#EDE8DE] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930]">
+                      {pcSteps.map((st) => {
+                        const isCur = activePostChatTab === st.stepNumber;
+                        return (
+                          <button
+                            key={st.stepNumber}
+                            type="button"
+                            onClick={() => setActivePostChatTab(st.stepNumber)}
+                            className={cn(
+                              "flex flex-col items-center justify-center py-2 px-1.5 rounded-lg text-center transition-all",
+                              isCur
+                                ? "bg-[#FAF8F5] dark:bg-[#121418] text-amber-700 dark:text-amber-400 font-semibold shadow-sm border border-[#E6E2D8] dark:border-[#262930]"
+                                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                            )}
+                          >
+                            <span className="text-[11px] font-semibold leading-tight truncate max-w-full">
+                              {st.title || `ধাপ ${st.stepNumber}`}
+                            </span>
+                            <span className="text-[10px] text-gray-500 mt-0.5">
+                              {formatStepDelayBadge(st)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Active Post-Chat Step Editor */}
+                    <div className="space-y-3 pt-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <Input
+                          value={activePcStep?.title || ''}
+                          onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'title', e.target.value)}
+                          placeholder="ধাপের নাম (যেমন: কেমন আছেন / নতুন অফার)"
+                          className="h-8 text-xs font-semibold bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] max-w-xs"
+                        />
+                        {pcSteps.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePostChatStep(activePcStep.stepNumber)}
+                            className="p-1 px-2 rounded bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-[11px] font-medium flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" /> মুছে ফেলুন
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-2.5 rounded-lg bg-[#FAF8F5] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930]">
+                        <div>
+                          <label className="text-[11px] font-medium text-gray-600 dark:text-gray-400 block mb-1">
+                            কীওয়ার্ড লেখার কতক্ষণ পর যাবে?
+                          </label>
+                          <div className="flex items-center gap-1.5">
+                            <Input
+                              type="number"
+                              min={1}
+                              value={activePcStep?.delayValue ?? 3}
+                              onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'delayValue', Math.max(1, Number(e.target.value) || 1))}
+                              className="h-7 w-16 text-xs font-semibold bg-[#EDE8DE]/50 dark:bg-[#121418]"
+                            />
+                            <select
+                              value={activePcStep?.delayUnit || 'days'}
+                              onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'delayUnit', e.target.value)}
+                              className="h-7 flex-1 rounded px-2 bg-[#EDE8DE]/50 dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] text-xs text-gray-900 dark:text-white"
+                            >
+                              <option value="minutes">মিনিট পর</option>
+                              <option value="hours">ঘণ্টা পর</option>
+                              <option value="days">দিন পর</option>
+                              <option value="weeks">সপ্তাহ পর</option>
+                              <option value="months">মাস পর</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[11px] font-medium text-gray-700 dark:text-gray-300">
+                              🔁 বারবার রিপিট হবে?
+                            </label>
+                            <Switch
+                              checked={Boolean(activePcStep?.repeatable)}
+                              onCheckedChange={(val) => updatePostChatStepField(activePcStep.stepNumber, 'repeatable', val)}
+                            />
+                          </div>
+                          {activePcStep?.repeatable && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] text-gray-500">প্রতি</span>
+                              <Input
+                                type="number"
+                                min={1}
+                                value={activePcStep?.repeatEveryValue ?? 1}
+                                onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'repeatEveryValue', Math.max(1, Number(e.target.value) || 1))}
+                                className="h-7 w-14 text-xs font-semibold px-1.5 bg-[#EDE8DE]/50 dark:bg-[#121418]"
+                              />
+                              <select
+                                value={activePcStep?.repeatEveryUnit || 'months'}
+                                onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'repeatEveryUnit', e.target.value)}
+                                className="h-7 flex-1 rounded px-1.5 bg-[#EDE8DE]/50 dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] text-[11px] text-gray-900 dark:text-white"
+                              >
+                                <option value="days">দিন পর পর</option>
+                                <option value="weeks">সপ্তাহে একবার</option>
+                                <option value="months">মাসে একবার</option>
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-gray-900 dark:text-white block">
+                          ফলো-আপ মেসেজ (কেমন আছে / অফার শেষ / নতুন অফার অ্যাড হলো)
+                        </label>
+                        <Textarea
+                          value={activePcStep?.message || ''}
+                          onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'message', e.target.value)}
+                          placeholder="যেমন: আসসালামু আলাইকুম {name}! কেমন আছেন? আমাদের নতুন অফার শুরু হয়েছে..."
+                          rows={3}
+                          className="bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-900 dark:text-white text-xs"
+                        />
                       </div>
                     </div>
                   </div>

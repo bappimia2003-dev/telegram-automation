@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getWaConnection, getWaDashboardStats } from '@/lib/whatsappDb';
+import { getSessionInfo } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -12,8 +13,10 @@ const STATUS_CACHE_TTL_MS = 2500;
 
 export async function GET() {
   try {
+    const session = await getSessionInfo();
+    const isClient = session.authenticated && session.role === 'client';
     const now = Date.now();
-    if (cachedStatusResult && now - lastStatusCacheTime < STATUS_CACHE_TTL_MS) {
+    if (!isClient && cachedStatusResult && now - lastStatusCacheTime < STATUS_CACHE_TTL_MS) {
       return NextResponse.json(cachedStatusResult);
     }
 
@@ -33,7 +36,7 @@ export async function GET() {
     }
 
     const [stats, conn] = await Promise.all([
-      getWaDashboardStats(),
+      getWaDashboardStats(isClient ? session.clientId : undefined),
       getWaConnection(),
     ]);
 
@@ -41,7 +44,7 @@ export async function GET() {
     const finalStatus = liveQr?.status || conn?.status || 'disconnected';
     const finalPhone = liveQr?.phoneNumber || conn?.phoneNumber || '';
 
-    cachedStatusResult = {
+    const result = {
       ok: true,
       stats,
       connection: {
@@ -52,9 +55,13 @@ export async function GET() {
       },
       engineReachable: Boolean(liveQr),
     };
-    lastStatusCacheTime = now;
 
-    return NextResponse.json(cachedStatusResult);
+    if (!isClient) {
+      cachedStatusResult = result;
+      lastStatusCacheTime = now;
+    }
+
+    return NextResponse.json(result);
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }

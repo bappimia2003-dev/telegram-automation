@@ -9,7 +9,8 @@ import {
   WaContactedUser, 
   WaMessageLog, 
   WaConnection, 
-  WaDashboardStats 
+  WaDashboardStats,
+  WaClientProfile
 } from './whatsappTypes';
 
 // =============================================
@@ -17,6 +18,7 @@ import {
 // =============================================
 const waMemory = {
   campaigns: [] as WaCampaign[],
+  clients: [] as WaClientProfile[],
   contactedUsers: [] as WaContactedUser[],
   messageLogs: [] as WaMessageLog[],
   connection: {
@@ -26,6 +28,7 @@ const waMemory = {
     qrCode: '',
     lastConnected: new Date().toISOString(),
     createdAt: new Date().toISOString(),
+    clientId: 'admin',
   } as WaConnection,
 };
 
@@ -34,14 +37,26 @@ const waMemory = {
 // =============================================
 function parseDescriptionTags(rawDesc: string): { 
   accountId: string; 
+  clientId: string;
   variants: WaCampaignVariant[]; 
   followupConfig?: WaFollowupConfig;
   description: string; 
 } {
   let description = rawDesc || '';
   let accountId = 'all';
+  let clientId = 'admin';
   let variants: WaCampaignVariant[] = [];
   let followupConfig: WaFollowupConfig | undefined = undefined;
+
+  // Extract [cli:...]
+  if (description.includes('[cli:')) {
+    const start = description.indexOf('[cli:');
+    const end = description.indexOf(']', start);
+    if (end !== -1) {
+      clientId = description.substring(start + 5, end) || 'admin';
+      description = (description.substring(0, start) + description.substring(end + 1)).trim();
+    }
+  }
 
   // Extract [acc:...]
   if (description.includes('[acc:')) {
@@ -94,11 +109,11 @@ function parseDescriptionTags(rawDesc: string): {
     }
   }
 
-  return { accountId, variants, followupConfig, description };
+  return { accountId, clientId, variants, followupConfig, description };
 }
 
 function rowToCampaign(r: any): WaCampaign {
-  const { accountId, variants: parsedVariants, followupConfig, description } = parseDescriptionTags(r.description || '');
+  const { accountId, clientId, variants: parsedVariants, followupConfig, description } = parseDescriptionTags(r.description || '');
 
   // If no variants array in description, construct default variant 1 from row data
   let variants = parsedVariants;
@@ -123,6 +138,7 @@ function rowToCampaign(r: any): WaCampaign {
     name: r.name,
     description,
     accountId,
+    clientId,
     keywords: r.keywords || '',
     isDefault: Boolean(r.is_default),
     welcomeMessage: r.welcome_message || '',
@@ -147,7 +163,7 @@ function campaignToRow(c: Partial<WaCampaign>): any {
   const row: any = {};
   if (c.id !== undefined) row.id = c.id;
   if (c.name !== undefined) row.name = c.name;
-  if (c.description !== undefined || c.accountId !== undefined || c.variants !== undefined || c.followupConfig !== undefined) {
+  if (c.description !== undefined || c.accountId !== undefined || c.clientId !== undefined || c.variants !== undefined || c.followupConfig !== undefined) {
     let desc = c.description || '';
     if (c.followupConfig) {
       const base64Fup = Buffer.from(JSON.stringify(c.followupConfig)).toString('base64');
@@ -159,6 +175,9 @@ function campaignToRow(c: Partial<WaCampaign>): any {
     }
     if (c.accountId && c.accountId !== 'all') {
       desc = `[acc:${c.accountId}] ${desc}`;
+    }
+    if (c.clientId && c.clientId !== 'admin') {
+      desc = `[cli:${c.clientId}] ${desc}`;
     }
     row.description = desc;
   }
@@ -236,6 +255,17 @@ function rowToMessageLog(r: any): WaMessageLog {
 function rowToConnection(r: any): WaConnection {
   let name = r.id === 'main' ? 'Primary WhatsApp' : `SIM ${r.id.slice(-4)}`;
   let phoneNumber = r.phone_number || '';
+  let clientId = 'admin';
+
+  if (phoneNumber.includes('[cli:')) {
+    const start = phoneNumber.indexOf('[cli:');
+    const end = phoneNumber.indexOf(']', start);
+    if (end !== -1) {
+      clientId = phoneNumber.substring(start + 5, end) || 'admin';
+      phoneNumber = (phoneNumber.substring(0, start) + phoneNumber.substring(end + 1)).trim();
+    }
+  }
+
   if (phoneNumber.includes('|')) {
     const parts = phoneNumber.split('|');
     name = parts[0];
@@ -250,6 +280,7 @@ function rowToConnection(r: any): WaConnection {
     qrCode: r.qr_code || '',
     lastConnected: r.last_connected || new Date().toISOString(),
     createdAt: r.created_at || new Date().toISOString(),
+    clientId,
   };
 }
 
@@ -277,7 +308,37 @@ export async function getAllCampaigns(forceRefresh = false): Promise<WaCampaign[
     console.error('Error fetching wa_campaigns:', error.message);
     return campaignsCache || waMemory.campaigns;
   }
-  const campaigns = (data || []).filter((r: any) => !r.id?.startsWith('system_')).map(rowToCampaign);
+
+  // Check if system_clients row exists in data and enforce expiry
+  const sysClientsRow = (data || []).find((r: any) => r.id === 'system_clients');
+  const expiredClientIds = new Set<string>();
+  if (sysClientsRow?.description) {
+    try {
+      let raw = sysClientsRow.description.trim();
+      if (!raw.startsWith('[')) {
+        raw = Buffer.from(raw, 'base64').toString('utf-8');
+      }
+      const parsed: WaClientProfile[] = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        for (const cli of parsed) {
+          if (isClientExpired(cli)) {
+            expiredClientIds.add(cli.id);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  const campaigns = (data || []).filter((r: any) => !r.id?.startsWith('system_')).map((r: any) => {
+    const camp = rowToCampaign(r);
+    if (camp.isActive && camp.clientId && expiredClientIds.has(camp.clientId)) {
+      camp.isActive = false;
+      // Persist auto-off in Supabase asynchronously
+      supabase.from('wa_campaigns').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', camp.id).then(() => {});
+    }
+    return camp;
+  });
+
   campaignsCache = campaigns;
   campaignsCacheTime = now;
   return campaigns;
@@ -600,15 +661,17 @@ export async function updateWaConnection(updates: Partial<WaConnection> & { id?:
 
   if (!supabase) return { ...(waMemory.connection || {}), ...updates, id: targetId } as WaConnection;
 
-  // Retrieve existing to preserve phone and name if not provided
+  // Retrieve existing to preserve phone, name, and clientId if not provided
   const existing = await getWaConnection(targetId);
 
   const finalName = updates.name !== undefined ? updates.name : (existing?.name || (targetId === 'main' ? 'Primary WhatsApp' : `SIM ${targetId.slice(-4)}`));
   const finalPhone = (updates.phoneNumber !== undefined && updates.phoneNumber !== '') ? updates.phoneNumber : (existing?.phoneNumber || '');
+  const finalClientId = updates.clientId !== undefined ? updates.clientId : (existing?.clientId || 'admin');
+  const cliPrefix = finalClientId && finalClientId !== 'admin' ? `[cli:${finalClientId}]` : '';
 
   const row: any = { 
     id: targetId,
-    phone_number: `${finalName}|${finalPhone}`,
+    phone_number: `${cliPrefix}${finalName}|${finalPhone}`,
   };
 
   if (updates.status !== undefined) row.status = updates.status;
@@ -628,9 +691,9 @@ export async function updateWaConnection(updates: Partial<WaConnection> & { id?:
 
   if (error) {
     console.error('Error updating wa_connection:', error.message);
-    return { ...(existing || {}), ...updates, id: targetId } as WaConnection;
+    return { ...(existing || {}), ...updates, id: targetId, clientId: finalClientId } as WaConnection;
   }
-  return data ? rowToConnection(data) : ({ ...(existing || {}), ...updates, id: targetId } as WaConnection);
+  return data ? rowToConnection(data) : ({ ...(existing || {}), ...updates, id: targetId, clientId: finalClientId } as WaConnection);
 }
 
 export async function deleteWaConnection(id: string): Promise<boolean> {
@@ -651,7 +714,7 @@ export async function deleteWaConnection(id: string): Promise<boolean> {
 let lastCleanupTime = 0;
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 
-export async function getWaDashboardStats(): Promise<WaDashboardStats> {
+export async function getWaDashboardStats(clientId?: string): Promise<WaDashboardStats> {
   // Trigger rolling 30-day cleanup check at most once every 6 hours non-blocking
   const now = Date.now();
   if (now - lastCleanupTime > SIX_HOURS_MS) {
@@ -659,7 +722,10 @@ export async function getWaDashboardStats(): Promise<WaDashboardStats> {
     performRolling30DayCleanup(30).catch(() => {});
   }
 
-  const campaigns = await getAllCampaigns();
+  let campaigns = await getAllCampaigns();
+  if (clientId && clientId !== 'admin') {
+    campaigns = campaigns.filter(c => c.clientId === clientId);
+  }
   const connection = await getWaConnection();
   const uniqueUsers = await getUniqueContactedCount();
 
@@ -713,5 +779,248 @@ export async function performRolling30DayCleanup(days = 30): Promise<{ deletedLo
   }
 
   return { deletedLogs, deletedContacted };
+}
+
+// =============================================
+// MULTI-CLIENT PROFILES, QUOTAS & EXPIRY ENGINE
+// Stored in wa_campaigns row id = 'system_clients'
+// =============================================
+const SYSTEM_CLIENTS_ROW_ID = 'system_clients';
+let clientsCache: WaClientProfile[] | null = null;
+let clientsCacheTime = 0;
+const CLIENTS_CACHE_TTL_MS = 3000;
+
+export function invalidateClientsCache() {
+  clientsCache = null;
+  clientsCacheTime = 0;
+}
+
+export function isClientExpired(client: WaClientProfile): boolean {
+  if (!client.isActive) return true;
+  if (!client.expiresAt) return false;
+  const expMs = new Date(client.expiresAt).getTime();
+  if (isNaN(expMs)) return false;
+  return Date.now() >= expMs;
+}
+
+export function getClientRemainingDays(client: WaClientProfile): number | null {
+  if (!client.expiresAt) return null;
+  const expMs = new Date(client.expiresAt).getTime();
+  if (isNaN(expMs)) return null;
+  const diffMs = expMs - Date.now();
+  if (diffMs <= 0) return 0;
+  return Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+}
+
+export function generateRandomPassword(length = 8): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+export async function getAllClients(forceRefresh = false): Promise<WaClientProfile[]> {
+  const now = Date.now();
+  if (!forceRefresh && clientsCache && (now - clientsCacheTime < CLIENTS_CACHE_TTL_MS)) {
+    return clientsCache;
+  }
+  const supabase = getSupabase();
+  if (!supabase) return waMemory.clients;
+
+  try {
+    const { data, error } = await supabase
+      .from('wa_campaigns')
+      .select('description')
+      .eq('id', SYSTEM_CLIENTS_ROW_ID)
+      .maybeSingle();
+
+    if (error || !data || !data.description) {
+      clientsCache = waMemory.clients;
+      clientsCacheTime = now;
+      return waMemory.clients;
+    }
+
+    let raw = data.description.trim();
+    if (!raw.startsWith('[')) {
+      raw = Buffer.from(raw, 'base64').toString('utf-8');
+    }
+    const parsed = JSON.parse(raw);
+    const list: WaClientProfile[] = Array.isArray(parsed) ? parsed : [];
+    waMemory.clients = list;
+    clientsCache = list;
+    clientsCacheTime = now;
+
+    // Non-blocking enforcement of expired client campaigns
+    enforceClientExpirations(list).catch(() => {});
+
+    return list;
+  } catch (e: any) {
+    console.error('Error parsing system_clients:', e.message);
+    return clientsCache || waMemory.clients;
+  }
+}
+
+export async function saveAllClients(clients: WaClientProfile[]): Promise<boolean> {
+  invalidateClientsCache();
+  waMemory.clients = clients;
+  clientsCache = clients;
+  clientsCacheTime = Date.now();
+
+  const supabase = getSupabase();
+  if (!supabase) return true;
+
+  try {
+    const encoded = Buffer.from(JSON.stringify(clients), 'base64').toString('utf-8')
+      ? Buffer.from(JSON.stringify(clients)).toString('base64')
+      : JSON.stringify(clients);
+
+    const row = {
+      id: SYSTEM_CLIENTS_ROW_ID,
+      name: '__SYSTEM_CLIENTS__',
+      description: encoded,
+      keywords: '',
+      is_default: false,
+      welcome_message: '',
+      image_url: '',
+      audio_url: '',
+      video_url: '',
+      document_url: '',
+      document_name: '',
+      send_order: 'message',
+      delay_between_sends: 1,
+      is_active: false,
+      chat_reply_enabled: false,
+      total_sent: 0,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('wa_campaigns').upsert(row);
+    if (error) {
+      console.error('Error saving system_clients:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e: any) {
+    console.error('Exception saving system_clients:', e.message);
+    return false;
+  }
+}
+
+export async function getClientById(id: string): Promise<WaClientProfile | null> {
+  const clients = await getAllClients();
+  return clients.find((c) => c.id === id) || null;
+}
+
+export async function getClientByPassword(password: string): Promise<WaClientProfile | null> {
+  if (!password) return null;
+  const clients = await getAllClients(true);
+  return clients.find((c) => c.password === password.trim()) || null;
+}
+
+export async function createClientProfile(input: {
+  name: string;
+  password?: string;
+  maxWhatsappNumbers?: number;
+  maxCampaigns?: number;
+  durationDays?: number;
+  notes?: string;
+}): Promise<WaClientProfile> {
+  const clients = await getAllClients(true);
+  const nowIso = new Date().toISOString();
+  const durationDays = input.durationDays !== undefined ? Number(input.durationDays) : 30;
+  const expiresAt = durationDays > 0
+    ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString()
+    : null;
+
+  let pwd = (input.password || '').trim() || generateRandomPassword(8);
+  while (clients.some((c) => c.password === pwd)) {
+    pwd = generateRandomPassword(8);
+  }
+
+  const newClient: WaClientProfile = {
+    id: `cli_${Math.random().toString(36).substring(2, 8)}${Date.now().toString(36).slice(-3)}`,
+    name: input.name.trim(),
+    password: pwd,
+    maxWhatsappNumbers: Math.max(1, Number(input.maxWhatsappNumbers ?? 1)),
+    maxCampaigns: Math.max(1, Number(input.maxCampaigns ?? 3)),
+    durationDays,
+    expiresAt,
+    isActive: true,
+    notes: input.notes || '',
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+
+  clients.push(newClient);
+  await saveAllClients(clients);
+  return newClient;
+}
+
+export async function updateClientProfile(
+  id: string,
+  updates: Partial<WaClientProfile> & { resetDays?: number }
+): Promise<WaClientProfile | null> {
+  const clients = await getAllClients(true);
+  const idx = clients.findIndex((c) => c.id === id);
+  if (idx === -1) return null;
+
+  const existing = clients[idx];
+  const merged: WaClientProfile = {
+    ...existing,
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  };
+
+  // If admin resets or updates durationDays via resetDays
+  if (updates.resetDays !== undefined) {
+    const days = Number(updates.resetDays);
+    merged.durationDays = days;
+    if (days > 0) {
+      merged.expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+      merged.isActive = true;
+    } else if (days === 0) {
+      merged.expiresAt = new Date(Date.now() - 1000).toISOString(); // Immediately expired
+    }
+  }
+
+  clients[idx] = merged;
+  await saveAllClients(clients);
+
+  // Enforce expiration immediately if expired or disabled
+  if (isClientExpired(merged)) {
+    await enforceClientExpirations(clients);
+  }
+
+  return merged;
+}
+
+export async function deleteClientProfile(id: string): Promise<boolean> {
+  const clients = await getAllClients(true);
+  const filtered = clients.filter((c) => c.id !== id);
+  if (filtered.length === clients.length) return false;
+  await saveAllClients(filtered);
+  return true;
+}
+
+export async function enforceClientExpirations(clientsList?: WaClientProfile[]): Promise<void> {
+  try {
+    const clients = clientsList || (await getAllClients());
+    const expiredClientIds = new Set(
+      clients.filter((c) => isClientExpired(c)).map((c) => c.id)
+    );
+    if (expiredClientIds.size === 0) return;
+
+    const campaigns = await getAllCampaigns();
+    for (const camp of campaigns) {
+      if (camp.isActive && camp.clientId && expiredClientIds.has(camp.clientId)) {
+        console.log(`[ClientExpiry] Auto-disabling campaign "${camp.name}" (${camp.id}) for expired client ${camp.clientId}`);
+        await updateCampaign(camp.id, { isActive: false });
+      }
+    }
+  } catch (e: any) {
+    console.error('Error enforcing client expirations:', e.message);
+  }
 }
 

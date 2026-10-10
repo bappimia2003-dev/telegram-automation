@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.matchCampaign = matchCampaign;
+exports.isAutoReplyInProgress = isAutoReplyInProgress;
 exports.processIncomingMessage = processIncomingMessage;
 const uuid_1 = require("uuid");
 const db_js_1 = require("./db.js");
@@ -63,6 +64,11 @@ const lastVariantIndexMap = new Map();
 // Track previous delays to ensure each random millisecond differs from the last
 let lastFirstDelayMs = 0;
 let lastSubsequentDelayMs = 0;
+// Track active auto-reply deliveries so quick 2nd messages during initial auto-reply don't kill follow-up
+const activeAutoReplySet = new Set();
+function isAutoReplyInProgress(sender, accountId) {
+    return activeAutoReplySet.has(`${accountId || 'all'}:${sender}`) || activeAutoReplySet.has(`all:${sender}`);
+}
 function getRandomDelay(minMs, maxMs, previousDelay) {
     let delay;
     let attempts = 0;
@@ -73,6 +79,12 @@ function getRandomDelay(minMs, maxMs, previousDelay) {
     return delay;
 }
 async function processIncomingMessage(sock, sender, pushName, messageText, accountId, messageKey) {
+    const deliveryKey = `${accountId || 'all'}:${sender}`;
+    if (activeAutoReplySet.has(deliveryKey)) {
+        (0, utils_js_1.log)('CAMPAIGN', `[Acc: ${accountId || 'all'}] Auto-reply already in progress for ${sender}. Skipping duplicate trigger.`);
+        return;
+    }
+    activeAutoReplySet.add(deliveryKey);
     try {
         const campaign = await matchCampaign(messageText, accountId);
         if (!campaign) {
@@ -169,6 +181,7 @@ async function processIncomingMessage(sock, sender, pushName, messageText, accou
         (0, utils_js_1.log)('CAMPAIGN', `⏳ Waiting ${(firstDelay / 1000).toFixed(3)}s (${firstDelay}ms) before sending 1st item to ${sender}...`);
         await (0, utils_js_1.sleep)(firstDelay);
         let allSuccessful = true;
+        let deliveredCount = 0;
         for (let i = 0; i < itemsToSend.length; i++) {
             const item = itemsToSend[i];
             // Keep typing/recording presence alive
@@ -184,6 +197,7 @@ async function processIncomingMessage(sock, sender, pushName, messageText, accou
             try {
                 if (item === 'message') {
                     await (0, fileSender_js_1.sendTextMessage)(sock, sender, effectiveMessage);
+                    deliveredCount++;
                     await (0, db_js_1.addMessageLog)({
                         id: (0, uuid_1.v4)(),
                         campaignId: campaign.id,
@@ -198,6 +212,7 @@ async function processIncomingMessage(sock, sender, pushName, messageText, accou
                 }
                 else if (item === 'image') {
                     await (0, fileSender_js_1.sendImageMessage)(sock, sender, effectiveImageUrl);
+                    deliveredCount++;
                     const cleanLogUrl = effectiveImageUrl.startsWith('data:') ? 'photo.jpg' : effectiveImageUrl;
                     await (0, db_js_1.addMessageLog)({
                         id: (0, uuid_1.v4)(),
@@ -213,6 +228,7 @@ async function processIncomingMessage(sock, sender, pushName, messageText, accou
                 }
                 else if (item === 'video') {
                     await (0, fileSender_js_1.sendVideoMessage)(sock, sender, effectiveVideoUrl);
+                    deliveredCount++;
                     const cleanLogUrl = effectiveVideoUrl.startsWith('data:') ? 'video.mp4' : effectiveVideoUrl;
                     await (0, db_js_1.addMessageLog)({
                         id: (0, uuid_1.v4)(),
@@ -228,6 +244,7 @@ async function processIncomingMessage(sock, sender, pushName, messageText, accou
                 }
                 else if (item === 'audio') {
                     await (0, fileSender_js_1.sendAudioMessage)(sock, sender, effectiveAudioUrl);
+                    deliveredCount++;
                     const cleanLogUrl = effectiveAudioUrl.startsWith('data:') ? 'voice_note.mp3' : effectiveAudioUrl;
                     await (0, db_js_1.addMessageLog)({
                         id: (0, uuid_1.v4)(),
@@ -243,6 +260,7 @@ async function processIncomingMessage(sock, sender, pushName, messageText, accou
                 }
                 else if (item === 'document') {
                     await (0, fileSender_js_1.sendDocumentMessage)(sock, sender, effectiveDocumentUrl, effectiveDocumentName);
+                    deliveredCount++;
                     const cleanLogUrl = effectiveDocumentUrl.startsWith('data:') ? effectiveDocumentName : effectiveDocumentUrl;
                     await (0, db_js_1.addMessageLog)({
                         id: (0, uuid_1.v4)(),
@@ -296,7 +314,7 @@ async function processIncomingMessage(sock, sender, pushName, messageText, accou
             phoneNumber: sender,
             contactName: pushName,
             sentAt: new Date().toISOString(),
-            status: allSuccessful ? 'sent' : 'failed',
+            status: allSuccessful || deliveredCount > 0 ? 'sent' : 'failed',
         });
         // Increment sent count
         await (0, db_js_1.incrementCampaignSentCount)(campaign.id);
@@ -304,5 +322,8 @@ async function processIncomingMessage(sock, sender, pushName, messageText, accou
     }
     catch (err) {
         (0, utils_js_1.errLog)('CAMPAIGN', 'Exception in processIncomingMessage:', err.message);
+    }
+    finally {
+        activeAutoReplySet.delete(deliveryKey);
     }
 }

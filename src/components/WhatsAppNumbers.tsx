@@ -161,11 +161,14 @@ export function WhatsAppNumbers({
       if (data.ok && data.account) {
         setNewAccountName('');
         setNewAccountPhone('');
-        setShowAddModal(false);
+        handleCloseAddModal();
         await fetchAccounts();
         if (onDataChange) onDataChange();
         // Automatically open QR modal for newly added account to scan
         setQrModalAccount(data.account);
+      } else if (data.error) {
+        alert(data.error);
+        handleCloseAddModal();
       }
     } catch (err) {
       console.error('Failed to create account:', err);

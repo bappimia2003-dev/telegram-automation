@@ -61,7 +61,7 @@ function getActiveSock(preferAccountId: string | null): any | null {
 }
 
 /**
- * Analyze all logs for a contact to determine follow-up state.
+ * Analyze all logs for a contact to determine follow-up state (unlimited steps, repeats, & post-chat mode).
  */
 function analyzeContactFollowupState(logs: any[], initialContactTimeMs: number) {
   let hasReplied = false;
@@ -69,39 +69,82 @@ function analyzeContactFollowupState(logs: any[], initialContactTimeMs: number) 
   let lastStepTimeMs = 0;
   let promiseTargetDate: string | null = null;
   let promiseAlreadySent = false;
+  let isPostChat = false;
+  let postChatTriggerTimeMs = 0;
+  const repeatCounts: Record<number, number> = {};
 
   const validInitialContactMs = Number.isFinite(initialContactTimeMs) ? initialContactTimeMs : 0;
+
+  // First pass: check if there is a postchat_trigger log
+  for (const l of logs) {
+    const logTimeMs = new Date(l.sentAt).getTime();
+    if (l.messageType === 'postchat_trigger' && logTimeMs >= validInitialContactMs - 10000) {
+      isPostChat = true;
+      postChatTriggerTimeMs = Math.max(postChatTriggerTimeMs, logTimeMs);
+    }
+  }
+
+  const effectiveStartMs = isPostChat ? postChatTriggerTimeMs : validInitialContactMs;
 
   for (const l of logs) {
     const logTimeMs = new Date(l.sentAt).getTime();
 
-    // Ignore any historical logs from older sessions before current contact
-    if (validInitialContactMs > 0 && logTimeMs < validInitialContactMs - 10000) {
+    // Ignore historical logs before the active session start
+    if (effectiveStartMs > 0 && logTimeMs < effectiveStartMs - 10000) {
       continue;
     }
 
-    // Inbound reply from customer: ANY incoming message after initial contact means manual takeover!
-    if (l.messageType === 'incoming' && (validInitialContactMs === 0 || logTimeMs >= validInitialContactMs - 5000)) {
+    // Inbound reply from customer strictly after effective start -> manual takeover!
+    if (l.messageType === 'incoming' && (effectiveStartMs === 0 || logTimeMs > effectiveStartMs)) {
       hasReplied = true;
     }
 
-    if (l.messageType === 'followup_step1' || l.messageType === 'followup') {
-      highestStep = Math.max(highestStep, 1);
-      lastStepTimeMs = Math.max(lastStepTimeMs, logTimeMs);
-    } else if (l.messageType === 'followup_step2') {
-      highestStep = Math.max(highestStep, 2);
-      lastStepTimeMs = Math.max(lastStepTimeMs, logTimeMs);
-    } else if (l.messageType === 'followup_step3') {
-      highestStep = Math.max(highestStep, 3);
-      lastStepTimeMs = Math.max(lastStepTimeMs, logTimeMs);
-    } else if (l.messageType === 'promise_sched' && l.fileUrl) {
+    if (isPostChat) {
+      const pcMatch = /^postchat_step(\d+)(?:_rep_(\d+))?$/.exec(l.messageType || '');
+      if (pcMatch) {
+        const sNum = parseInt(pcMatch[1], 10);
+        const rNum = pcMatch[2] ? parseInt(pcMatch[2], 10) : 0;
+        highestStep = Math.max(highestStep, sNum);
+        lastStepTimeMs = Math.max(lastStepTimeMs, logTimeMs);
+        if (rNum > 0) {
+          repeatCounts[sNum] = Math.max(repeatCounts[sNum] || 0, rNum);
+        }
+      }
+    } else {
+      if (l.messageType === 'followup') {
+        highestStep = Math.max(highestStep, 1);
+        lastStepTimeMs = Math.max(lastStepTimeMs, logTimeMs);
+      } else {
+        const fupMatch = /^followup_step(\d+)(?:_rep_(\d+))?$/.exec(l.messageType || '');
+        if (fupMatch) {
+          const sNum = parseInt(fupMatch[1], 10);
+          const rNum = fupMatch[2] ? parseInt(fupMatch[2], 10) : 0;
+          highestStep = Math.max(highestStep, sNum);
+          lastStepTimeMs = Math.max(lastStepTimeMs, logTimeMs);
+          if (rNum > 0) {
+            repeatCounts[sNum] = Math.max(repeatCounts[sNum] || 0, rNum);
+          }
+        }
+      }
+    }
+
+    if (l.messageType === 'promise_sched' && l.fileUrl) {
       promiseTargetDate = l.fileUrl;
     } else if (l.messageType === 'promise_sent') {
       promiseAlreadySent = true;
     }
   }
 
-  return { hasReplied, highestStep, lastStepTimeMs, promiseTargetDate, promiseAlreadySent };
+  return {
+    hasReplied,
+    highestStep,
+    lastStepTimeMs: lastStepTimeMs || effectiveStartMs,
+    promiseTargetDate,
+    promiseAlreadySent,
+    isPostChat,
+    postChatTriggerTimeMs,
+    repeatCounts,
+  };
 }
 
 /**
@@ -119,8 +162,8 @@ function replaceVariables(
 ): string {
   if (!template) return '';
   const cleanName = (contactName || '').trim();
-  const hasValidName = cleanName && cleanName !== 'Customer' && !cleanName.includes('@') && cleanName.length < 25;
-  let nameLabel = 'সম্মানিত কাস্টমার';
+  const hasValidName = Boolean(cleanName && cleanName !== 'Customer' && !cleanName.includes('@') && cleanName.length < 25);
+  let nameLabel = 'ভাইয়া/আপু';
   if (hasValidName) {
     if (gender === 'apu') nameLabel = `${cleanName} আপু`;
     else if (gender === 'vai') nameLabel = `${cleanName} ভাইয়া`;
@@ -128,7 +171,7 @@ function replaceVariables(
   } else {
     if (gender === 'apu') nameLabel = 'আপু';
     else if (gender === 'vai') nameLabel = 'ভাইয়া';
-    else nameLabel = 'ভাইয়া/আপু';
+    else nameLabel = 'ভাইয়া';
   }
 
   let bdHour = 12;
@@ -152,20 +195,37 @@ function replaceVariables(
   else if (bdHour >= 18 && bdHour < 20) timeStr = 'সন্ধ্যা';
   else timeStr = 'রাত';
 
-  return template
+  let result = template;
+  // Cleanly handle "{name}, ভাই" or "{name} ভাই" so we never produce ", ভাই" or "ভাইয়া, ভাই"
+  if (hasValidName) {
+    result = result.replace(/\{name\}(\s*,?\s*(?:ভাইয়া|ভাইয়া|ভাই|আপু))/gi, `${cleanName}$1`);
+  } else {
+    result = result.replace(/\{name\}\s*,?\s*(ভাইয়া|ভাইয়া|ভাই|আপু)/gi, '$1');
+  }
+
+  return result
     .replace(/\{name\}/gi, nameLabel)
     .replace(/\{product\}/gi, campaignName || 'আমাদের অফারটি')
     .replace(/\{time\}/gi, timeStr)
-    .replace(/\{honorific\}/gi, gender === 'apu' ? 'আপু' : gender === 'vai' ? 'ভাইয়া' : '');
+    .replace(/\{honorific\}/gi, gender === 'apu' ? 'আপু' : gender === 'vai' ? 'ভাইয়া' : '')
+    .replace(/^\s*,\s*/, '')
+    .trim();
 }
 
 /**
- * Resolve configuration for a specific step (1, 2, or 3) from fup.steps array,
- * with backwards-compatible fallback to top-level legacy fields.
+ * Resolve configuration for a specific step (1..N) from fup.steps or fup.postChatSteps,
+ * with rotation of alternateMessages for repeatable steps.
  */
-function getStepConfig(fup: WaFollowupConfig, stepNumber: number, campaign?: WaCampaign, recipientPhone?: string) {
-  // 1. Primary: Match explicit step in fup.steps
-  const step = fup.steps?.find((s) => s.stepNumber === stepNumber);
+function getStepConfig(
+  fup: WaFollowupConfig,
+  stepNumber: number,
+  campaign?: WaCampaign,
+  recipientPhone?: string,
+  isPostChat = false,
+  repeatIndex = 0
+) {
+  const sourceSteps = isPostChat ? fup.postChatSteps : fup.steps;
+  const step = sourceSteps?.find((s) => s.stepNumber === stepNumber);
   if (step) {
     let img = (step.imageUrl || '').trim();
     let aud = (step.audioUrl || '').trim();
@@ -184,8 +244,7 @@ function getStepConfig(fup: WaFollowupConfig, stepNumber: number, campaign?: WaC
       }
     }
 
-    // ONLY for Step 1: if step 1 doesn't have an explicit image, allow legacy top-level fup fallback
-    if (stepNumber === 1) {
+    if (!isPostChat && stepNumber === 1) {
       if (!img && fup.followupImageUrl) img = fup.followupImageUrl.trim();
       if (!aud && fup.followupAudioUrl) aud = fup.followupAudioUrl.trim();
       if (!vid && fup.followupVideoUrl) vid = fup.followupVideoUrl.trim();
@@ -195,8 +254,16 @@ function getStepConfig(fup: WaFollowupConfig, stepNumber: number, campaign?: WaC
       }
     }
 
+    // Rotate through primary message + alternateMessages on repeats
+    const msgPool = [
+      step.message || '',
+      ...((step.alternateMessages || []).filter((m) => m && m.trim())),
+    ].filter(Boolean);
+    const chosenMessage =
+      msgPool.length > 0 ? msgPool[repeatIndex % msgPool.length] : (step.message || '');
+
     return {
-      message: step.message !== undefined ? step.message : '',
+      message: chosenMessage,
       imageUrl: img,
       audioUrl: aud,
       videoUrl: vid,
@@ -206,9 +273,9 @@ function getStepConfig(fup: WaFollowupConfig, stepNumber: number, campaign?: WaC
     };
   }
 
-  // 2. Secondary: Check explicit followupVariants stored in followupConfig (never campaign auto-reply variants!)
+  // 2. Secondary: Check explicit followupVariants stored in followupConfig
   const fupVariants = ((fup as any).followupVariants || []).filter((v: any) => v.isActive);
-  if (fupVariants.length > 0) {
+  if (!isPostChat && fupVariants.length > 0) {
     const variantIndex = (stepNumber - 1) < fupVariants.length ? (stepNumber - 1) : ((stepNumber - 1) % fupVariants.length);
     const variant = fupVariants[variantIndex] || fupVariants[0];
     return {
@@ -224,29 +291,24 @@ function getStepConfig(fup: WaFollowupConfig, stepNumber: number, campaign?: WaC
 
   // 3. Fallback: Top-level followup fields (ONLY for Step 1)
   return {
-    message: stepNumber === 1 ? (fup.followupMessage || '') : '',
-    imageUrl: stepNumber === 1 ? (fup.followupImageUrl || '').trim() : '',
-    audioUrl: stepNumber === 1 ? (fup.followupAudioUrl || '').trim() : '',
-    videoUrl: stepNumber === 1 ? (fup.followupVideoUrl || '').trim() : '',
-    documentUrl: stepNumber === 1 ? (fup.followupDocumentUrl || '').trim() : '',
-    documentName: stepNumber === 1 ? (fup.followupDocumentName || 'Document').trim() : '',
-    files: stepNumber === 1 ? (fup.followupFiles || []) : [],
+    message: !isPostChat && stepNumber === 1 ? (fup.followupMessage || '') : '',
+    imageUrl: !isPostChat && stepNumber === 1 ? (fup.followupImageUrl || '').trim() : '',
+    audioUrl: !isPostChat && stepNumber === 1 ? (fup.followupAudioUrl || '').trim() : '',
+    videoUrl: !isPostChat && stepNumber === 1 ? (fup.followupVideoUrl || '').trim() : '',
+    documentUrl: !isPostChat && stepNumber === 1 ? (fup.followupDocumentUrl || '').trim() : '',
+    documentName: !isPostChat && stepNumber === 1 ? (fup.followupDocumentName || 'Document').trim() : '',
+    files: !isPostChat && stepNumber === 1 ? (fup.followupFiles || []) : [],
   };
 }
 
 /**
  * Dispatches step content respecting user intent with full crash resilience:
- * - When AI is OFF or API Key is OFF: Sends 100% exact text provided by user (no AI modification)
- * - When AI is ON and API Key is active: Optimizes message with Gemini
- * - Resilient delivery: If both image/video and text exist, delivers image/video with exact text as caption
- * - CRITICAL ANTI-LOOP FIX: If text is delivered but audio/media fails, step is marked completed
- *   so the customer is NEVER repeatedly spammed with duplicate text messages!
  */
 async function dispatchStepFollowup(
   sock: any,
   campaign: WaCampaign,
   contact: any,
-  stepNumber: 1 | 2 | 3,
+  stepNumber: number,
   stepConfig: {
     message: string;
     imageUrl: string;
@@ -254,114 +316,169 @@ async function dispatchStepFollowup(
     videoUrl: string;
     documentUrl: string;
     documentName: string;
+    files?: Array<{ id?: string; name?: string; url: string; type: string; size?: number }>;
   },
   gender: 'apu' | 'vai' | 'apni',
-  fup: WaFollowupConfig
+  fup: WaFollowupConfig,
+  customLogType?: string
 ): Promise<boolean> {
-  const hasText = Boolean(stepConfig.message && stepConfig.message.trim());
-  const hasImage = Boolean(stepConfig.imageUrl && stepConfig.imageUrl.trim());
-  const hasAudio = Boolean(stepConfig.audioUrl && stepConfig.audioUrl.trim());
-  const hasVideo = Boolean(stepConfig.videoUrl && stepConfig.videoUrl.trim());
-  const hasDoc = Boolean(stepConfig.documentUrl && stepConfig.documentUrl.trim());
+  // Collect all media files from stepConfig.files + single URL fields (deduplicated, preserving order)
+  const filesList = Array.isArray(stepConfig.files) ? stepConfig.files : [];
 
-  if (!hasText && !hasImage && !hasAudio && !hasVideo && !hasDoc) {
+  const imageUrls: string[] = [];
+  for (const f of filesList) {
+    if (f.type === 'image' && f.url && f.url.trim() && !imageUrls.includes(f.url.trim())) {
+      imageUrls.push(f.url.trim());
+    }
+  }
+  if (stepConfig.imageUrl && stepConfig.imageUrl.trim() && !imageUrls.includes(stepConfig.imageUrl.trim())) {
+    imageUrls.push(stepConfig.imageUrl.trim());
+  }
+
+  const videoUrls: string[] = [];
+  for (const f of filesList) {
+    if (f.type === 'video' && f.url && f.url.trim() && !videoUrls.includes(f.url.trim())) {
+      videoUrls.push(f.url.trim());
+    }
+  }
+  if (stepConfig.videoUrl && stepConfig.videoUrl.trim() && !videoUrls.includes(stepConfig.videoUrl.trim())) {
+    videoUrls.push(stepConfig.videoUrl.trim());
+  }
+
+  const docItems: Array<{ url: string; name: string }> = [];
+  for (const f of filesList) {
+    if (f.type === 'document' && f.url && f.url.trim() && !docItems.some((d) => d.url === f.url.trim())) {
+      docItems.push({ url: f.url.trim(), name: (f.name || stepConfig.documentName || 'Document').trim() });
+    }
+  }
+  if (stepConfig.documentUrl && stepConfig.documentUrl.trim() && !docItems.some((d) => d.url === stepConfig.documentUrl.trim())) {
+    docItems.push({ url: stepConfig.documentUrl.trim(), name: (stepConfig.documentName || 'Document').trim() });
+  }
+
+  const audioUrls: string[] = [];
+  for (const f of filesList) {
+    if (f.type === 'audio' && f.url && f.url.trim() && !audioUrls.includes(f.url.trim())) {
+      audioUrls.push(f.url.trim());
+    }
+  }
+  if (stepConfig.audioUrl && stepConfig.audioUrl.trim() && !audioUrls.includes(stepConfig.audioUrl.trim())) {
+    audioUrls.push(stepConfig.audioUrl.trim());
+  }
+
+  const hasText = Boolean(stepConfig.message && stepConfig.message.trim());
+  const hasImage = imageUrls.length > 0;
+  const hasAudio = audioUrls.length > 0;
+  const hasVideo = videoUrls.length > 0;
+  const hasDoc = docItems.length > 0;
+
+  const isAiActive =
+    fup.aiEnabled === true &&
+    Boolean(fup.aiApiKey) &&
+    fup.aiApiKey !== 'none' &&
+    fup.aiApiKey !== 'off' &&
+    fup.aiApiKey !== 'disabled';
+
+  if (!hasText && !hasImage && !hasAudio && !hasVideo && !hasDoc && !isAiActive) {
     log('FOLLOWUP', `⚠️ Step ${stepNumber} for campaign "${campaign.name}" has no message or media configured.`);
     return false;
   }
 
   let msg = '';
   if (hasText) {
-    let text = stepConfig.message.trim();
-    if (text.includes('{name}')) {
-      const cleanName = (contact.contactName || '').trim();
-      const hasValidName = cleanName && cleanName !== 'Customer' && !cleanName.includes('@') && cleanName.length < 25;
-      text = text.replace(/\{name\}/gi, hasValidName ? cleanName : '');
-    }
-    msg = text.trim();
+    msg = replaceVariables(stepConfig.message.trim(), contact.contactName, campaign.name, gender);
+  }
 
-    // AI Optimization Check
-    const isAiActive = fup.aiEnabled === true && 
-      Boolean(fup.aiApiKey) && 
-      fup.aiApiKey !== 'none' && 
-      fup.aiApiKey !== 'off' && 
-      fup.aiApiKey !== 'disabled';
-
-    if (isAiActive) {
-      try {
-        const optimized = await generateFollowupText({
-          step: stepNumber,
-          contactName: contact.contactName,
-          gender,
-          campaignName: campaign.name,
-          understandingText: fup.understandingText,
-          baseTemplate: msg,
-          apiKeyOrId: fup.aiApiKey,
-          preferredModel: fup.aiModel || 'gemini-flash-latest',
-        });
-        if (optimized && optimized.trim()) {
-          msg = optimized.trim();
-          log('FOLLOWUP', `✨ Step ${stepNumber} AI optimized text for ${contact.phoneNumber}: "${msg.slice(0, 50)}..."`);
-        }
-      } catch (err: any) {
-        log('FOLLOWUP', `AI optimization skipped for Step ${stepNumber} (${err.message}). Using exact text.`);
+  // If AI is active and either we have text to optimize OR the step had no text/media (default AI text mode)
+  if (isAiActive && (hasText || (!hasImage && !hasAudio && !hasVideo && !hasDoc))) {
+    try {
+      const optimized = await generateFollowupText({
+        step: (stepNumber <= 3 ? stepNumber : 3) as 1 | 2 | 3,
+        contactName: contact.contactName,
+        gender,
+        campaignName: campaign.name,
+        understandingText: fup.understandingText,
+        aiSystemPrompt: fup.aiSystemPrompt,
+        baseTemplate: msg,
+        apiKeyOrId: fup.aiApiKey,
+        preferredModel: fup.aiModel || 'gemini-flash-latest',
+      });
+      if (optimized && optimized.trim()) {
+        msg = optimized.trim();
+        log('FOLLOWUP', `✨ Step ${stepNumber} AI optimized text for ${contact.phoneNumber}: "${msg.slice(0, 50)}..."`);
       }
-    } else {
-      log('FOLLOWUP', `🔒 Step ${stepNumber} AI is OFF. Sending exact user text to ${contact.phoneNumber}.`);
+    } catch (err: any) {
+      log('FOLLOWUP', `AI optimization skipped for Step ${stepNumber} (${err.message}). Using exact text.`);
     }
+  } else if (hasText) {
+    log('FOLLOWUP', `🔒 Step ${stepNumber} AI is OFF. Sending exact user text to ${contact.phoneNumber}.`);
   }
 
   let deliveredAny = false;
   let loggedType: 'text' | 'image' | 'audio' | 'video' | 'document' = 'text';
   let loggedUrl = '';
 
-  // 1. Deliver Image (with text caption if available)
+  // 1. Deliver Image(s) (with text caption attached to the last image, or sent separately if images fail)
   if (hasImage) {
-    try {
+    for (let i = 0; i < imageUrls.length; i++) {
+      const imgUrl = imageUrls[i];
+      const isLastImage = i === imageUrls.length - 1;
       try {
-        await sock.sendPresenceUpdate('composing', contact.phoneNumber);
-      } catch {}
-      await sleep(1000);
-      const caption = msg; // send message as caption
-      await sendImageMessage(sock, contact.phoneNumber, stepConfig.imageUrl, caption);
-      deliveredAny = true;
-      loggedType = 'image';
-      loggedUrl = stepConfig.imageUrl;
-      msg = ''; // text delivered with image
-      log('FOLLOWUP', `✅ Step ${stepNumber} delivered image to ${contact.phoneNumber}`);
-    } catch (e: any) {
-      errLog('FOLLOWUP', `Step ${stepNumber} image send failed: ${e.message}`);
+        try {
+          await sock.sendPresenceUpdate('composing', contact.phoneNumber);
+        } catch {}
+        await sleep(1000);
+        const caption = isLastImage ? msg : '';
+        await sendImageMessage(sock, contact.phoneNumber, imgUrl, caption);
+        deliveredAny = true;
+        loggedType = 'image';
+        loggedUrl = imgUrl;
+        if (isLastImage && msg) {
+          msg = ''; // text delivered as image caption
+        }
+        log('FOLLOWUP', `✅ Step ${stepNumber} delivered image (${i + 1}/${imageUrls.length}) to ${contact.phoneNumber}`);
+      } catch (e: any) {
+        errLog('FOLLOWUP', `Step ${stepNumber} image (${i + 1}/${imageUrls.length}) send failed: ${e.message}`);
+      }
     }
   }
 
-  // 2. Deliver Video (with text caption if available and not already sent with image)
+  // 2. Deliver Video(s) (with text caption if available and not already sent with image)
   if (hasVideo) {
-    try {
+    for (let i = 0; i < videoUrls.length; i++) {
+      const vidUrl = videoUrls[i];
+      const isLastVideo = i === videoUrls.length - 1;
       try {
-        await sock.sendPresenceUpdate('composing', contact.phoneNumber);
-      } catch {}
-      await sleep(1000);
-      const caption = msg;
-      await sendVideoMessage(sock, contact.phoneNumber, stepConfig.videoUrl, caption);
-      deliveredAny = true;
-      loggedType = 'video';
-      loggedUrl = stepConfig.videoUrl;
-      msg = ''; // text delivered with video
-      log('FOLLOWUP', `✅ Step ${stepNumber} delivered video to ${contact.phoneNumber}`);
-    } catch (e: any) {
-      errLog('FOLLOWUP', `Step ${stepNumber} video send failed: ${e.message}`);
+        try {
+          await sock.sendPresenceUpdate('composing', contact.phoneNumber);
+        } catch {}
+        await sleep(1000);
+        const caption = isLastVideo ? msg : '';
+        await sendVideoMessage(sock, contact.phoneNumber, vidUrl, caption);
+        deliveredAny = true;
+        loggedType = 'video';
+        loggedUrl = vidUrl;
+        if (isLastVideo && msg) {
+          msg = ''; // text delivered with video
+        }
+        log('FOLLOWUP', `✅ Step ${stepNumber} delivered video (${i + 1}/${videoUrls.length}) to ${contact.phoneNumber}`);
+      } catch (e: any) {
+        errLog('FOLLOWUP', `Step ${stepNumber} video send failed: ${e.message}`);
+      }
     }
   }
 
-  // 3. Deliver Document
+  // 3. Deliver Document(s)
   if (hasDoc) {
-    try {
-      await sendDocumentMessage(sock, contact.phoneNumber, stepConfig.documentUrl, stepConfig.documentName);
-      deliveredAny = true;
-      loggedType = 'document';
-      loggedUrl = stepConfig.documentUrl;
-      log('FOLLOWUP', `✅ Step ${stepNumber} delivered document to ${contact.phoneNumber}`);
-    } catch (e: any) {
-      errLog('FOLLOWUP', `Step ${stepNumber} document send failed: ${e.message}`);
+    for (const docItem of docItems) {
+      try {
+        await sendDocumentMessage(sock, contact.phoneNumber, docItem.url, docItem.name);
+        deliveredAny = true;
+        loggedType = 'document';
+        loggedUrl = docItem.url;
+        log('FOLLOWUP', `✅ Step ${stepNumber} delivered document to ${contact.phoneNumber}`);
+      } catch (e: any) {
+        errLog('FOLLOWUP', `Step ${stepNumber} document send failed: ${e.message}`);
+      }
     }
   }
 
@@ -383,29 +500,39 @@ async function dispatchStepFollowup(
     }
   }
 
-  // 5. Deliver Audio (Voice note)
+  // 5. Deliver Audio (Voice note(s))
   if (hasAudio) {
-    try {
+    for (const audUrl of audioUrls) {
       try {
-        await sock.sendPresenceUpdate('recording', contact.phoneNumber);
-      } catch {}
-      await sleep(1200);
-      await sendAudioMessage(sock, contact.phoneNumber, stepConfig.audioUrl);
-      deliveredAny = true;
-      if (loggedType === 'text') {
-        loggedType = 'audio';
-        loggedUrl = stepConfig.audioUrl;
+        try {
+          await sock.sendPresenceUpdate('recording', contact.phoneNumber);
+        } catch {}
+        await sleep(1200);
+        await sendAudioMessage(sock, contact.phoneNumber, audUrl);
+        deliveredAny = true;
+        if (loggedType === 'text') {
+          loggedType = 'audio';
+          loggedUrl = audUrl;
+        }
+        log('FOLLOWUP', `✅ Step ${stepNumber} delivered voice note to ${contact.phoneNumber}`);
+      } catch (e: any) {
+        errLog('FOLLOWUP', `Step ${stepNumber} audio send failed: ${e.message}`);
       }
-      log('FOLLOWUP', `✅ Step ${stepNumber} delivered voice note to ${contact.phoneNumber}`);
-    } catch (e: any) {
-      errLog('FOLLOWUP', `Step ${stepNumber} audio send failed: ${e.message}`);
     }
   }
 
   // CRITICAL RESILIENCE: If ANY part of the step was delivered (e.g. text succeeded even if audio failed):
   // We MUST log the step as sent and return true! This prevents infinite repeat spam loops.
   if (deliveredAny) {
-    await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, stepNumber, loggedType, loggedUrl);
+    await logFollowupStep(
+      campaign.id,
+      contact.phoneNumber,
+      contact.contactName,
+      stepNumber,
+      loggedType,
+      loggedUrl,
+      customLogType
+    );
     return true;
   }
 
@@ -423,9 +550,6 @@ const stepFailCountMap = new Map<string, number>(); // failKey -> failure count 
 
 /**
  * Apply randomized cooldown after sending a follow-up:
- * - Between individual sends: random 15 to 40 seconds.
- * - When batch limit (3 to 5 people) is reached: pause for random 3 to 5 minutes.
- * - Result: No two contacts ever receive at the same time; pacing is human-like and anti-ban compliant!
  */
 function applyAccountCooldown(accountId: string, fup: WaFollowupConfig): void {
   const currentBatch = (accountBatchCountMap.get(accountId) || 0) + 1;
@@ -434,14 +558,12 @@ function applyAccountCooldown(accountId: string, fup: WaFollowupConfig): void {
   const batchTarget = Math.max(2, Math.floor(Math.random() * (maxBatch - minBatch + 1)) + minBatch);
 
   if (currentBatch >= batchTarget) {
-    // Batch limit reached: Longer human-like pause (3 to 5 minutes)
     accountBatchCountMap.set(accountId, 0);
     const batchPauseSeconds = Math.floor(Math.random() * (300 - 180 + 1)) + 180;
     const batchPauseMs = batchPauseSeconds * 1000 + Math.floor(Math.random() * 999);
     accountCooldownMap.set(accountId, Date.now() + batchPauseMs);
     log('FOLLOWUP', `🛑 [Batch limit of ${batchTarget} reached on Acc: ${accountId}] Anti-ban pause for ${(batchPauseSeconds / 60).toFixed(1)} minutes before next batch.`);
   } else {
-    // Normal interval between individual recipients: 15 to 40 seconds
     accountBatchCountMap.set(accountId, currentBatch);
     const gapSeconds = Math.floor(Math.random() * (40 - 15 + 1)) + 15;
     const gapMs = gapSeconds * 1000 + Math.floor(Math.random() * 999);
@@ -452,9 +574,6 @@ function applyAccountCooldown(accountId: string, fup: WaFollowupConfig): void {
 
 /**
  * Check if the current time in Bangladesh (Asia/Dhaka, UTC+6) is outside quiet hours.
- * Quiet hours: 12:00 AM (midnight, 00:00) to 8:00 AM (morning, 08:00).
- * - 00:00 to 07:59 (12:00 AM to 07:59 AM BD Time) -> NO follow-up is allowed (returns false).
- * - 08:00 to 23:59 (08:00 AM to 11:59 PM BD Time) -> Follow-up is allowed (returns true).
  */
 export function isWithinAllowedFollowupHours(): boolean {
   try {
@@ -469,13 +588,11 @@ export function isWithinAllowedFollowupHours(): boolean {
     for (const part of parts) {
       if (part.type === 'hour') bdHour = parseInt(part.value, 10);
     }
-    // Quiet window: 00:00 - 07:59 (bdHour from 0 to 7)
     if (bdHour >= 0 && bdHour < 8) {
       return false;
     }
     return true;
   } catch {
-    // Robust fallback using UTC+6
     const now = new Date();
     const bdHour = (now.getUTCHours() + 6) % 24;
     return bdHour >= 8;
@@ -492,36 +609,112 @@ export function logQuietHoursNoticeOnce(): void {
 }
 
 /**
+ * Convert delay value + unit to milliseconds.
+ */
+function unitToMs(val: number, unit?: string): number {
+  const v = Math.max(1, Number(val) || 1);
+  switch (unit) {
+    case 'minutes':
+      return v * 60 * 1000;
+    case 'hours':
+      return v * 60 * 60 * 1000;
+    case 'days':
+      return v * 24 * 60 * 60 * 1000;
+    case 'weeks':
+      return v * 7 * 24 * 60 * 60 * 1000;
+    case 'months':
+      return v * 30 * 24 * 60 * 60 * 1000;
+    default:
+      return v * 60 * 1000;
+  }
+}
+
+/**
+ * Compute required wait time (ms) before firing a specific step.
+ */
+function getStepRequiredDelayMs(
+  stepMeta: any,
+  stepNumber: number,
+  fup: WaFollowupConfig,
+  phoneNumber: string,
+  minAgeDays: number,
+  isPostChat: boolean
+): number {
+  if (stepMeta?.delayValue && stepMeta?.delayUnit) {
+    const baseMs = unitToMs(stepMeta.delayValue, stepMeta.delayUnit);
+    if (!isPostChat && stepNumber === 1 && stepMeta.delayUnit === 'minutes' && fup.antiBanJitter !== false) {
+      const phoneDigits = phoneNumber.replace(/\D/g, '');
+      const seed = phoneDigits.length >= 4 ? parseInt(phoneDigits.slice(-4), 10) : 1234;
+      const jitterMs = (((seed % 120) / 60) + ((seed % 10) * 0.05)) * 60 * 1000;
+      return baseMs + jitterMs;
+    }
+    return baseMs;
+  }
+
+  // Legacy defaults when delayValue/delayUnit are not explicitly set on the step
+  if (isPostChat) {
+    if (stepNumber === 1) return 3 * 24 * 60 * 60 * 1000; // 3 days
+    if (stepNumber === 2) return 7 * 24 * 60 * 60 * 1000; // 7 days
+    return 30 * 24 * 60 * 60 * 1000; // 1 month
+  }
+
+  if (stepNumber === 1) {
+    let minDelay = Number(fup.minDelayMinutes) || 2;
+    if (minAgeDays === 0 && (minDelay <= 0 || minDelay > 15)) minDelay = 2;
+    const phoneDigits = phoneNumber.replace(/\D/g, '');
+    const seed = phoneDigits.length >= 4 ? parseInt(phoneDigits.slice(-4), 10) : 1234;
+    const jitterMinutes = ((seed % 120) / 60) + ((seed % 10) * 0.05);
+    const targetMinutes = minDelay + (fup.antiBanJitter !== false ? jitterMinutes : 0);
+    return targetMinutes * 60 * 1000;
+  }
+  if (stepNumber === 2) {
+    return 3 * 60 * 60 * 1000; // 3 hours
+  }
+  if (stepNumber === 3) {
+    return 20 * 60 * 60 * 1000; // 20 hours (next day)
+  }
+  return 7 * 24 * 60 * 60 * 1000; // 1 week for extra steps
+}
+
+/**
  * Process follow-ups for a single campaign with strictly staggered, non-overlapping timing.
+ * Supports unlimited steps, weekly/monthly repeatable steps, and Post-Chat closing keyword triggers.
  */
 async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
   const fup = campaign.followupConfig;
-  if (!fup || !fup.followupEnabled) {
-    return; // Strict safety check
+  if (!fup || (!fup.followupEnabled && !fup.postChatFollowupEnabled)) {
+    return;
   }
 
   // Quiet Hours Check: 12:00 AM (midnight) to 08:00 AM (morning) Bangladesh Time
   if (!isWithinAllowedFollowupHours()) {
     logQuietHoursNoticeOnce();
-    return; // Suppress all follow-ups during quiet hours
+    return;
   }
 
   const accountId = campaign.accountId && campaign.accountId !== 'all' ? campaign.accountId : (campaign.id || 'default');
-  
+
   // 1. Staggered Pacing Check: If this account is in cooldown, skip this tick
   const now = Date.now();
   const nextAllowed = accountCooldownMap.get(accountId) || 0;
   if (now < nextAllowed) {
-    return; // Still waiting randomized interval between contacts
+    return;
   }
 
   const sock = getActiveSock(campaign.accountId && campaign.accountId !== 'all' ? campaign.accountId : null);
   if (!sock) {
-    return; // No WhatsApp connection available for this account
+    return;
   }
 
   const minAgeDays = Number((fup as any).minContactAgeDays) || 0;
-  const maxDaysBack = Number((fup as any).totalDurationDays) || 30;
+  const hasLongOrRepeatableSteps =
+    fup.postChatFollowupEnabled ||
+    (fup.steps || []).some((s) => s.repeatable || s.delayUnit === 'weeks' || s.delayUnit === 'months') ||
+    (fup.postChatSteps || []).some((s) => s.repeatable || s.delayUnit === 'weeks' || s.delayUnit === 'months');
+  const maxDaysBack = hasLongOrRepeatableSteps
+    ? Math.max(Number((fup as any).totalDurationDays) || 365, 365)
+    : Number((fup as any).totalDurationDays) || 30;
+
   const contacts = await getRecentContactedUsers(campaign.id, minAgeDays, maxDaysBack);
   if (contacts.length === 0) return;
 
@@ -530,29 +723,33 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
   for (const contact of contacts) {
     const flightKey = `${campaign.id}:${contact.phoneNumber}`;
     if (inFlightKeys.has(flightKey)) {
-      continue; // Never process the same contact concurrently
+      continue;
     }
 
     try {
       const initialContactMs = new Date(contact.sentAt).getTime();
       const ageMs = now - initialContactMs;
-      const ageMinutes = ageMs / (60 * 1000);
       const ageDays = ageMs / (24 * 60 * 60 * 1000);
 
-      // If minContactAgeDays is explicitly set (> 0), enforce that age requirement
       if (minAgeDays > 0 && ageDays < minAgeDays) {
         continue;
       }
-
-      // Campaign duration limit check (e.g. max 30/60/90 days)
       if (maxDaysBack > 0 && ageDays > maxDaysBack) {
         continue;
       }
 
-      // Fetch message logs for this contact (including incoming replies across campaigns)
       const logs = await getContactLogs(campaign.id, contact.phoneNumber);
       const state = analyzeContactFollowupState(logs, initialContactMs);
       const gender = ruleBasedGender(contact.contactName, '');
+
+      // If this contact is in Post-Chat mode, ensure postChatFollowupEnabled is ON;
+      // if in normal mode, ensure followupEnabled is ON.
+      if (state.isPostChat && !fup.postChatFollowupEnabled) {
+        continue;
+      }
+      if (!state.isPostChat && !fup.followupEnabled) {
+        continue;
+      }
 
       // ─────────────────────────────────────────────────────────────────────────
       // Case A: Customer gave a Promise Date (e.g. "কাল নিব", "শুক্রবার")
@@ -563,7 +760,8 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
           try {
             log('FOLLOWUP', `📅 Promise date reached (${state.promiseTargetDate}) for ${contact.phoneNumber}. Sending reminder...`);
             const step1Config = getStepConfig(fup, 1, campaign, contact.phoneNumber);
-            const msg = step1Config.message || 'আসসালামু আলাইকুম {name}! আপনার আগ্রহের অফারটির বিষয়ে জানাতে পারেন।';
+            const rawPromiseMsg = step1Config.message || 'আসসালামু আলাইকুম {name}! আপনার আগ্রহের অফারটির বিষয়ে জানাতে পারেন।';
+            const msg = replaceVariables(rawPromiseMsg, contact.contactName, campaign.name, gender);
             let promiseSent = false;
             try {
               await sendTextMessage(sock, contact.phoneNumber, msg);
@@ -586,7 +784,7 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
             }
 
             applyAccountCooldown(accountId, fup);
-            break; // Stop after 1 send to maintain strictly staggered pacing
+            break;
           } finally {
             inFlightKeys.delete(flightKey);
           }
@@ -594,139 +792,175 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
       }
 
       // ─────────────────────────────────────────────────────────────────────────
-      // Case B: If customer REPLIED, manual takeover is ACTIVE -> STOP AUTO FOLLOW-UP!
+      // Case B: If customer REPLIED after effective start, STOP AUTO FOLLOW-UP!
       // ─────────────────────────────────────────────────────────────────────────
       if (state.hasReplied) {
         continue;
       }
 
-      // ─────────────────────────────────────────────────────────────────────────
-      // Step 1: Deliver to eligible contact after configured delay (e.g. 2-5 min)
-      // ─────────────────────────────────────────────────────────────────────────
-      if (state.highestStep === 0) {
-        let minDelay = Number(fup.minDelayMinutes);
-        if (!minDelay || minDelay <= 0) {
-          if (fup.followupDelayUnit === 'hours') {
-            minDelay = (Number(fup.followupDelayValue) || 1) * 60;
-          } else if (fup.followupDelayUnit === 'days') {
-            minDelay = (Number(fup.followupDelayValue) || 1) * 1440;
-          } else {
-            minDelay = Number(fup.followupDelayValue) || 2;
-          }
-        }
-        if (minDelay <= 0) minDelay = 2;
+      // Resolve active step sequence (Post-Chat steps vs Regular Campaign steps)
+      const activeStepsList = state.isPostChat
+        ? fup.postChatSteps && fup.postChatSteps.length > 0
+          ? fup.postChatSteps
+          : []
+        : fup.steps && fup.steps.length > 0
+        ? fup.steps
+        : [
+            { stepNumber: 1, delayValue: 3, delayUnit: 'minutes' as const },
+            { stepNumber: 2, delayValue: 3, delayUnit: 'hours' as const },
+            { stepNumber: 3, delayValue: 1, delayUnit: 'days' as const },
+          ];
 
-        const phoneDigits = contact.phoneNumber.replace(/\D/g, '');
-        const seed = phoneDigits.length >= 4 ? parseInt(phoneDigits.slice(-4), 10) : 1234;
-        const jitterMinutes = ((seed % 120) / 60) + ((seed % 10) * 0.05); // 0.2 to 2.2 min jitter
-        const targetMinutes = minDelay + (fup.antiBanJitter !== false ? jitterMinutes : 0);
-
-        // When running real-time campaign follow-up (minAgeDays == 0):
-        if (minAgeDays === 0) {
-          if (ageMinutes < targetMinutes) {
-            continue;
-          }
-          // Safety: Don't blast contacts older than 24 hours without Step 1
-          if (ageMinutes > 1440) {
-            continue;
-          }
-        }
-
-        inFlightKeys.add(flightKey);
-        try {
-          const timingLabel = minAgeDays > 0
-            ? `${ageDays.toFixed(1)} days ago`
-            : `${targetMinutes.toFixed(2)}-min target`;
-          log('FOLLOWUP', `⏳ [Step 1: ${timingLabel}] Sending to ${contact.phoneNumber} (${contact.contactName}) for "${campaign.name}"...`);
-
-          const step1Config = getStepConfig(fup, 1, campaign, contact.phoneNumber);
-          const failKey = `${campaign.id}:${contact.phoneNumber}:1`;
-          const success = await dispatchStepFollowup(sock, campaign, contact, 1, step1Config, gender, fup);
-
-          try {
-            await sock.sendPresenceUpdate('paused', contact.phoneNumber);
-          } catch {}
-
-          if (success) {
-            stepFailCountMap.delete(failKey);
-            applyAccountCooldown(accountId, fup);
-            break;
-          } else {
-            const fails = (stepFailCountMap.get(failKey) || 0) + 1;
-            stepFailCountMap.set(failKey, fails);
-            if (fails >= 2) {
-              log('FOLLOWUP', `⚠️ [Safety Skip] Step 1 for ${contact.phoneNumber} failed ${fails} times (broken file/network). Recording step as failed.`);
-              await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, 1, 'text', 'failed: max_retries_exceeded');
-              stepFailCountMap.delete(failKey);
-            }
-            applyAccountCooldown(accountId, fup);
-            break;
-          }
-        } finally {
-          inFlightKeys.delete(flightKey);
-        }
-      }
+      const maxConfiguredStep = activeStepsList.reduce(
+        (max, s) => Math.max(max, s.stepNumber || 0),
+        activeStepsList.length || 3
+      );
 
       // ─────────────────────────────────────────────────────────────────────────
-      // Step 2: 3 to 4 Hours after Step 1 (Safety Ceiling: 48 Hours)
+      // Case C: Check if the current highestStep is REPEATABLE and due for repeat
+      // (When either highestStep is the final step OR highestStep has repeatable=true
+      //  and there is no next step due sooner)
       // ─────────────────────────────────────────────────────────────────────────
-      if (state.highestStep === 1) {
-        const hoursSinceStep1 = (now - state.lastStepTimeMs) / (60 * 60 * 1000);
-        if (hoursSinceStep1 > 48) {
-          // Lapsed lead: older than 48 hours since Step 1 without Step 2. Safely skip to prevent ancient nudges.
-          continue;
-        }
-        if (hoursSinceStep1 >= 3) {
-          inFlightKeys.add(flightKey);
-          try {
-            log('FOLLOWUP', `🕒 [Step 2: 3-4h nudge] Sending to ${contact.phoneNumber} (${contact.contactName})...`);
+      const currentStepMeta = activeStepsList.find((s) => s.stepNumber === state.highestStep);
+      if (
+        state.highestStep > 0 &&
+        currentStepMeta?.repeatable &&
+        state.highestStep >= maxConfiguredStep
+      ) {
+        const currentRepCount = state.repeatCounts[state.highestStep] || 0;
+        const maxReps = Number(currentStepMeta.maxRepeats) || 0; // 0 = unlimited
+        if (maxReps === 0 || currentRepCount < maxReps) {
+          const repeatIntervalMs = unitToMs(
+            currentStepMeta.repeatEveryValue || 1,
+            currentStepMeta.repeatEveryUnit || 'weeks'
+          );
+          const elapsedSinceLastMs = now - state.lastStepTimeMs;
 
-            const step2Config = getStepConfig(fup, 2, campaign, contact.phoneNumber);
-            const failKey = `${campaign.id}:${contact.phoneNumber}:2`;
-            const success = await dispatchStepFollowup(sock, campaign, contact, 2, step2Config, gender, fup);
+          if (elapsedSinceLastMs >= repeatIntervalMs) {
+            const nextRepNum = currentRepCount + 1;
+            const logPrefix = state.isPostChat ? 'postchat_step' : 'followup_step';
+            const customLogType = `${logPrefix}${state.highestStep}_rep_${nextRepNum}`;
+            const failKey = `${campaign.id}:${contact.phoneNumber}:${customLogType}`;
 
+            inFlightKeys.add(flightKey);
             try {
-              await sock.sendPresenceUpdate('paused', contact.phoneNumber);
-            } catch {}
+              log(
+                'FOLLOWUP',
+                `🔁 [${state.isPostChat ? 'Post-Chat ' : ''}Step ${state.highestStep} Repeat #${nextRepNum}] Sending recurring follow-up to ${contact.phoneNumber} for "${campaign.name}"...`
+              );
+              const stepCfg = getStepConfig(
+                fup,
+                state.highestStep,
+                campaign,
+                contact.phoneNumber,
+                state.isPostChat,
+                nextRepNum
+              );
+              const success = await dispatchStepFollowup(
+                sock,
+                campaign,
+                contact,
+                state.highestStep,
+                stepCfg,
+                gender,
+                fup,
+                customLogType
+              );
+              try {
+                await sock.sendPresenceUpdate('paused', contact.phoneNumber);
+              } catch {}
 
-            if (success) {
-              stepFailCountMap.delete(failKey);
-              applyAccountCooldown(accountId, fup);
-              break;
-            } else {
-              const fails = (stepFailCountMap.get(failKey) || 0) + 1;
-              stepFailCountMap.set(failKey, fails);
-              if (fails >= 2) {
-                log('FOLLOWUP', `⚠️ [Safety Skip] Step 2 for ${contact.phoneNumber} failed ${fails} times. Recording step as failed.`);
-                await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, 2, 'text', 'failed: max_retries_exceeded');
+              if (success) {
                 stepFailCountMap.delete(failKey);
+                applyAccountCooldown(accountId, fup);
+                break;
+              } else {
+                const fails = (stepFailCountMap.get(failKey) || 0) + 1;
+                stepFailCountMap.set(failKey, fails);
+                if (fails >= 2) {
+                  await logFollowupStep(
+                    campaign.id,
+                    contact.phoneNumber,
+                    contact.contactName,
+                    state.highestStep,
+                    'text',
+                    'failed: max_retries_exceeded',
+                    customLogType
+                  );
+                  stepFailCountMap.delete(failKey);
+                }
+                applyAccountCooldown(accountId, fup);
+                break;
               }
-              applyAccountCooldown(accountId, fup);
-              break;
+            } finally {
+              inFlightKeys.delete(flightKey);
             }
-          } finally {
-            inFlightKeys.delete(flightKey);
           }
         }
       }
 
       // ─────────────────────────────────────────────────────────────────────────
-      // Step 3: Next Day (~20-24 Hours after Step 2, Safety Ceiling: 96 Hours)
+      // Case D: Advance to Next Step (Step 1, 2, 3, 4, ... Unlimited!)
       // ─────────────────────────────────────────────────────────────────────────
-      if (state.highestStep === 2) {
-        const hoursSinceStep2 = (now - state.lastStepTimeMs) / (60 * 60 * 1000);
-        if (hoursSinceStep2 > 96) {
-          // Lapsed lead: older than 4 days since Step 2 without Step 3. Safely skip.
-          continue;
+      const nextStepNumber = state.highestStep + 1;
+      if (nextStepNumber <= maxConfiguredStep) {
+        const nextStepMeta = activeStepsList.find((s) => s.stepNumber === nextStepNumber);
+        const requiredDelayMs = getStepRequiredDelayMs(
+          nextStepMeta,
+          nextStepNumber,
+          fup,
+          contact.phoneNumber,
+          minAgeDays,
+          state.isPostChat
+        );
+
+        const referenceTimeMs =
+          nextStepNumber === 1
+            ? state.isPostChat
+              ? state.postChatTriggerTimeMs
+              : initialContactMs
+            : state.lastStepTimeMs;
+
+        const elapsedMs = now - referenceTimeMs;
+
+        // Safety ceiling for short-delay steps (only when delay is under 24h)
+        if (!state.isPostChat && minAgeDays === 0 && requiredDelayMs < 24 * 60 * 60 * 1000) {
+          const maxCeilingMs = Math.max(requiredDelayMs * 4, 48 * 60 * 60 * 1000);
+          if (elapsedMs > maxCeilingMs) {
+            continue;
+          }
         }
-        if (hoursSinceStep2 >= 20) {
+
+        if (elapsedMs >= requiredDelayMs) {
+          const logPrefix = state.isPostChat ? 'postchat_step' : 'followup_step';
+          const customLogType = `${logPrefix}${nextStepNumber}`;
+          const failKey = `${campaign.id}:${contact.phoneNumber}:${customLogType}`;
+
           inFlightKeys.add(flightKey);
           try {
-            log('FOLLOWUP', `🌅 [Step 3: Next-day value] Sending to ${contact.phoneNumber}...`);
+            log(
+              'FOLLOWUP',
+              `⏳ [${state.isPostChat ? 'Post-Chat ' : ''}Step ${nextStepNumber}/${maxConfiguredStep}] Sending to ${contact.phoneNumber} (${contact.contactName}) for "${campaign.name}"...`
+            );
 
-            const step3Config = getStepConfig(fup, 3, campaign, contact.phoneNumber);
-            const failKey = `${campaign.id}:${contact.phoneNumber}:3`;
-            const success = await dispatchStepFollowup(sock, campaign, contact, 3, step3Config, gender, fup);
+            const stepCfg = getStepConfig(
+              fup,
+              nextStepNumber,
+              campaign,
+              contact.phoneNumber,
+              state.isPostChat,
+              0
+            );
+            const success = await dispatchStepFollowup(
+              sock,
+              campaign,
+              contact,
+              nextStepNumber,
+              stepCfg,
+              gender,
+              fup,
+              customLogType
+            );
 
             try {
               await sock.sendPresenceUpdate('paused', contact.phoneNumber);
@@ -734,15 +968,25 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
 
             if (success) {
               stepFailCountMap.delete(failKey);
-              log('FOLLOWUP', `✅ Step 3 completed for ${contact.phoneNumber}. Follow-up sequence finished.`);
               applyAccountCooldown(accountId, fup);
               break;
             } else {
               const fails = (stepFailCountMap.get(failKey) || 0) + 1;
               stepFailCountMap.set(failKey, fails);
               if (fails >= 2) {
-                log('FOLLOWUP', `⚠️ [Safety Skip] Step 3 for ${contact.phoneNumber} failed ${fails} times. Recording step as failed.`);
-                await logFollowupStep(campaign.id, contact.phoneNumber, contact.contactName, 3, 'text', 'failed: max_retries_exceeded');
+                log(
+                  'FOLLOWUP',
+                  `⚠️ [Safety Skip] Step ${nextStepNumber} for ${contact.phoneNumber} failed ${fails} times. Recording step as failed.`
+                );
+                await logFollowupStep(
+                  campaign.id,
+                  contact.phoneNumber,
+                  contact.contactName,
+                  nextStepNumber,
+                  'text',
+                  'failed: max_retries_exceeded',
+                  customLogType
+                );
                 stepFailCountMap.delete(failKey);
               }
               applyAccountCooldown(accountId, fup);
