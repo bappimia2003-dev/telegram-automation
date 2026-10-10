@@ -1439,47 +1439,12 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
           <span>Add Another Variation (A/B Switching & Rotation)</span>
         </Button>
       </div>
-
-      {/* 3. Delivery Controls */}
-      <Card className="border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#181A1F] text-gray-900 dark:text-white flex-1 flex flex-col">
-        <CardHeader className="pb-3 border-b border-[#E6E2D8] dark:border-[#262930]">
-          <CardTitle className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <Clock className="w-5 h-5 text-emerald-600" />
-            Delivery Controls
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-4 space-y-4 flex-1 flex flex-col justify-between">
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-gray-900 dark:text-white">Send Order (Comma-separated)</label>
-            <Input
-              value={sendOrder}
-              onChange={(e) => setSendOrder(e.target.value)}
-              placeholder="message,image,audio,video,document"
-              className="bg-[#FAF8F5] dark:bg-[#121418] border-[#E6E2D8] dark:border-[#262930] text-gray-900 dark:text-white"
-            />
-          </div>
-
-          <div className="pt-2 border-t border-[#E6E2D8] dark:border-[#262930]">
-            <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930]">
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">Campaign Active</p>
-                <p className="text-xs text-gray-500">Turn on/off auto-sending for this product</p>
-              </div>
-              <Switch
-                checked={isActive}
-                onCheckedChange={setIsActive}
-                className="data-[state=checked]:bg-green-700"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
         </div>
         {/* END OF LEFT COLUMN */}
 
-        {/* RIGHT COLUMN: AI Automation & Follow-up Box (Attached Side-by-Side) */}
+        {/* RIGHT COLUMN: AI Automation & Follow-up Box + Delivery Controls */}
         <div className="flex flex-col gap-6 h-full">
-          <Card className="border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#181A1F] text-gray-900 dark:text-white flex-1 flex flex-col">
+          <Card className="border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#181A1F] text-gray-900 dark:text-white">
             <CardHeader className="pb-3 border-b border-[#E6E2D8] dark:border-[#262930]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
@@ -1515,7 +1480,7 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
               </div>
             </CardHeader>
 
-            <CardContent className="space-y-5 pt-4 flex-1 flex flex-col justify-between">
+            <CardContent className="space-y-4 pt-4">
               {/* 1. API Configuration & AI Engine (Telegram-Style Integration) */}
               <div className="p-4 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] space-y-3.5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -2237,6 +2202,41 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
                   </div>
                 );
               })()}
+            </CardContent>
+          </Card>
+
+          {/* 3. Delivery Controls */}
+          <Card className="border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#181A1F] text-gray-900 dark:text-white">
+            <CardHeader className="pb-3 border-b border-[#E6E2D8] dark:border-[#262930]">
+              <CardTitle className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <Clock className="w-5 h-5 text-emerald-600" />
+                Delivery Controls
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-3.5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 items-end">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-gray-900 dark:text-white">Send Order (Comma-separated)</label>
+                  <Input
+                    value={sendOrder}
+                    onChange={(e) => setSendOrder(e.target.value)}
+                    placeholder="message,image,audio,video,document"
+                    className="h-10 bg-[#FAF8F5] dark:bg-[#121418] border-[#E6E2D8] dark:border-[#262930] text-gray-900 dark:text-white text-xs"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930]">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-900 dark:text-white">Campaign Active</p>
+                    <p className="text-[11px] text-gray-500">Auto-sending ON/OFF</p>
+                  </div>
+                  <Switch
+                    checked={isActive}
+                    onCheckedChange={setIsActive}
+                    className="data-[state=checked]:bg-green-700"
+                  />
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
