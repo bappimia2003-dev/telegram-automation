@@ -1032,9 +1032,9 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
       )}
 
       {/* 2-Column Side-by-Side Layout: Campaign Box on Left, AI Follow-up System on Right */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-stretch">
         {/* LEFT COLUMN: Campaign Information, Auto-Reply Variations & Delivery Controls */}
-        <div className="space-y-6">
+        <div className="flex flex-col gap-6 h-full">
           {/* 1. General Info & Keywords */}
           <Card className="border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#181A1F] text-gray-900 dark:text-white">
             <CardHeader className="pb-3 border-b border-[#E6E2D8] dark:border-[#262930]">
@@ -1441,14 +1441,14 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
       </div>
 
       {/* 3. Delivery Controls */}
-      <Card className="border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#181A1F] text-gray-900 dark:text-white">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+      <Card className="border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#181A1F] text-gray-900 dark:text-white flex-1 flex flex-col">
+        <CardHeader className="pb-3 border-b border-[#E6E2D8] dark:border-[#262930]">
+          <CardTitle className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
             <Clock className="w-5 h-5 text-emerald-600" />
             Delivery Controls
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="pt-4 space-y-4 flex-1 flex flex-col justify-between">
           <div className="space-y-2">
             <label className="text-xs font-medium text-gray-900 dark:text-white">Send Order (Comma-separated)</label>
             <Input
@@ -1474,14 +1474,12 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
           </div>
         </CardContent>
       </Card>
-
-
         </div>
         {/* END OF LEFT COLUMN */}
 
         {/* RIGHT COLUMN: AI Automation & Follow-up Box (Attached Side-by-Side) */}
-        <div className="space-y-6">
-          <Card className="border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#181A1F] text-gray-900 dark:text-white">
+        <div className="flex flex-col gap-6 h-full">
+          <Card className="border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#181A1F] text-gray-900 dark:text-white flex-1 flex flex-col">
             <CardHeader className="pb-3 border-b border-[#E6E2D8] dark:border-[#262930]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
@@ -1517,7 +1515,7 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
               </div>
             </CardHeader>
 
-            <CardContent className="space-y-5 pt-4">
+            <CardContent className="space-y-5 pt-4 flex-1 flex flex-col justify-between">
               {/* 1. API Configuration & AI Engine (Telegram-Style Integration) */}
               <div className="p-4 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] space-y-3.5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -1664,119 +1662,116 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
 
                 {/* Visual Status Indicator: Active vs OFF */}
                 {(!fupConfig.aiEnabled || fupConfig.aiApiKey === 'none') ? (
-                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
-                    <span className="text-base shrink-0">🔒</span>
+                  <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                    <span className="text-sm shrink-0">🔒</span>
                     <div>
-                      <span className="font-bold">AI অপটিমাইজেশন সম্পূর্ণ বন্ধ (OFF): </span>
-                      কাস্টমারকে মেসেজ পাঠানোর সময় কোনো AI বা Gemini API ব্যবহার হবে না। প্রতিটি ফলো-আপ ধাপে আপনার লেখা মূল টেক্সট এবং আপলোড করা ইমেজ/মিডিয়া হুবহু পাঠানো হবে।
+                      <span className="font-bold">AI অপটিমাইজেশন বন্ধ (OFF): </span>
+                      প্রতিটি ফলো-আপ ধাপে আপনার লেখা মূল টেক্সট এবং আপলোড করা ইমেজ/মিডিয়া হুবহু পাঠানো হবে।
                     </div>
                   </div>
                 ) : (
-                  <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-800 dark:text-emerald-300 flex items-start gap-2">
-                    <span className="text-base shrink-0">✨</span>
-                    <div>
-                      <span className="font-bold">AI অপটিমাইজেশন সক্রিয় (ACTIVE): </span>
-                      Gemini AI আপনার ফলো-আপ ড্রাফট ও প্রোডাক্ট তথ্যের আলোকে মিষ্টি ও মার্জিত করে গুছিয়ে টেক্সট পাঠাবে।
+                  <div className="space-y-3 pt-1">
+                    <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-800 dark:text-emerald-300 flex items-start gap-2">
+                      <span className="text-sm shrink-0">✨</span>
+                      <div>
+                        <span className="font-bold">AI অপটিমাইজেশন সক্রিয় (ACTIVE): </span>
+                        Gemini AI আপনার ফলো-আপ ড্রাফট ও প্রোডাক্ট তথ্যের আলোকে মিষ্টি ও মার্জিত করে গুছিয়ে টেক্সট পাঠাবে।
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-gray-900 dark:text-white">
+                          AI Follow-up Writing Instruction (মেসেজ গুছিয়ে লেখার নির্দেশনা)
+                        </label>
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                          🛡️ নো-চ্যাটবট: AI কোনো রিপ্লাই দিবে না
+                        </span>
+                      </div>
+                      <Textarea
+                        value={fupConfig.aiSystemPrompt || ''}
+                        onChange={(e) => updateFup('aiSystemPrompt', e.target.value)}
+                        placeholder="প্রোডাক্ট তথ্যের আলোকে ফলো-আপ মেসেজটি সুন্দর, মার্জিত ও ফ্রেন্ডলি ভাষায় গুছিয়ে লেখার নির্দেশনা দাও..."
+                        rows={2}
+                        className="bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-900 dark:text-white text-xs"
+                      />
                     </div>
                   </div>
                 )}
+              </div>
 
-                {/* AI Prompt / Instruction */}
-                <div className={cn("space-y-1.5 pt-1 transition-opacity", (!fupConfig.aiEnabled || fupConfig.aiApiKey === 'none') && "opacity-50 pointer-events-none")}>
+              {/* 2. Understanding Files Upload (AI Knowledge Base) - Only shown when AI is ON */}
+              {fupConfig.aiEnabled && fupConfig.aiApiKey !== 'none' && (
+                <div className="p-4 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] space-y-3">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-gray-900 dark:text-white">
-                      AI Follow-up Writing Instruction (মেসেজ গুছিয়ে লেখার নির্দেশনা)
-                    </label>
-                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                      🛡️ নো-চ্যাটবট: AI কোনো রিপ্লাই দিবে না
+                    <div className="flex items-center gap-2">
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Product Understanding Files (AI Knowledge)</h4>
+                    </div>
+                    <span className="text-[11px] text-gray-500">PDF, DOCX, XLSX, TXT</span>
+                  </div>
+
+                  <label className={cn(
+                    "w-full border border-dashed border-emerald-500/40 rounded-xl p-3 flex items-center justify-center gap-2 cursor-pointer transition-colors",
+                    isUploadingDoc ? "bg-emerald-500/10 opacity-70" : "hover:bg-green-600/5 hover:border-emerald-500/60"
+                  )}>
+                    <Upload className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                      {isUploadingDoc ? 'Uploading & parsing document...' : '+ Upload Understanding File (Knowledge Base)'}
                     </span>
-                  </div>
-                  <Textarea
-                    value={fupConfig.aiSystemPrompt || ''}
-                    onChange={(e) => updateFup('aiSystemPrompt', e.target.value)}
-                    placeholder="প্রোডাক্ট তথ্যের আলোকে ফলো-আপ মেসেজটি সুন্দর, মার্জিত ও ফ্রেন্ডলি ভাষায় গুছিয়ে লেখার নির্দেশনা দাও..."
-                    rows={2}
-                    className="bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-900 dark:text-white text-xs"
-                  />
-                  <p className="text-[11px] text-gray-500">
-                    * AI কাস্টমারের কোনো মেসেজের রিপ্লাই দিবে না — শুধু প্ল্যান অনুযায়ী সময়মতো সুন্দরভাবে টেক্সট গুছিয়ে পাঠাবে।
-                  </p>
-                </div>
-              </div>
-
-              {/* 2. Understanding Files Upload (AI Knowledge Base) */}
-              <div className="p-4 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Product Understanding Files (AI Knowledge)</h4>
-                  </div>
-                  <span className="text-[11px] text-gray-500">PDF, DOCX, XLSX, TXT</span>
-                </div>
-
-                {/* Upload Button */}
-                <label className={cn(
-                  "w-full border border-dashed border-emerald-500/40 rounded-xl p-3 flex items-center justify-center gap-2 cursor-pointer transition-colors",
-                  isUploadingDoc ? "bg-emerald-500/10 opacity-70" : "hover:bg-green-600/5 hover:border-emerald-500/60"
-                )}>
-                  <Upload className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                    {isUploadingDoc ? 'Uploading & parsing document...' : '+ Upload Understanding File (Knowledge Base)'}
-                  </span>
-                  <input
-                    type="file"
-                    accept=".pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.md"
-                    className="hidden"
-                    onChange={handleUnderstandingFileUpload}
-                    disabled={isUploadingDoc}
-                  />
-                </label>
-
-                {/* Uploaded Understanding Files List */}
-                {fupConfig.understandingFiles && fupConfig.understandingFiles.length > 0 && (
-                  <div className="space-y-2 pt-1">
-                    {fupConfig.understandingFiles.map((file) => (
-                      <div
-                        key={file.id}
-                        className="flex items-center justify-between p-2.5 rounded-lg bg-[#EDE8DE] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] text-xs"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                          <div className="truncate">
-                            <p className="font-medium text-gray-900 dark:text-white truncate">{file.name}</p>
-                            <p className="text-[10px] text-gray-500">
-                              {file.size ? `${(file.size / 1024).toFixed(1)} KB` : 'Document'} • AI Ready
-                            </p>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteUnderstandingFile(file.id)}
-                          className="p-1 text-gray-500 hover:text-destructive hover:bg-destructive/10 rounded transition-colors shrink-0"
-                          title="Remove file"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Optional Custom Context / Notes */}
-                <div className="space-y-1.5 pt-1">
-                  <label className="text-xs font-medium text-gray-900 dark:text-white">
-                    Product Notes & Specific Rules (Optional)
+                    <input
+                      type="file"
+                      accept=".pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.md"
+                      className="hidden"
+                      onChange={handleUnderstandingFileUpload}
+                      disabled={isUploadingDoc}
+                    />
                   </label>
-                  <Textarea
-                    value={fupConfig.understandingText || ''}
-                    onChange={(e) => updateFup('understandingText', e.target.value)}
-                    placeholder="পণ্য সম্পর্কিত বিশেষ শর্ত, ডেলিভারি চার্জ বা মূল্য তালিকা..."
-                    rows={2}
-                    className="bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-900 dark:text-white text-xs"
-                  />
+
+                  {fupConfig.understandingFiles && fupConfig.understandingFiles.length > 0 && (
+                    <div className="space-y-2 pt-1">
+                      {fupConfig.understandingFiles.map((file) => (
+                        <div
+                          key={file.id}
+                          className="flex items-center justify-between p-2.5 rounded-lg bg-[#EDE8DE] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] text-xs"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <div className="truncate">
+                              <p className="font-medium text-gray-900 dark:text-white truncate">{file.name}</p>
+                              <p className="text-[10px] text-gray-500">
+                                {file.size ? `${(file.size / 1024).toFixed(1)} KB` : 'Document'} • AI Ready
+                              </p>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteUnderstandingFile(file.id)}
+                            className="p-1 text-gray-500 hover:text-destructive hover:bg-destructive/10 rounded transition-colors shrink-0"
+                            title="Remove file"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5 pt-1">
+                    <label className="text-xs font-medium text-gray-900 dark:text-white">
+                      Product Notes & Specific Rules (Optional)
+                    </label>
+                    <Textarea
+                      value={fupConfig.understandingText || ''}
+                      onChange={(e) => updateFup('understandingText', e.target.value)}
+                      placeholder="পণ্য সম্পর্কিত বিশেষ শর্ত, ডেলিভারি চার্জ বা মূল্য তালিকা..."
+                      rows={2}
+                      className="bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-900 dark:text-white text-xs"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Extendable & Repeatable Multi-Step Follow-up System */}
               {(() => {
@@ -2244,227 +2239,295 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
               })()}
             </CardContent>
           </Card>
+        </div>
+        {/* END OF RIGHT COLUMN */}
 
-          {/* NEW CARD: Post-Chat Closing Keyword Trigger Follow-up (কাস্টমার কথা বলে না কিনলে কীওয়ার্ড দিয়ে ফলো-আপ) */}
-          <Card className="bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] shadow-lg overflow-hidden">
-            <CardHeader className="pb-4 border-b border-[#E6E2D8] dark:border-[#262930] bg-gradient-to-r from-amber-500/10 via-emerald-500/5 to-transparent">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
-                    <RotateCcw className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base text-gray-900 dark:text-white flex items-center gap-2">
-                      কথা বলার পর না কিনলে ফলো-আপ (Post-Chat Keyword Follow-up)
-                      <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px]">
-                        100% Rule-Based
-                      </Badge>
-                    </CardTitle>
-                    <CardDescription className="text-xs text-gray-500 mt-0.5">
-                      কাস্টমার কথা বলার পর না কিনলে আপনি চ্যাটের শেষে নির্দিষ্ট কীওয়ার্ড লিখলেই বট তাকে বারবার ফলো-আপ করবে
-                    </CardDescription>
-                  </div>
+        {/* FULL-WIDTH BALANCED 2-COLUMN CARD: Post-Chat Closing Keyword Trigger Follow-up */}
+        <Card className="xl:col-span-2 border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#181A1F] text-gray-900 dark:text-white overflow-hidden">
+          <CardHeader className="pb-3 border-b border-[#E6E2D8] dark:border-[#262930]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                  <RotateCcw className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CardTitle className="text-base font-semibold text-gray-900 dark:text-white">
+                      কথা বলার পর না কিনলে ফলো-আপ (Post-Chat Keyword Follow-up)
+                    </CardTitle>
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] whitespace-nowrap shrink-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25 font-medium"
+                    >
+                      100% Rule-Based
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    কাস্টমার কথা বলার পর না কিনলে আপনি চ্যাটের শেষে নির্দিষ্ট কীওয়ার্ড লিখলেই বট তাকে বারবার ফলো-আপ করবে
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-[10px] whitespace-nowrap",
+                    fupConfig.postChatFollowupEnabled
+                      ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
+                      : "bg-gray-100 dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700"
+                  )}
+                >
+                  {fupConfig.postChatFollowupEnabled ? 'ACTIVE' : 'OFF'}
+                </Badge>
                 <Switch
                   checked={Boolean(fupConfig.postChatFollowupEnabled)}
                   onCheckedChange={(val) => updateFup('postChatFollowupEnabled', val)}
+                  className="data-[state=checked]:bg-green-700"
                 />
               </div>
-            </CardHeader>
+            </div>
+          </CardHeader>
 
-            <CardContent className="pt-5 space-y-4">
-              {/* Explanation Box */}
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 space-y-1">
-                <p className="font-semibold">কিভাবে কাজ করবে?</p>
-                <p className="text-[11px] opacity-90 leading-relaxed">
-                  একজন কাস্টমার নক দিল, কথা হলো কিন্তু সে কিনলো না। আপনি চ্যাটের শেষে যখনই নিচের যেকোনো একটি কীওয়ার্ড (যেমন: <strong>okay</strong>, <strong>Thank You</strong>, <strong>আবার কথা হবে</strong>) লিখে মেসেজ পাঠাবেন, বট অটোমেটিক বুঝে যাবে এবং ওই কাস্টমারকে নিচের সিডিউল অনুযায়ী (কেমন আছে, অফার শেষ, অথবা নতুন অফার অ্যাড হলো) বারবার ফলো-আপ দিতে থাকবে।
-                </p>
-              </div>
+          <CardContent className="pt-4">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-stretch">
+              {/* LEFT HALF: Explanation & Closing Keywords Setup */}
+              <div className="p-4 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] flex flex-col justify-between space-y-4">
+                <div className="space-y-4">
+                  {/* How it works box (Matched Emerald Theme) */}
+                  <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-xs text-gray-700 dark:text-gray-300 space-y-1.5">
+                    <p className="font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>কিভাবে কাজ করবে?</span>
+                    </p>
+                    <p className="text-[11px] leading-relaxed">
+                      একজন কাস্টমার নক দিল, কথা হলো কিন্তু সে কিনলো না। আপনি চ্যাটের শেষে যখনই নিচের যেকোনো একটি কীওয়ার্ড (যেমন: <strong className="text-gray-900 dark:text-white">okay, Thank You, আবার কথা হবে</strong>) লিখে মেসেজ পাঠাবেন, বট অটোমেটিক বুঝে যাবে এবং ওই কাস্টমারকে ডানপাশের সিডিউল অনুযায়ী (কেমন আছে, অফার শেষ, অথবা নতুন অফার অ্যাড হলো) বারবার ফলো-আপ দিতে থাকবে।
+                    </p>
+                  </div>
 
-              {/* Admin Closing Keywords Input */}
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-gray-900 dark:text-white block">
-                  আপনার ক্লোজিং কীওয়ার্ডসমূহ (কমা দিয়ে আলাদা করুন)
-                </label>
-                <Input
-                  value={fupConfig.postChatTriggerKeywords || ''}
-                  onChange={(e) => updateFup('postChatTriggerKeywords', e.target.value)}
-                  placeholder="okay, Thank You, আবার কথা হবে, ধন্যবাদ"
-                  className="bg-[#FAF8F5] dark:bg-[#121418] border-[#E6E2D8] dark:border-[#262930] text-gray-900 dark:text-white text-xs font-medium"
-                />
-                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                  <span className="text-[10px] text-gray-500">কুইক কীওয়ার্ড যোগ করুন:</span>
-                  {['okay', 'Thank You', 'আবার কথা হবে', 'ধন্যবাদ', 'পরে কথা হবে', 'জানাবেন'].map((kw) => (
-                    <button
-                      key={kw}
-                      type="button"
-                      onClick={() => {
-                        const cur = (fupConfig.postChatTriggerKeywords || '')
-                          .split(',')
-                          .map((s) => s.trim())
-                          .filter(Boolean);
-                        if (!cur.some((c) => c.toLowerCase() === kw.toLowerCase())) {
-                          updateFup('postChatTriggerKeywords', [...cur, kw].join(', '));
-                        }
-                      }}
-                      className="px-2 py-0.5 rounded-md text-[10px] bg-[#EDE8DE] dark:bg-[#121418] hover:bg-amber-500/20 text-gray-700 dark:text-gray-300 border border-[#E6E2D8] dark:border-[#262930] transition-colors font-medium"
-                    >
-                      + {kw}
-                    </button>
-                  ))}
+                  {/* Admin Closing Keywords Input */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-gray-900 dark:text-white block">
+                      আপনার ক্লোজিং কীওয়ার্ডসমূহ (কমা দিয়ে আলাদা করুন)
+                    </label>
+                    <Input
+                      value={fupConfig.postChatTriggerKeywords || ''}
+                      onChange={(e) => updateFup('postChatTriggerKeywords', e.target.value)}
+                      placeholder="okay, Thank You, আবার কথা হবে, ধন্যবাদ"
+                      className="bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-900 dark:text-white text-xs font-medium h-10"
+                    />
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                      <span className="text-[11px] text-gray-500">কুইক কীওয়ার্ড যোগ করুন:</span>
+                      {['okay', 'Thank You', 'আবার কথা হবে', 'ধন্যবাদ', 'পরে কথা হবে', 'জানাবেন'].map((kw) => (
+                        <button
+                          key={kw}
+                          type="button"
+                          onClick={() => {
+                            const cur = (fupConfig.postChatTriggerKeywords || '')
+                              .split(',')
+                              .map((s) => s.trim())
+                              .filter(Boolean);
+                            if (!cur.some((c) => c.toLowerCase() === kw.toLowerCase())) {
+                              updateFup('postChatTriggerKeywords', [...cur, kw].join(', '));
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded-md text-[11px] bg-[#EDE8DE] dark:bg-[#181A1F] hover:bg-emerald-500/15 text-gray-700 dark:text-gray-300 border border-[#E6E2D8] dark:border-[#262930] transition-colors font-medium"
+                        >
+                          + {kw}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status Bar at Bottom of Left Box to Match Height */}
+                <div className="p-3 rounded-lg bg-[#EDE8DE]/60 dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] text-xs flex items-center justify-between gap-2">
+                  <span className="text-gray-500 font-medium">ট্রিগার স্ট্যাটাস:</span>
+                  <span className={cn(
+                    "font-semibold",
+                    fupConfig.postChatFollowupEnabled
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-gray-500"
+                  )}>
+                    {fupConfig.postChatFollowupEnabled
+                      ? `✅ সক্রিয় (${(fupConfig.postChatTriggerKeywords || '').split(',').map((s) => s.trim()).filter(Boolean).length || 3}টি কীওয়ার্ড সেট করা আছে)`
+                      : '⏸️ বর্তমানে বন্ধ আছে (চালু করতে উপরে সুইচ অন করুন)'}
+                  </span>
                 </div>
               </div>
 
-              {/* Post-Chat Follow-up Steps */}
+              {/* RIGHT HALF: Post-Chat Follow-up Steps & Schedule Editor */}
               {(() => {
                 const pcSteps = ensurePostChatSteps(fupConfig.postChatSteps);
                 const activePcStep = pcSteps.find((s) => s.stepNumber === activePostChatTab) || pcSteps[0];
 
                 return (
-                  <div className="p-3.5 rounded-xl bg-[#EDE8DE]/40 dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] space-y-3.5">
-                    <div className="flex items-center justify-between gap-2 pb-2 border-b border-[#E6E2D8] dark:border-[#262930]">
-                      <span className="text-xs font-semibold text-gray-900 dark:text-white">
-                        পোস্ট-চ্যাট ফলো-আপ মেসেজসমূহ ({pcSteps.length} Steps)
-                      </span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={handleAddPostChatStep}
-                        className="h-7 px-2.5 text-[11px] bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-lg"
-                      >
-                        <Plus className="w-3.5 h-3.5 mr-1" />
-                        + ধাপ যোগ করুন
-                      </Button>
-                    </div>
-
-                    {/* Post-Chat Step Tabs */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-1 rounded-xl bg-[#EDE8DE] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930]">
-                      {pcSteps.map((st) => {
-                        const isCur = activePostChatTab === st.stepNumber;
-                        return (
-                          <button
-                            key={st.stepNumber}
-                            type="button"
-                            onClick={() => setActivePostChatTab(st.stepNumber)}
-                            className={cn(
-                              "flex flex-col items-center justify-center py-2 px-1.5 rounded-lg text-center transition-all",
-                              isCur
-                                ? "bg-[#FAF8F5] dark:bg-[#121418] text-amber-700 dark:text-amber-400 font-semibold shadow-sm border border-[#E6E2D8] dark:border-[#262930]"
-                                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                            )}
-                          >
-                            <span className="text-[11px] font-semibold leading-tight truncate max-w-full">
-                              {st.title || `ধাপ ${st.stepNumber}`}
-                            </span>
-                            <span className="text-[10px] text-gray-500 mt-0.5">
-                              {formatStepDelayBadge(st)}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Active Post-Chat Step Editor */}
-                    <div className="space-y-3 pt-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <Input
-                          value={activePcStep?.title || ''}
-                          onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'title', e.target.value)}
-                          placeholder="ধাপের নাম (যেমন: কেমন আছেন / নতুন অফার)"
-                          className="h-8 text-xs font-semibold bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] max-w-xs"
-                        />
-                        {pcSteps.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeletePostChatStep(activePcStep.stepNumber)}
-                            className="p-1 px-2 rounded bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-[11px] font-medium flex items-center gap-1"
-                          >
-                            <Trash2 className="w-3 h-3" /> মুছে ফেলুন
-                          </button>
-                        )}
+                  <div className="p-4 rounded-xl bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] flex flex-col justify-between space-y-3.5">
+                    <div className="space-y-3.5">
+                      <div className="flex items-center justify-between gap-2 pb-2 border-b border-[#E6E2D8] dark:border-[#262930]">
+                        <div className="flex items-center gap-2">
+                          <Send className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                          <span className="text-xs font-semibold text-gray-900 dark:text-white">
+                            পোস্ট-চ্যাট ফলো-আপ মেসেজসমূহ ({pcSteps.length} Steps)
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleAddPostChatStep}
+                          className="h-7 px-2.5 text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg"
+                        >
+                          <Plus className="w-3.5 h-3.5 mr-1" />
+                          + ধাপ যোগ করুন
+                        </Button>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-2.5 rounded-lg bg-[#FAF8F5] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930]">
-                        <div>
-                          <label className="text-[11px] font-medium text-gray-600 dark:text-gray-400 block mb-1">
-                            কীওয়ার্ড লেখার কতক্ষণ পর যাবে?
-                          </label>
-                          <div className="flex items-center gap-1.5">
-                            <Input
-                              type="number"
-                              min={1}
-                              value={activePcStep?.delayValue ?? 3}
-                              onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'delayValue', Math.max(1, Number(e.target.value) || 1))}
-                              className="h-7 w-16 text-xs font-semibold bg-[#EDE8DE]/50 dark:bg-[#121418]"
-                            />
-                            <select
-                              value={activePcStep?.delayUnit || 'days'}
-                              onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'delayUnit', e.target.value)}
-                              className="h-7 flex-1 rounded px-2 bg-[#EDE8DE]/50 dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] text-xs text-gray-900 dark:text-white"
+                      {/* Post-Chat Step Tabs */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-1.5 rounded-xl bg-[#EDE8DE] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930]">
+                        {pcSteps.map((st) => {
+                          const isCur = activePostChatTab === st.stepNumber;
+                          return (
+                            <button
+                              key={st.stepNumber}
+                              type="button"
+                              onClick={() => setActivePostChatTab(st.stepNumber)}
+                              className={cn(
+                                "flex flex-col items-center justify-center py-2 px-1.5 rounded-lg text-center transition-all",
+                                isCur
+                                  ? "bg-[#FAF8F5] dark:bg-[#121418] text-green-800 dark:text-emerald-400 font-semibold shadow-sm border border-[#E6E2D8] dark:border-[#262930]"
+                                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                              )}
                             >
-                              <option value="minutes">মিনিট পর</option>
-                              <option value="hours">ঘণ্টা পর</option>
-                              <option value="days">দিন পর</option>
-                              <option value="weeks">সপ্তাহ পর</option>
-                              <option value="months">মাস পর</option>
-                            </select>
-                          </div>
+                              <span className="text-[11px] font-semibold leading-tight truncate max-w-full">
+                                {st.title || `ধাপ ${st.stepNumber}`}
+                              </span>
+                              <span className="text-[10px] text-gray-500 mt-0.5">
+                                {formatStepDelayBadge(st)}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Active Post-Chat Step Editor */}
+                      <div className="space-y-3 pt-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <Input
+                            value={activePcStep?.title || ''}
+                            onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'title', e.target.value)}
+                            placeholder="ধাপের নাম (যেমন: কেমন আছেন / নতুন অফার)"
+                            className="h-8 text-xs font-semibold bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] max-w-xs"
+                          />
+                          {pcSteps.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePostChatStep(activePcStep.stepNumber)}
+                              className="p-1 px-2 rounded bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-[11px] font-medium flex items-center gap-1"
+                            >
+                              <Trash2 className="w-3 h-3" /> মুছে ফেলুন
+                            </button>
+                          )}
                         </div>
 
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-[11px] font-medium text-gray-700 dark:text-gray-300">
-                              🔁 বারবার রিপিট হবে?
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-2.5 rounded-lg bg-[#EDE8DE]/60 dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930]">
+                          <div>
+                            <label className="text-[11px] font-medium text-gray-600 dark:text-gray-400 block mb-1">
+                              কীওয়ার্ড লেখার কতক্ষণ পর যাবে?
                             </label>
-                            <Switch
-                              checked={Boolean(activePcStep?.repeatable)}
-                              onCheckedChange={(val) => updatePostChatStepField(activePcStep.stepNumber, 'repeatable', val)}
-                            />
-                          </div>
-                          {activePcStep?.repeatable && (
                             <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] text-gray-500">প্রতি</span>
                               <Input
                                 type="number"
                                 min={1}
-                                value={activePcStep?.repeatEveryValue ?? 1}
-                                onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'repeatEveryValue', Math.max(1, Number(e.target.value) || 1))}
-                                className="h-7 w-14 text-xs font-semibold px-1.5 bg-[#EDE8DE]/50 dark:bg-[#121418]"
+                                value={activePcStep?.delayValue ?? 3}
+                                onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'delayValue', Math.max(1, Number(e.target.value) || 1))}
+                                className="h-7 w-16 text-xs font-semibold bg-[#FAF8F5] dark:bg-[#121418] border-[#E6E2D8] dark:border-[#262930]"
                               />
                               <select
-                                value={activePcStep?.repeatEveryUnit || 'months'}
-                                onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'repeatEveryUnit', e.target.value)}
-                                className="h-7 flex-1 rounded px-1.5 bg-[#EDE8DE]/50 dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] text-[11px] text-gray-900 dark:text-white"
+                                value={activePcStep?.delayUnit || 'days'}
+                                onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'delayUnit', e.target.value)}
+                                className="h-7 flex-1 rounded px-2 bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] text-xs text-gray-900 dark:text-white"
                               >
-                                <option value="days">দিন পর পর</option>
-                                <option value="weeks">সপ্তাহে একবার</option>
-                                <option value="months">মাসে একবার</option>
+                                <option value="minutes">মিনিট পর</option>
+                                <option value="hours">ঘণ্টা পর</option>
+                                <option value="days">দিন পর</option>
+                                <option value="weeks">সপ্তাহ পর</option>
+                                <option value="months">মাস পর</option>
                               </select>
                             </div>
-                          )}
-                        </div>
-                      </div>
+                          </div>
 
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-gray-900 dark:text-white block">
-                          ফলো-আপ মেসেজ (কেমন আছে / অফার শেষ / নতুন অফার অ্যাড হলো)
-                        </label>
-                        <Textarea
-                          value={activePcStep?.message || ''}
-                          onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'message', e.target.value)}
-                          placeholder="যেমন: আসসালামু আলাইকুম {name}! কেমন আছেন? আমাদের নতুন অফার শুরু হয়েছে..."
-                          rows={3}
-                          className="bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-900 dark:text-white text-xs"
-                        />
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[11px] font-medium text-gray-700 dark:text-gray-300">
+                                🔁 বারবার রিপিট হবে?
+                              </label>
+                              <Switch
+                                checked={Boolean(activePcStep?.repeatable)}
+                                onCheckedChange={(val) => updatePostChatStepField(activePcStep.stepNumber, 'repeatable', val)}
+                                className="data-[state=checked]:bg-green-700"
+                              />
+                            </div>
+                            {activePcStep?.repeatable && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] text-gray-500">প্রতি</span>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  value={activePcStep?.repeatEveryValue ?? 1}
+                                  onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'repeatEveryValue', Math.max(1, Number(e.target.value) || 1))}
+                                  className="h-7 w-14 text-xs font-semibold px-1.5 bg-[#FAF8F5] dark:bg-[#121418] border-[#E6E2D8] dark:border-[#262930]"
+                                />
+                                <select
+                                  value={activePcStep?.repeatEveryUnit || 'months'}
+                                  onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'repeatEveryUnit', e.target.value)}
+                                  className="h-7 flex-1 rounded px-1.5 bg-[#FAF8F5] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930] text-[11px] text-gray-900 dark:text-white"
+                                >
+                                  <option value="days">দিন পর পর</option>
+                                  <option value="weeks">সপ্তাহে একবার</option>
+                                  <option value="months">মাসে একবার</option>
+                                </select>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between flex-wrap gap-1">
+                            <label className="text-xs font-medium text-gray-900 dark:text-white">
+                              ফলো-আপ মেসেজ (কেমন আছে / অফার শেষ / নতুন অফার অ্যাড হলো)
+                            </label>
+                            <div className="flex items-center gap-1">
+                              {['{name}', '{product}', '{time}'].map((chip) => (
+                                <button
+                                  key={chip}
+                                  type="button"
+                                  onClick={() => {
+                                    const cur = activePcStep?.message || '';
+                                    updatePostChatStepField(activePcStep.stepNumber, 'message', cur ? `${cur} ${chip}` : chip);
+                                  }}
+                                  className="px-1.5 py-0.5 rounded text-[10px] bg-[#EDE8DE] dark:bg-[#181A1F] hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 transition-colors font-mono font-medium"
+                                >
+                                  +{chip}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <Textarea
+                            value={activePcStep?.message || ''}
+                            onChange={(e) => updatePostChatStepField(activePcStep.stepNumber, 'message', e.target.value)}
+                            placeholder="যেমন: আসসালামু আলাইকুম {name}! কেমন আছেন? আমাদের নতুন অফার শুরু হয়েছে..."
+                            rows={3}
+                            className="bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-900 dark:text-white text-xs"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
                 );
               })()}
-            </CardContent>
-          </Card>
-        </div>
-        {/* END OF RIGHT COLUMN */}
+            </div>
+          </CardContent>
+        </Card>
       </div>
       {/* END OF 2-COLUMN GRID */}
 
