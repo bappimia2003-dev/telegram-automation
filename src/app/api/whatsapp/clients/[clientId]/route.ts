@@ -40,7 +40,7 @@ export async function PUT(
     if (body.isActive !== undefined) updates.isActive = Boolean(body.isActive);
     if (body.notes !== undefined) updates.notes = String(body.notes);
 
-    // Regenerate unique password and auto-save in DB
+    // Regenerate unique password and auto-save in DB, or set custom password
     if (body.regeneratePassword) {
       const allClients = await getAllClients(true);
       let newPwd = (body.password || '').trim() || generateRandomPassword(8);
@@ -49,7 +49,15 @@ export async function PUT(
       }
       updates.password = newPwd;
     } else if (body.password !== undefined && String(body.password).trim() !== '') {
-      updates.password = String(body.password).trim();
+      const customPwd = String(body.password).trim();
+      const allClients = await getAllClients(true);
+      if (allClients.some((c) => c.id !== clientId && c.password === customPwd)) {
+        return NextResponse.json(
+          { ok: false, error: 'এই পাসওয়ার্ডটি অন্য আরেকজন ক্লায়েন্টের জন্য ব্যবহৃত হচ্ছে। অনুগ্রহ করে ভিন্ন পাসওয়ার্ড দিন।' },
+          { status: 400 }
+        );
+      }
+      updates.password = customPwd;
     }
 
     // Set or reset subscription validity days

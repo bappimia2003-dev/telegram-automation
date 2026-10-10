@@ -49,7 +49,9 @@ export default function AdminClientsPage() {
 
   // Per-client UI state
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [savedPwdId, setSavedPwdId] = useState<string | null>(null);
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
+  const [passwordDrafts, setPasswordDrafts] = useState<Record<string, string>>({});
   const [expandedClient, setExpandedClient] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<Record<string, 'campaigns' | 'numbers' | 'activity'>>({});
   const [customDaysInput, setCustomDaysInput] = useState<Record<string, number>>({});
@@ -68,15 +70,21 @@ export default function AdminClientsPage() {
         setClients(data.clients);
         const drafts: Record<string, { maxNumbers: number; maxCampaigns: number }> = {};
         const daysMap: Record<string, number> = {};
+        const pwdMap: Record<string, string> = {};
+        const visMap: Record<string, boolean> = {};
         for (const c of data.clients) {
           drafts[c.id] = {
             maxNumbers: c.maxWhatsappNumbers || 1,
             maxCampaigns: c.maxCampaigns || 3,
           };
           daysMap[c.id] = c.durationDays || 30;
+          pwdMap[c.id] = c.password || '';
+          visMap[c.id] = true;
         }
         setQuotaDrafts((prev) => ({ ...drafts, ...prev }));
         setCustomDaysInput((prev) => ({ ...daysMap, ...prev }));
+        setPasswordDrafts((prev) => ({ ...pwdMap, ...prev }));
+        setVisiblePasswords((prev) => ({ ...visMap, ...prev }));
       }
     } catch (err) {
       console.error('Error fetching clients:', err);
@@ -134,6 +142,38 @@ export default function AdminClientsPage() {
     }
   };
 
+  const handleSaveCustomPassword = async (clientId: string) => {
+    const customPwd = (passwordDrafts[clientId] || '').trim();
+    if (!customPwd) {
+      alert('অনুগ্রহ করে একটি পাসওয়ার্ড লিখুন (Please enter a password)');
+      return;
+    }
+    setSavingId(clientId);
+    try {
+      const res = await fetch(`/api/whatsapp/clients/${clientId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: customPwd }),
+      });
+      const data = await res.json();
+      if (data.ok && data.client) {
+        setClients((prev) =>
+          prev.map((c) => (c.id === clientId ? { ...c, password: data.client.password } : c))
+        );
+        setPasswordDrafts((prev) => ({ ...prev, [clientId]: data.client.password }));
+        setVisiblePasswords((prev) => ({ ...prev, [clientId]: true }));
+        setSavedPwdId(clientId);
+        setTimeout(() => setSavedPwdId(null), 2500);
+      } else {
+        alert(data.error || 'Failed to update password');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   const handleRegeneratePassword = async (clientId: string) => {
     setSavingId(clientId);
     try {
@@ -147,7 +187,10 @@ export default function AdminClientsPage() {
         setClients((prev) =>
           prev.map((c) => (c.id === clientId ? { ...c, password: data.client.password } : c))
         );
+        setPasswordDrafts((prev) => ({ ...prev, [clientId]: data.client.password }));
         setVisiblePasswords((prev) => ({ ...prev, [clientId]: true }));
+        setSavedPwdId(clientId);
+        setTimeout(() => setSavedPwdId(null), 2500);
         handleCopyPassword(clientId, data.client.password);
       }
     } catch (err) {
@@ -493,31 +536,75 @@ export default function AdminClientsPage() {
                       </div>
                     </div>
 
-                    {/* Password Box + Regenerate + Copy */}
+                    {/* Editable Custom Password Box + Save Password + Regenerate + Copy */}
                     <div className="flex flex-wrap items-center gap-2 bg-[#F4F1EB] dark:bg-[#121418] p-2.5 rounded-xl border border-[#E6E2D8] dark:border-[#262930]">
-                      <div className="flex items-center gap-2 px-2">
+                      <div className="flex items-center gap-2 px-1">
                         <KeyRound className="w-4 h-4 text-[#164E43] dark:text-[#34D399] shrink-0" />
                         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Password:</span>
-                        <code className="text-xs font-extrabold font-mono text-gray-900 dark:text-white bg-white dark:bg-[#1C2026] px-2.5 py-1 rounded-lg border border-[#E6E2D8] dark:border-[#2A2E37]">
-                          {showPwd ? client.password : '••••••••'}
-                        </code>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setVisiblePasswords((prev) => ({ ...prev, [client.id]: !prev[client.id] }))
-                          }
-                          className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 p-1"
-                          title={showPwd ? 'Hide password' : 'Show password'}
-                        >
-                          {showPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
+                        <div className="relative flex items-center">
+                          <Input
+                            type={showPwd ? 'text' : 'password'}
+                            value={passwordDrafts[client.id] ?? client.password ?? ''}
+                            onChange={(e) =>
+                              setPasswordDrafts((prev) => ({
+                                ...prev,
+                                [client.id]: e.target.value,
+                              }))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSaveCustomPassword(client.id);
+                              }
+                            }}
+                            placeholder="নতুন পাসওয়ার্ড লিখুন..."
+                            className="h-8 w-40 sm:w-44 pr-7 text-xs font-extrabold font-mono text-gray-900 dark:text-white bg-white dark:bg-[#1C2026] border-[#E6E2D8] dark:border-[#2A2E37] rounded-lg"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setVisiblePasswords((prev) => ({ ...prev, [client.id]: !prev[client.id] }))
+                            }
+                            className="absolute right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                            title={showPwd ? 'Hide password' : 'Show password'}
+                          >
+                            {showPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
                       </div>
 
                       <Button
                         type="button"
                         size="sm"
+                        onClick={() => handleSaveCustomPassword(client.id)}
+                        disabled={savingId === client.id}
+                        className={cn(
+                          "h-8 px-3 text-xs font-bold rounded-lg text-white transition-all",
+                          savedPwdId === client.id
+                            ? "bg-emerald-600 hover:bg-emerald-600"
+                            : (passwordDrafts[client.id] ?? client.password) !== client.password
+                            ? "bg-emerald-600 hover:bg-emerald-500 shadow-sm ring-2 ring-emerald-500/30"
+                            : "bg-[#164E43] hover:bg-[#124238]"
+                        )}
+                      >
+                        {savedPwdId === client.id ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 mr-1" />
+                            Saved!
+                          </>
+                        ) : (
+                          <>
+                            <Edit3 className="w-3.5 h-3.5 mr-1" />
+                            Save Password
+                          </>
+                        )}
+                      </Button>
+
+                      <Button
+                        type="button"
+                        size="sm"
                         variant="outline"
-                        onClick={() => handleCopyPassword(client.id, client.password)}
+                        onClick={() => handleCopyPassword(client.id, passwordDrafts[client.id] ?? client.password)}
                         className="h-8 px-2.5 text-xs font-bold rounded-lg border-[#E6E2D8] dark:border-[#2A2E37]"
                       >
                         {copiedId === client.id ? (
@@ -536,12 +623,14 @@ export default function AdminClientsPage() {
                       <Button
                         type="button"
                         size="sm"
+                        variant="outline"
                         onClick={() => handleRegeneratePassword(client.id)}
                         disabled={savingId === client.id}
-                        className="h-8 px-3 text-xs font-bold rounded-lg bg-[#164E43] hover:bg-[#124238] text-white"
+                        className="h-8 px-2.5 text-xs font-bold rounded-lg border-[#E6E2D8] dark:border-[#2A2E37]"
+                        title="Auto-generate random password"
                       >
                         <RefreshCw className={cn("w-3.5 h-3.5 mr-1", savingId === client.id && "animate-spin")} />
-                        Regenerate
+                        Auto Generate
                       </Button>
                     </div>
                   </div>
