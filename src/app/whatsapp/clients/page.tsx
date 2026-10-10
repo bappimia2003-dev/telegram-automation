@@ -469,316 +469,318 @@ export default function AdminClientsPage() {
             return (
               <div
                 key={client.id}
-                className="rounded-2xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] shadow-xs overflow-hidden transition-all"
+                className={cn(
+                  "rounded-2xl bg-[#FBF9F4] dark:bg-[#181A1F] border shadow-xs overflow-hidden transition-all",
+                  isExpanded
+                    ? "border-[#164E43]/40 dark:border-[#34D399]/40 ring-1 ring-[#164E43]/15"
+                    : "border-[#E6E2D8] dark:border-[#262930] hover:border-[#164E43]/30 dark:hover:border-[#34D399]/30"
+                )}
               >
-                {/* Main Client Row */}
-                <div className="p-5 space-y-5">
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    {/* Profile + Floating Pop-up Day Badge */}
-                    <div className="flex items-center gap-4">
-                      <div className="relative pt-1">
-                        {/* Floating Day Counter Pop-up Badge on top of Client Profile */}
-                        {remainingDays !== null && remainingDays !== undefined && (
-                          <div
-                            className={cn(
-                              "absolute -top-2 -right-2 z-10 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-tight shadow-md border flex items-center gap-1 leading-tight",
-                              isExpired || remainingDays <= 0
-                                ? "bg-red-600 text-white border-red-400 animate-pulse"
-                                : remainingDays <= 5
-                                ? "bg-amber-500 text-white border-amber-300"
-                                : "bg-[#164E43] text-white border-[#227968]"
-                            )}
-                          >
-                            <Clock className="w-2.5 h-2.5" />
-                            <span>{isExpired || remainingDays <= 0 ? '0d (Off)' : `${remainingDays}d`}</span>
-                          </div>
-                        )}
-                        <div className="w-14 h-14 rounded-2xl bg-[#164E43]/10 dark:bg-[#34D399]/10 border border-[#164E43]/20 dark:border-[#34D399]/20 flex items-center justify-center text-[#164E43] dark:text-[#34D399] font-extrabold text-xl">
-                          {client.name.charAt(0).toUpperCase()}
+                {/* Clickable Compact Client Header Row (All details hidden until clicked) */}
+                <div
+                  onClick={() =>
+                    setExpandedClient((prev) => ({ ...prev, [client.id]: !prev[client.id] }))
+                  }
+                  className="p-4 sm:p-5 flex items-center justify-between gap-4 cursor-pointer select-none hover:bg-[#F4F1EB]/50 dark:hover:bg-[#1C2026]/50 transition-colors"
+                >
+                  {/* Profile + Floating Pop-up Day Badge */}
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className="relative pt-1 shrink-0">
+                      {/* Floating Day Counter Pop-up Badge on top of Client Profile */}
+                      {remainingDays !== null && remainingDays !== undefined && (
+                        <div
+                          className={cn(
+                            "absolute -top-2 -right-2 z-10 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-tight shadow-md border flex items-center gap-1 leading-tight",
+                            isExpired || remainingDays <= 0
+                              ? "bg-red-600 text-white border-red-400 animate-pulse"
+                              : remainingDays <= 5
+                              ? "bg-amber-500 text-white border-amber-300"
+                              : "bg-[#164E43] text-white border-[#227968]"
+                          )}
+                        >
+                          <Clock className="w-2.5 h-2.5" />
+                          <span>{isExpired || remainingDays <= 0 ? '0d (Off)' : `${remainingDays}d`}</span>
                         </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2.5 flex-wrap">
-                          <h3 className="text-base sm:text-lg font-extrabold text-gray-900 dark:text-white">
-                            {client.name}
-                          </h3>
-                          <span
-                            className={cn(
-                              "text-[11px] font-bold px-2.5 py-0.5 rounded-full border",
-                              isExpired
-                                ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30"
-                                : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
-                            )}
-                          >
-                            {isExpired
-                              ? '⚠️ Expired — Auto Off'
-                              : remainingDays !== null
-                              ? `⏳ ${remainingDays} Days Left`
-                              : 'Active'}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
-                          <span className="flex items-center gap-1 font-medium">
-                            <Smartphone className="w-3.5 h-3.5 text-[#164E43] dark:text-[#34D399]" />
-                            Numbers: <strong className="text-gray-900 dark:text-white">{client.usage?.whatsappNumbersCount || 0} / {client.maxWhatsappNumbers}</strong>
-                          </span>
-                          <span className="flex items-center gap-1 font-medium">
-                            <Layers className="w-3.5 h-3.5 text-[#164E43] dark:text-[#34D399]" />
-                            Campaigns: <strong className="text-gray-900 dark:text-white">{client.usage?.campaignsCount || 0} / {client.maxCampaigns}</strong>
-                          </span>
-                          <span className="flex items-center gap-1 font-medium">
-                            <Send className="w-3.5 h-3.5 text-[#164E43] dark:text-[#34D399]" />
-                            Sent: <strong className="text-gray-900 dark:text-white">{client.usage?.totalSent || 0}</strong>
-                          </span>
-                        </div>
+                      )}
+                      <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-[#164E43]/10 dark:bg-[#34D399]/10 border border-[#164E43]/20 dark:border-[#34D399]/20 flex items-center justify-center text-[#164E43] dark:text-[#34D399] font-extrabold text-xl">
+                        {client.name.charAt(0).toUpperCase()}
                       </div>
                     </div>
 
-                    {/* Editable Custom Password Box + Save Password + Regenerate + Copy */}
-                    <div className="flex flex-wrap items-center gap-2 bg-[#F4F1EB] dark:bg-[#121418] p-2.5 rounded-xl border border-[#E6E2D8] dark:border-[#262930]">
-                      <div className="flex items-center gap-2 px-1">
-                        <KeyRound className="w-4 h-4 text-[#164E43] dark:text-[#34D399] shrink-0" />
-                        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Password:</span>
-                        <div className="relative flex items-center">
-                          <Input
-                            type={showPwd ? 'text' : 'password'}
-                            value={passwordDrafts[client.id] ?? client.password ?? ''}
-                            onChange={(e) =>
-                              setPasswordDrafts((prev) => ({
-                                ...prev,
-                                [client.id]: e.target.value,
-                              }))
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleSaveCustomPassword(client.id);
-                              }
-                            }}
-                            placeholder="নতুন পাসওয়ার্ড লিখুন..."
-                            className="h-8 w-40 sm:w-44 pr-7 text-xs font-extrabold font-mono text-gray-900 dark:text-white bg-white dark:bg-[#1C2026] border-[#E6E2D8] dark:border-[#2A2E37] rounded-lg"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setVisiblePasswords((prev) => ({ ...prev, [client.id]: !prev[client.id] }))
-                            }
-                            className="absolute right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                            title={showPwd ? 'Hide password' : 'Show password'}
-                          >
-                            {showPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                          </button>
-                        </div>
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h3 className="text-base sm:text-lg font-extrabold text-gray-900 dark:text-white truncate">
+                          {client.name}
+                        </h3>
+                        <span
+                          className={cn(
+                            "text-[11px] font-bold px-2.5 py-0.5 rounded-full border",
+                            isExpired
+                              ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30"
+                              : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+                          )}
+                        >
+                          {isExpired
+                            ? '⚠️ Expired — Auto Off'
+                            : remainingDays !== null
+                            ? `⏳ ${remainingDays} Days Left`
+                            : 'Active'}
+                        </span>
                       </div>
 
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => handleSaveCustomPassword(client.id)}
-                        disabled={savingId === client.id}
-                        className={cn(
-                          "h-8 px-3 text-xs font-bold rounded-lg text-white transition-all",
-                          savedPwdId === client.id
-                            ? "bg-emerald-600 hover:bg-emerald-600"
-                            : (passwordDrafts[client.id] ?? client.password) !== client.password
-                            ? "bg-emerald-600 hover:bg-emerald-500 shadow-sm ring-2 ring-emerald-500/30"
-                            : "bg-[#164E43] hover:bg-[#124238]"
-                        )}
-                      >
-                        {savedPwdId === client.id ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 mr-1" />
-                            Saved!
-                          </>
-                        ) : (
-                          <>
-                            <Edit3 className="w-3.5 h-3.5 mr-1" />
-                            Save Password
-                          </>
-                        )}
-                      </Button>
-
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleCopyPassword(client.id, passwordDrafts[client.id] ?? client.password)}
-                        className="h-8 px-2.5 text-xs font-bold rounded-lg border-[#E6E2D8] dark:border-[#2A2E37]"
-                      >
-                        {copiedId === client.id ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 mr-1 text-emerald-600" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5 mr-1" />
-                            Copy
-                          </>
-                        )}
-                      </Button>
-
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleRegeneratePassword(client.id)}
-                        disabled={savingId === client.id}
-                        className="h-8 px-2.5 text-xs font-bold rounded-lg border-[#E6E2D8] dark:border-[#2A2E37]"
-                        title="Auto-generate random password"
-                      >
-                        <RefreshCw className={cn("w-3.5 h-3.5 mr-1", savingId === client.id && "animate-spin")} />
-                        Auto Generate
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Quotas & Subscription Day Timer Controls Grid */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-3 border-t border-[#E6E2D8] dark:border-[#262930]">
-                    {/* Left: Quota Limits */}
-                    <div className="rounded-xl bg-[#F4F1EB] dark:bg-[#121418] p-3.5 border border-[#E6E2D8] dark:border-[#262930] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
-                            Max Numbers
-                          </label>
-                          <Input
-                            type="number"
-                            min={1}
-                            max={50}
-                            value={draft.maxNumbers}
-                            onChange={(e) =>
-                              setQuotaDrafts((prev) => ({
-                                ...prev,
-                                [client.id]: { ...draft, maxNumbers: Math.max(1, Number(e.target.value)) },
-                              }))
-                            }
-                            className="w-20 h-8 text-xs font-bold bg-white dark:bg-[#181A1F]"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
-                            Max Campaigns
-                          </label>
-                          <Input
-                            type="number"
-                            min={1}
-                            max={100}
-                            value={draft.maxCampaigns}
-                            onChange={(e) =>
-                              setQuotaDrafts((prev) => ({
-                                ...prev,
-                                [client.id]: { ...draft, maxCampaigns: Math.max(1, Number(e.target.value)) },
-                              }))
-                            }
-                            className="w-24 h-8 text-xs font-bold bg-white dark:bg-[#181A1F]"
-                          />
-                        </div>
-                      </div>
-
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => handleUpdateQuotas(client.id)}
-                        disabled={savingId === client.id}
-                        className="h-8 px-3.5 rounded-lg bg-[#164E43] hover:bg-[#124238] text-white text-xs font-bold shrink-0"
-                      >
-                        Save Limits
-                      </Button>
-                    </div>
-
-                    {/* Right: Day Timer / Validity Control & Reset */}
-                    <div className="rounded-xl bg-[#F4F1EB] dark:bg-[#121418] p-3.5 border border-[#E6E2D8] dark:border-[#262930] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="space-y-1.5">
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                          <CalendarClock className="w-3.5 h-3.5 text-[#164E43] dark:text-[#34D399]" />
-                          <span>Campaign Duration (Days) & Reset</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {[7, 15, 30].map((preset) => (
-                            <button
-                              key={preset}
-                              type="button"
-                              onClick={() => handleResetDays(client.id, preset)}
-                              className="px-2 py-1 rounded-md text-[11px] font-bold bg-white dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#2A2E37] hover:border-[#164E43] text-gray-800 dark:text-gray-200 transition-colors"
-                            >
-                              {preset}d
-                            </button>
-                          ))}
-                          <Input
-                            type="number"
-                            min={1}
-                            max={3650}
-                            value={daysVal}
-                            onChange={(e) =>
-                              setCustomDaysInput((prev) => ({
-                                ...prev,
-                                [client.id]: Math.max(0, Number(e.target.value)),
-                              }))
-                            }
-                            className="w-16 h-7 text-xs font-bold bg-white dark:bg-[#181A1F] px-2"
-                          />
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => handleResetDays(client.id, Number(daysVal))}
-                            disabled={savingId === client.id}
-                            className="h-7 px-2.5 rounded-lg bg-[#164E43] hover:bg-[#124238] text-white text-[11px] font-bold"
-                          >
-                            <RotateCcw className="w-3 h-3 mr-1" />
-                            Set / Reset Days
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleResetDays(client.id, 0)}
-                            disabled={savingId === client.id}
-                            className="h-7 px-2 rounded-lg border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 text-[11px] font-bold"
-                            title="Expire immediately & turn off all campaigns"
-                          >
-                            Stop (0d)
-                          </Button>
-                        </div>
+                      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
+                        <span className="flex items-center gap-1 font-medium">
+                          <Smartphone className="w-3.5 h-3.5 text-[#164E43] dark:text-[#34D399]" />
+                          Numbers: <strong className="text-gray-900 dark:text-white">{client.usage?.whatsappNumbersCount || 0} / {client.maxWhatsappNumbers}</strong>
+                        </span>
+                        <span className="flex items-center gap-1 font-medium">
+                          <Layers className="w-3.5 h-3.5 text-[#164E43] dark:text-[#34D399]" />
+                          Campaigns: <strong className="text-gray-900 dark:text-white">{client.usage?.campaignsCount || 0} / {client.maxCampaigns}</strong>
+                        </span>
+                        <span className="flex items-center gap-1 font-medium">
+                          <Send className="w-3.5 h-3.5 text-[#164E43] dark:text-[#34D399]" />
+                          Sent: <strong className="text-gray-900 dark:text-white">{client.usage?.totalSent || 0}</strong>
+                        </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Bottom Action Bar: Expand Details / Activities / Edit + Delete */}
-                  <div className="flex items-center justify-between pt-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExpandedClient((prev) => ({ ...prev, [client.id]: !prev[client.id] }))
-                      }
-                      className="flex items-center gap-2 text-xs font-bold text-[#164E43] dark:text-[#34D399] hover:underline cursor-pointer"
-                    >
-                      <Activity className="w-4 h-4" />
-                      <span>
-                        {isExpanded
-                          ? 'Hide Client Details, Campaigns & Activities'
-                          : `View Details, Edit Campaigns (${client.campaigns?.length || 0}) & Live Activity (${client.recentLogs?.length || 0})`}
-                      </span>
+                  {/* Right Expand / Collapse Indicator Button */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#F4F1EB] dark:bg-[#121418] text-[#164E43] dark:text-[#34D399] border border-[#E6E2D8] dark:border-[#262930]">
+                      {isExpanded ? 'Hide Details' : 'View All Details'}
                       {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteClient(client.id, client.name)}
-                      className="flex items-center gap-1 text-xs font-semibold text-red-600 dark:text-red-400 hover:underline"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Delete Client</span>
-                    </button>
+                    </span>
+                    <div className="sm:hidden p-2 rounded-xl bg-[#F4F1EB] dark:bg-[#121418] text-[#164E43] dark:text-[#34D399] border border-[#E6E2D8] dark:border-[#262930]">
+                      {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </div>
                   </div>
                 </div>
 
-                {/* Expanded Details, Campaigns Editor & Live Activities */}
+                {/* Expanded All Details (Password, Quotas, Days Reset, Campaigns, Numbers, Live Activity & Delete) */}
                 {isExpanded && (
-                  <div className="bg-[#F4F1EB]/70 dark:bg-[#121418] border-t border-[#E6E2D8] dark:border-[#262930] p-5 space-y-4">
-                    {/* Sub-navigation Tabs */}
+                  <div className="bg-[#F4F1EB]/70 dark:bg-[#121418] border-t border-[#E6E2D8] dark:border-[#262930] p-5 space-y-5 animate-in fade-in duration-150">
+                    {/* Row 1: Editable Custom Password Box + Delete Client Button */}
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-[#FBF9F4] dark:bg-[#181A1F] p-3.5 rounded-xl border border-[#E6E2D8] dark:border-[#262930]">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex items-center gap-2 px-1">
+                          <KeyRound className="w-4 h-4 text-[#164E43] dark:text-[#34D399] shrink-0" />
+                          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Password:</span>
+                          <div className="relative flex items-center">
+                            <Input
+                              type={showPwd ? 'text' : 'password'}
+                              value={passwordDrafts[client.id] ?? client.password ?? ''}
+                              onChange={(e) =>
+                                setPasswordDrafts((prev) => ({
+                                  ...prev,
+                                  [client.id]: e.target.value,
+                                }))
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleSaveCustomPassword(client.id);
+                                }
+                              }}
+                              placeholder="নতুন পাসওয়ার্ড লিখুন..."
+                              className="h-8 w-40 sm:w-44 pr-7 text-xs font-extrabold font-mono text-gray-900 dark:text-white bg-white dark:bg-[#1C2026] border-[#E6E2D8] dark:border-[#2A2E37] rounded-lg"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setVisiblePasswords((prev) => ({ ...prev, [client.id]: !prev[client.id] }))
+                              }
+                              className="absolute right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                              title={showPwd ? 'Hide password' : 'Show password'}
+                            >
+                              {showPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => handleSaveCustomPassword(client.id)}
+                          disabled={savingId === client.id}
+                          className={cn(
+                            "h-8 px-3 text-xs font-bold rounded-lg text-white transition-all",
+                            savedPwdId === client.id
+                              ? "bg-emerald-600 hover:bg-emerald-600"
+                              : (passwordDrafts[client.id] ?? client.password) !== client.password
+                              ? "bg-emerald-600 hover:bg-emerald-500 shadow-sm ring-2 ring-emerald-500/30"
+                              : "bg-[#164E43] hover:bg-[#124238]"
+                          )}
+                        >
+                          {savedPwdId === client.id ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 mr-1" />
+                              Saved!
+                            </>
+                          ) : (
+                            <>
+                              <Edit3 className="w-3.5 h-3.5 mr-1" />
+                              Save Password
+                            </>
+                          )}
+                        </Button>
+
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleCopyPassword(client.id, passwordDrafts[client.id] ?? client.password)}
+                          className="h-8 px-2.5 text-xs font-bold rounded-lg border-[#E6E2D8] dark:border-[#2A2E37]"
+                        >
+                          {copiedId === client.id ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+                              Copied
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5 mr-1" />
+                              Copy
+                            </>
+                          )}
+                        </Button>
+
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleRegeneratePassword(client.id)}
+                          disabled={savingId === client.id}
+                          className="h-8 px-2.5 text-xs font-bold rounded-lg border-[#E6E2D8] dark:border-[#2A2E37]"
+                          title="Auto-generate random password"
+                        >
+                          <RefreshCw className={cn("w-3.5 h-3.5 mr-1", savingId === client.id && "animate-spin")} />
+                          Auto Generate
+                        </Button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteClient(client.id, client.name)}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-500/10 px-3 py-1.5 rounded-lg transition-colors self-end lg:self-center"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete Client</span>
+                      </button>
+                    </div>
+
+                    {/* Row 2: Quotas & Subscription Day Timer Controls Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {/* Left: Quota Limits */}
+                      <div className="rounded-xl bg-[#FBF9F4] dark:bg-[#181A1F] p-3.5 border border-[#E6E2D8] dark:border-[#262930] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
+                              Max Numbers
+                            </label>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={50}
+                              value={draft.maxNumbers}
+                              onChange={(e) =>
+                                setQuotaDrafts((prev) => ({
+                                  ...prev,
+                                  [client.id]: { ...draft, maxNumbers: Math.max(1, Number(e.target.value)) },
+                                }))
+                              }
+                              className="w-20 h-8 text-xs font-bold bg-white dark:bg-[#121418]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
+                              Max Campaigns
+                            </label>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={100}
+                              value={draft.maxCampaigns}
+                              onChange={(e) =>
+                                setQuotaDrafts((prev) => ({
+                                  ...prev,
+                                  [client.id]: { ...draft, maxCampaigns: Math.max(1, Number(e.target.value)) },
+                                }))
+                              }
+                              className="w-24 h-8 text-xs font-bold bg-white dark:bg-[#121418]"
+                            />
+                          </div>
+                        </div>
+
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => handleUpdateQuotas(client.id)}
+                          disabled={savingId === client.id}
+                          className="h-8 px-3.5 rounded-lg bg-[#164E43] hover:bg-[#124238] text-white text-xs font-bold shrink-0"
+                        >
+                          Save Limits
+                        </Button>
+                      </div>
+
+                      {/* Right: Day Timer / Validity Control & Reset */}
+                      <div className="rounded-xl bg-[#FBF9F4] dark:bg-[#181A1F] p-3.5 border border-[#E6E2D8] dark:border-[#262930] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                            <CalendarClock className="w-3.5 h-3.5 text-[#164E43] dark:text-[#34D399]" />
+                            <span>Campaign Duration (Days) & Reset</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {[7, 15, 30].map((preset) => (
+                              <button
+                                key={preset}
+                                type="button"
+                                onClick={() => handleResetDays(client.id, preset)}
+                                className="px-2 py-1 rounded-md text-[11px] font-bold bg-white dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#2A2E37] hover:border-[#164E43] text-gray-800 dark:text-gray-200 transition-colors"
+                              >
+                                {preset}d
+                              </button>
+                            ))}
+                            <Input
+                              type="number"
+                              min={1}
+                              max={3650}
+                              value={daysVal}
+                              onChange={(e) =>
+                                setCustomDaysInput((prev) => ({
+                                  ...prev,
+                                  [client.id]: Math.max(0, Number(e.target.value)),
+                                }))
+                              }
+                              className="w-16 h-7 text-xs font-bold bg-white dark:bg-[#121418] px-2"
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => handleResetDays(client.id, Number(daysVal))}
+                              disabled={savingId === client.id}
+                              className="h-7 px-2.5 rounded-lg bg-[#164E43] hover:bg-[#124238] text-white text-[11px] font-bold"
+                            >
+                              <RotateCcw className="w-3 h-3 mr-1" />
+                              Set / Reset Days
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleResetDays(client.id, 0)}
+                              disabled={savingId === client.id}
+                              className="h-7 px-2 rounded-lg border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 text-[11px] font-bold"
+                              title="Expire immediately & turn off all campaigns"
+                            >
+                              Stop (0d)
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Row 3: Sub-navigation Tabs */}
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2">
                         <button
