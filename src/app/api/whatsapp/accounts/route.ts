@@ -41,14 +41,14 @@ export async function GET(request: Request) {
       };
     });
 
-    // If engine has active sessions not yet stored in DB, include them (owned by admin)
+    // If engine has active connected sessions not yet stored in DB, include them (owned by admin)
     for (const live of engineAccounts) {
-      if (!accounts.some((a) => a.id === live.id)) {
+      if (live.status === 'connected' && !accounts.some((a) => a.id === live.id)) {
         accounts.push({
           id: live.id,
           name: live.name || (live.id === 'main' ? 'Primary WhatsApp' : `SIM ${live.id.slice(-4)}`),
           phoneNumber: live.phoneNumber || '',
-          status: live.status || 'disconnected',
+          status: live.status,
           qrCode: live.qrCode || '',
           lastConnected: new Date().toISOString(),
           createdAt: new Date().toISOString(),

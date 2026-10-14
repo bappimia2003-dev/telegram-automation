@@ -784,7 +784,8 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
   };
 
   useEffect(() => {
-    fetch(`/api/whatsapp/accounts?t=${Date.now()}`, { cache: 'no-store' })
+    const clientParam = initialData?.clientId ? `&clientId=${encodeURIComponent(initialData.clientId)}` : '';
+    fetch(`/api/whatsapp/accounts?t=${Date.now()}${clientParam}`, { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
         if (data.ok && Array.isArray(data.accounts)) {
@@ -795,7 +796,7 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
         }
       })
       .catch((err) => console.error('Failed to load accounts in form:', err));
-  }, [initialData?.accountId]);
+  }, [initialData?.accountId, initialData?.clientId]);
 
   const toggleVariantOpen = (id: string) => {
     setOpenVariantIds((prev) => ({

@@ -382,8 +382,8 @@ export async function getAllDbAccounts(): Promise<WaConnection[]> {
 export async function deleteDbAccount(accountId: string): Promise<void> {
   if (!supabase) return;
   try {
-    await supabase.from('wa_connection').delete().eq('id', accountId);
-    await supabase.from('wa_connection').delete().eq('id', `auth_${accountId}`);
+    await supabase.from('wa_connection').delete().in('id', [accountId, `auth_${accountId}`]);
+    await supabase.from('wa_connection').delete().like('id', `auth_${accountId}%`);
   } catch (e: any) {
     errLog('DB', 'Exception deleting account from db:', e.message);
   }

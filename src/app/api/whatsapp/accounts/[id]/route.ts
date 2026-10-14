@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getWaConnection, updateWaConnection, deleteWaConnection } from '@/lib/whatsappDb';
+import { getSessionInfo } from '@/lib/auth';
 
 const WA_ENGINE_URL = process.env.WA_ENGINE_URL || 'http://localhost:3005';
 
@@ -120,15 +121,30 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const session = await getSessionInfo();
+    if (!session.authenticated) {
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     const accountId = params.id;
+    const conn = await getWaConnection(accountId);
+
+    if (conn && session.role === 'client' && conn.clientId !== session.clientId) {
+      return NextResponse.json(
+        { ok: false, error: 'Forbidden: You can only delete your own WhatsApp numbers' },
+        { status: 403 }
+      );
+    }
 
     // 1. Tell engine to disconnect & delete
     try {
       await fetch(`${WA_ENGINE_URL}/accounts/${accountId}`, {
         method: 'DELETE',
-        signal: AbortSignal.timeout(3000),
+        signal: AbortSignal.timeout(6000),
       });
-    } catch {}
+    } catch (e: any) {
+      console.warn('Engine delete notification failed/timed out:', e.message);
+    }
 
     // 2. Delete from DB
     await deleteWaConnection(accountId);

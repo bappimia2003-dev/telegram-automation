@@ -58,6 +58,12 @@ export default function AdminClientsPage() {
   const [quotaDrafts, setQuotaDrafts] = useState<Record<string, { maxNumbers: number; maxCampaigns: number }>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
 
+  // Add number modal for client
+  const [addNumberClientId, setAddNumberClientId] = useState<string | null>(null);
+  const [newClientAccName, setNewClientAccName] = useState('');
+  const [newClientAccPhone, setNewClientAccPhone] = useState('');
+  const [addingNumber, setAddingNumber] = useState(false);
+
   const fetchClients = async () => {
     try {
       const res = await fetch(`/api/whatsapp/clients?t=${Date.now()}`, { cache: 'no-store' });
@@ -270,6 +276,70 @@ export default function AdminClientsPage() {
       await fetchClients();
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleAddNumberForClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addNumberClientId || !newClientAccName.trim()) return;
+    setAddingNumber(true);
+    try {
+      const res = await fetch('/api/whatsapp/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newClientAccName.trim(),
+          phoneNumber: newClientAccPhone.trim(),
+          clientId: addNumberClientId,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setAddNumberClientId(null);
+        setNewClientAccName('');
+        setNewClientAccPhone('');
+        await fetchClients();
+      } else {
+        alert(data.error || 'Failed to add number for client');
+      }
+    } catch (err: any) {
+      alert('Error adding number: ' + err.message);
+    } finally {
+      setAddingNumber(false);
+    }
+  };
+
+  const handleDeleteClientAccount = async (accountId: string, clientName: string, accountName: string) => {
+    if (!confirm(`Are you sure you want to delete number "${accountName}" for client "${clientName}"?`)) return;
+    try {
+      const res = await fetch(`/api/whatsapp/accounts/${accountId}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        await fetchClients();
+      } else {
+        alert(data.error || 'Failed to delete number');
+      }
+    } catch (err: any) {
+      alert('Error deleting number: ' + err.message);
+    }
+  };
+
+  const handleDisconnectClientAccount = async (accountId: string) => {
+    if (!confirm('Are you sure you want to disconnect this WhatsApp number?')) return;
+    try {
+      const res = await fetch(`/api/whatsapp/accounts/${accountId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'disconnect' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        await fetchClients();
+      } else {
+        alert(data.error || 'Failed to disconnect number');
+      }
+    } catch (err: any) {
+      alert('Error disconnecting number: ' + err.message);
     }
   };
 
@@ -883,34 +953,85 @@ export default function AdminClientsPage() {
 
                     {/* Tab 2: Client WhatsApp Numbers */}
                     {currentTab === 'numbers' && (
-                      <div>
+                      <div className="space-y-2.5">
+                        <div className="flex items-center justify-between gap-2 pb-0.5">
+                          <span className="text-[11px] font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                            <Smartphone className="w-3.5 h-3.5 text-[#164E43] dark:text-[#34D399]" />
+                            WhatsApp Numbers ({client.accounts?.length || 0}/{client.maxWhatsappNumbers})
+                          </span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => {
+                              if ((client.accounts?.length || 0) >= client.maxWhatsappNumbers) {
+                                alert(`এই ক্লায়েন্টের হোয়াটসঅ্যাপ নাম্বার লিমিট পূর্ণ (${client.maxWhatsappNumbers}/${client.maxWhatsappNumbers})। আগে লিমিট বাড়ান।`);
+                                return;
+                              }
+                              setAddNumberClientId(client.id);
+                              setNewClientAccName(`SIM-${client.name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8)}`);
+                              setNewClientAccPhone('');
+                            }}
+                            className="h-6 px-2.5 text-[10px] font-bold rounded-md bg-[#164E43] hover:bg-[#124238] text-white flex items-center gap-1 shadow-xs active:scale-95 transition-transform"
+                          >
+                            <Plus className="w-3 h-3" />
+                            Add Number for Client
+                          </Button>
+                        </div>
+
                         {(!client.accounts || client.accounts.length === 0) ? (
-                          <div className="text-[11px] text-gray-500 dark:text-gray-400 py-2 px-3 text-center bg-white dark:bg-[#181A1F] rounded-lg border border-[#E6E2D8] dark:border-[#262930]">
-                            এই ক্লায়েন্ট এখনো কোনো হোয়াটসঅ্যাপ নাম্বার কানেক্ট করেনি।
+                          <div className="text-[11px] text-gray-500 dark:text-gray-400 py-3 px-3 text-center bg-white dark:bg-[#181A1F] rounded-lg border border-[#E6E2D8] dark:border-[#262930]">
+                            এই ক্লায়েন্ট এখনো কোনো হোয়াটসঅ্যাপ নাম্বার যুক্ত করেনি। উপরে 'Add Number for Client' বাটনে ক্লিক করে যোগ করতে পারেন।
                           </div>
                         ) : (
                           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                             {client.accounts.map((acc: any) => (
                               <div
                                 key={acc.id}
-                                className="px-3 py-2 rounded-lg bg-white dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] flex items-center justify-between"
+                                className="px-3 py-2 rounded-lg bg-white dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] flex items-center justify-between gap-2 shadow-xs"
                               >
-                                <div>
-                                  <div className="text-xs font-bold text-gray-900 dark:text-white">{acc.name}</div>
-                                  <div className="text-[10px] text-gray-500 dark:text-gray-400">
-                                    {acc.phoneNumber ? `+${acc.phoneNumber}` : 'No number linked'}
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <span
+                                      className={cn(
+                                        "w-2 h-2 rounded-full shrink-0",
+                                        acc.status === 'connected' ? "bg-emerald-500" : "bg-gray-400"
+                                      )}
+                                    />
+                                    <span className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                                      {acc.name}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] text-gray-500 dark:text-gray-400 font-mono mt-0.5 truncate">
+                                    {acc.phoneNumber ? `+${acc.phoneNumber}` : 'No phone linked'}
                                   </div>
                                 </div>
-                                <span
-                                  className={cn(
-                                    "text-[10px] font-bold px-2 py-0.5 rounded-full",
-                                    acc.status === 'connected'
-                                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
-                                      : "bg-gray-500/15 text-gray-600 dark:text-gray-400"
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {acc.status === 'connected' ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDisconnectClientAccount(acc.id)}
+                                      className="p-1.5 rounded-md text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                                      title="Disconnect WhatsApp"
+                                    >
+                                      <Power className="w-3.5 h-3.5" />
+                                    </button>
+                                  ) : (
+                                    <Link href={`/whatsapp/numbers/${acc.id}`}>
+                                      <span className="text-[10px] font-bold text-amber-600 hover:underline px-1 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
+                                        Scan QR
+                                      </span>
+                                    </Link>
                                   )}
-                                >
-                                  {acc.status}
-                                </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteClientAccount(acc.id, client.name, acc.name)}
+                                    className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                                    title="Delete Number"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -961,6 +1082,68 @@ export default function AdminClientsPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Add WhatsApp Number for Client Modal */}
+      {addNumberClientId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[#FAF8F5] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-[#E6E2D8] dark:border-[#262930]">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-[#164E43] dark:text-[#34D399]" />
+                <span>Add Number for Client</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setAddNumberClientId(null)}
+                className="text-gray-400 hover:text-gray-600 text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleAddNumberForClient} className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Account / SIM Name</label>
+                <Input
+                  value={newClientAccName}
+                  onChange={(e) => setNewClientAccName(e.target.value)}
+                  placeholder="e.g. Sales SIM 1"
+                  required
+                  className="mt-1 h-9 text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">Phone Number (Optional)</label>
+                <Input
+                  value={newClientAccPhone}
+                  onChange={(e) => setNewClientAccPhone(e.target.value)}
+                  placeholder="e.g. 8801700000000"
+                  className="mt-1 h-9 text-xs font-mono"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setAddNumberClientId(null)}
+                  className="h-8 text-xs font-semibold"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={addingNumber || !newClientAccName.trim()}
+                  className="h-8 text-xs font-bold bg-[#164E43] hover:bg-[#124238] text-white"
+                >
+                  {addingNumber ? 'Adding...' : 'Add Number'}
+                </Button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

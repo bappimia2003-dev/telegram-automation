@@ -69,7 +69,7 @@ export function WhatsAppNumbers({
   };
 
   useEffect(() => {
-    if (propAccounts && propAccounts.length > 0) {
+    if (propAccounts !== undefined) {
       setAccounts(propAccounts);
       try {
         localStorage.setItem('wa_cached_accounts', JSON.stringify(propAccounts));
@@ -281,13 +281,25 @@ export function WhatsAppNumbers({
     if (!confirm('Delete this WhatsApp number account? All associated campaigns will default to "All Numbers".')) return;
     setLoading(true);
     try {
-      await fetch(`/api/whatsapp/accounts/${accountId}`, { method: 'DELETE' });
-      if (qrModalAccount?.id === accountId) setQrModalAccount(null);
-      setAccounts((prev) => prev.filter((a) => a.id !== accountId));
-      await fetchAccounts();
-      if (onDataChange) onDataChange();
-    } catch (err) {
+      const res = await fetch(`/api/whatsapp/accounts/${accountId}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        if (qrModalAccount?.id === accountId) setQrModalAccount(null);
+        setAccounts((prev) => {
+          const next = prev.filter((a) => a.id !== accountId);
+          try {
+            localStorage.setItem('wa_cached_accounts', JSON.stringify(next));
+          } catch {}
+          return next;
+        });
+        if (onDataChange) onDataChange();
+        await fetchAccounts();
+      } else {
+        alert(data.error || 'Failed to delete account');
+      }
+    } catch (err: any) {
       console.error('Failed deleting account:', err);
+      alert('Error deleting account: ' + (err.message || 'Network error'));
     } finally {
       setLoading(false);
     }

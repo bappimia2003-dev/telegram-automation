@@ -698,14 +698,29 @@ export async function updateWaConnection(updates: Partial<WaConnection> & { id?:
 
 export async function deleteWaConnection(id: string): Promise<boolean> {
   connectionsCache = null;
+  connectionsCacheTime = 0;
   const supabase = getSupabase();
   if (id === 'main') {
     (waMemory as any).connection = null;
   }
   if (!supabase) return true;
-  const { error } = await supabase.from('wa_connection').delete().eq('id', id);
-  if (error) console.error('Error deleting wa_connection:', error.message);
-  return !error;
+  try {
+    const { error } = await supabase.from('wa_connection').delete().in('id', [id, `auth_${id}`]);
+    if (error) console.error('Error deleting wa_connection:', error.message);
+    await supabase.from('wa_connection').delete().like('id', `auth_${id}%`);
+
+    // Reset any campaign assigned to this account back to 'all'
+    const campaigns = await getAllCampaigns();
+    for (const c of campaigns) {
+      if (c.accountId === id) {
+        await updateCampaign(c.id, { accountId: 'all' });
+      }
+    }
+    return !error;
+  } catch (err: any) {
+    console.error('Exception deleting wa_connection:', err.message);
+    return false;
+  }
 }
 
 // =============================================
