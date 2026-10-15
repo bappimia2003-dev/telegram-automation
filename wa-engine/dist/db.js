@@ -3,12 +3,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.invalidateEngineCampaignsCache = invalidateEngineCampaignsCache;
 exports.getActiveCampaigns = getActiveCampaigns;
 exports.isAlreadyContacted = isAlreadyContacted;
 exports.markAsContacted = markAsContacted;
 exports.incrementCampaignSentCount = incrementCampaignSentCount;
 exports.addMessageLog = addMessageLog;
 exports.updateWaConnectionState = updateWaConnectionState;
+exports.invalidateEngineAccountsCache = invalidateEngineAccountsCache;
 exports.getAllDbAccounts = getAllDbAccounts;
 exports.deleteDbAccount = deleteDbAccount;
 exports.backupAuthSession = backupAuthSession;
@@ -33,8 +35,8 @@ const path_1 = __importDefault(require("path"));
 const zlib_1 = __importDefault(require("zlib"));
 const utils_js_1 = require("./utils.js");
 dotenv_1.default.config();
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://vqnoaodavbiyenbqqbib.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || 'sb_publishable_ftsZlmW-ROg_v-d5CtmurQ_ukFS3aEF';
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_KEY = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 let supabase = null;
 if (SUPABASE_URL && SUPABASE_KEY) {
     supabase = (0, supabase_js_1.createClient)(SUPABASE_URL, SUPABASE_KEY, {
@@ -155,7 +157,19 @@ function rowToCampaign(r) {
         updatedAt: r.updated_at || new Date().toISOString(),
     };
 }
-async function getActiveCampaigns() {
+// In-Memory Cache for Campaigns to prevent Supabase Egress Quota Exhaustion
+let cachedActiveCampaigns = null;
+let lastCampaignsFetchTime = 0;
+const CAMPAIGNS_CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL
+function invalidateEngineCampaignsCache() {
+    cachedActiveCampaigns = null;
+    lastCampaignsFetchTime = 0;
+}
+async function getActiveCampaigns(force = false) {
+    const now = Date.now();
+    if (!force && cachedActiveCampaigns && (now - lastCampaignsFetchTime < CAMPAIGNS_CACHE_TTL_MS)) {
+        return cachedActiveCampaigns;
+    }
     if (!supabase)
         return [];
     try {
@@ -206,6 +220,8 @@ async function getActiveCampaigns() {
             }
             activeCampaigns.push(camp);
         }
+        cachedActiveCampaigns = activeCampaigns;
+        lastCampaignsFetchTime = now;
         return activeCampaigns;
     }
     catch (e) {
@@ -342,12 +358,24 @@ async function updateWaConnectionState(accountId, updates) {
         if (updates.lastConnected !== undefined)
             row.last_connected = updates.lastConnected;
         await supabase.from('wa_connection').upsert(row);
+        invalidateEngineAccountsCache();
     }
     catch (e) {
         (0, utils_js_1.errLog)('DB', 'Exception updating wa_connection state:', e.message);
     }
 }
-async function getAllDbAccounts() {
+let cachedDbAccounts = null;
+let lastAccountsFetchTime = 0;
+const ACCOUNTS_CACHE_TTL_MS = 30 * 1000;
+function invalidateEngineAccountsCache() {
+    cachedDbAccounts = null;
+    lastAccountsFetchTime = 0;
+}
+async function getAllDbAccounts(force = false) {
+    const now = Date.now();
+    if (!force && cachedDbAccounts && (now - lastAccountsFetchTime < ACCOUNTS_CACHE_TTL_MS)) {
+        return cachedDbAccounts;
+    }
     if (!supabase)
         return [];
     try {
@@ -362,7 +390,7 @@ async function getAllDbAccounts() {
             (0, utils_js_1.errLog)('DB', 'Error getting db accounts:', error.message);
             return [];
         }
-        return (data || []).map((r) => {
+        const mapped = (data || []).map((r) => {
             let name = r.id === 'main' ? 'Primary WhatsApp' : `SIM ${r.id.slice(-4)}`;
             let phoneNumber = r.phone_number || '';
             let clientId = 'admin';
@@ -390,6 +418,9 @@ async function getAllDbAccounts() {
                 clientId,
             };
         });
+        cachedDbAccounts = mapped;
+        lastAccountsFetchTime = now;
+        return mapped;
     }
     catch (e) {
         (0, utils_js_1.errLog)('DB', 'Exception getting db accounts:', e.message);
@@ -400,8 +431,9 @@ async function deleteDbAccount(accountId) {
     if (!supabase)
         return;
     try {
-        await supabase.from('wa_connection').delete().eq('id', accountId);
-        await supabase.from('wa_connection').delete().eq('id', `auth_${accountId}`);
+        await supabase.from('wa_connection').delete().in('id', [accountId, `auth_${accountId}`]);
+        await supabase.from('wa_connection').delete().like('id', `auth_${accountId}%`);
+        invalidateEngineAccountsCache();
     }
     catch (e) {
         (0, utils_js_1.errLog)('DB', 'Exception deleting account from db:', e.message);

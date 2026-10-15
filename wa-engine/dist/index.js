@@ -173,6 +173,8 @@ app.put('/accounts/:id', (req, res) => {
 // 8. Follow-up: Sync settings and variations
 app.post('/followup/sync', (_req, res) => {
     (0, utils_js_1.log)('FOLLOWUP', '🔄 Follow-up configuration sync received from web dashboard.');
+    (0, db_js_1.invalidateEngineCampaignsCache)();
+    (0, db_js_1.invalidateEngineAccountsCache)();
     res.json({ ok: true });
 });
 // --- Legacy / Default routes for 'main' account ---
@@ -222,7 +224,7 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // Start the follow-up scheduler (checks every 60s for pending follow-ups)
     (0, followupScheduler_js_1.startFollowupScheduler)();
-    // Watcher: Poll DB every 12s for any account marked 'connecting' or 'connected' without an active socket
+    // Watcher: Poll DB every 45s for any account marked 'connecting' or 'connected' without an active socket
     setInterval(async () => {
         try {
             const dbAccounts = await (0, db_js_1.getAllDbAccounts)();
@@ -238,5 +240,5 @@ app.listen(PORT, '0.0.0.0', () => {
         catch (err) {
             // transient network error
         }
-    }, 12000);
+    }, 45000);
 });

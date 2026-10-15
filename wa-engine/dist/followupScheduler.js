@@ -855,8 +855,8 @@ async function processCampaignFollowups(campaign) {
  * Main scheduler loop: runs every 15 seconds in background with strict mutex lock.
  */
 function startFollowupScheduler() {
-    const INTERVAL_MS = 15 * 1000; // 15 seconds
-    (0, utils_js_1.log)('FOLLOWUP', '🚀 Intelligent Multi-Step Follow-up Scheduler started (polling every 15s with staggered anti-blast pacing)...');
+    const INTERVAL_MS = 30 * 1000; // 30 seconds
+    (0, utils_js_1.log)('FOLLOWUP', '🚀 Intelligent Multi-Step Follow-up Scheduler started (polling every 30s with staggered anti-blast pacing)...');
     const runCycle = async () => {
         if (isCycleRunning)
             return; // Prevent concurrent cycle execution
