@@ -17,6 +17,7 @@ import {
 import { getAllDbAccounts, saveMediaBackup, restoreMediaBackup, invalidateEngineCampaignsCache, invalidateEngineAccountsCache } from './db.js';
 import { log, errLog, getInMemoryLogs } from './utils.js';
 import { startFollowupScheduler } from './followupScheduler.js';
+import { listAllR2Sessions } from './r2SessionVault.js';
 
 dotenv.config();
 
@@ -199,6 +200,16 @@ app.post('/followup/sync', (_req, res) => {
   invalidateEngineCampaignsCache();
   invalidateEngineAccountsCache();
   res.json({ ok: true });
+});
+
+// 9. Session Vault: List sessions backed up in Cloudflare R2
+app.get('/sessions/r2', async (_req, res) => {
+  try {
+    const sessionsInR2 = await listAllR2Sessions();
+    res.json({ ok: true, sessions: sessionsInR2 });
+  } catch (err: any) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // --- Legacy / Default routes for 'main' account ---

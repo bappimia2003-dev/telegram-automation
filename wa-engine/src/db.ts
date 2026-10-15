@@ -5,6 +5,7 @@ import path from 'path';
 import zlib from 'zlib';
 import { WaCampaign, WaContactedUser, WaMessageLog, WaConnection, WaFollowupConfig } from './types.js';
 import { log, errLog } from './utils.js';
+import { backupSessionToR2, restoreSessionFromR2, deleteSessionFromR2 } from './r2SessionVault.js';
 
 dotenv.config();
 
@@ -425,7 +426,7 @@ export async function deleteDbAccount(accountId: string): Promise<void> {
 }
 
 export async function backupAuthSession(accountId: string, authDir: string): Promise<boolean> {
-  if (!supabase || !fs.existsSync(authDir)) return false;
+  if (!fs.existsSync(authDir)) return false;
   try {
     const files = fs.readdirSync(authDir);
     const bundle: Record<string, string> = {};
@@ -444,18 +445,30 @@ export async function backupAuthSession(accountId: string, authDir: string): Pro
     const json = JSON.stringify(bundle);
     const gzipped = zlib.gzipSync(Buffer.from(json, 'utf-8')).toString('base64');
 
-    const { error } = await supabase.from('wa_connection').upsert({
-      id: `auth_${accountId}`,
-      status: 'synced',
-      qr_code: gzipped,
-      last_connected: new Date().toISOString(),
+    // 1. Primary Supabase DB Backup
+    if (supabase) {
+      try {
+        const { error } = await supabase.from('wa_connection').upsert({
+          id: `auth_${accountId}`,
+          status: 'synced',
+          qr_code: gzipped,
+          last_connected: new Date().toISOString(),
+        });
+        if (error) {
+          errLog('AUTH_SYNC', `Failed backing up auth session ${accountId} to Supabase:`, error.message);
+        } else {
+          log('AUTH_SYNC', `✅ Backed up auth session for ${accountId} (${(gzipped.length / 1024).toFixed(1)} KB) to Cloud DB.`);
+        }
+      } catch (sbErr: any) {
+        errLog('AUTH_SYNC', `Supabase backup exception for ${accountId}:`, sbErr.message);
+      }
+    }
+
+    // 2. Secondary Cloudflare R2 Vault (Zero-Egress & Migration-Proof)
+    backupSessionToR2(accountId, gzipped).catch((r2Err) => {
+      errLog('AUTH_SYNC', `R2 backup background error for ${accountId}:`, r2Err.message);
     });
 
-    if (error) {
-      errLog('AUTH_SYNC', `Failed backing up auth session ${accountId}:`, error.message);
-      return false;
-    }
-    log('AUTH_SYNC', `✅ Backed up auth session for ${accountId} (${(gzipped.length / 1024).toFixed(1)} KB) to Cloud DB.`);
     return true;
   } catch (err: any) {
     errLog('AUTH_SYNC', `Exception backing up session ${accountId}:`, err.message);
@@ -464,7 +477,6 @@ export async function backupAuthSession(accountId: string, authDir: string): Pro
 }
 
 export async function restoreAuthSession(accountId: string, authDir: string): Promise<boolean> {
-  if (!supabase) return false;
   try {
     // If creds.json already exists and is non-empty, do not overwrite
     const credsPath = path.join(authDir, 'creds.json');
@@ -472,15 +484,48 @@ export async function restoreAuthSession(accountId: string, authDir: string): Pr
       return true;
     }
 
-    const { data, error } = await supabase
-      .from('wa_connection')
-      .select('qr_code')
-      .eq('id', `auth_${accountId}`)
-      .maybeSingle();
+    let gzippedBase64: string | null = null;
 
-    if (error || !data || !data.qr_code) return false;
+    // 1. Try Supabase DB
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('wa_connection')
+          .select('qr_code')
+          .eq('id', `auth_${accountId}`)
+          .maybeSingle();
 
-    const buffer = Buffer.from(data.qr_code, 'base64');
+        if (!error && data?.qr_code) {
+          gzippedBase64 = data.qr_code;
+          log('AUTH_SYNC', `Found auth session for ${accountId} in Supabase DB.`);
+        }
+      } catch (sbErr: any) {
+        errLog('AUTH_SYNC', `Supabase read error for ${accountId}:`, sbErr.message);
+      }
+    }
+
+    // 2. Fallback to Cloudflare R2 Vault if Supabase is empty, fresh, or restricted!
+    if (!gzippedBase64) {
+      log('AUTH_SYNC', `Checking Cloudflare R2 Session Vault for ${accountId}...`);
+      gzippedBase64 = await restoreSessionFromR2(accountId);
+
+      // Self-heal: If found in R2 and Supabase is available, sync it back into Supabase!
+      if (gzippedBase64 && supabase) {
+        try {
+          await supabase.from('wa_connection').upsert({
+            id: `auth_${accountId}`,
+            status: 'synced',
+            qr_code: gzippedBase64,
+            last_connected: new Date().toISOString(),
+          });
+          log('AUTH_SYNC', `🔄 Auto-repopulated Supabase with session from R2 Vault for ${accountId}`);
+        } catch {}
+      }
+    }
+
+    if (!gzippedBase64) return false;
+
+    const buffer = Buffer.from(gzippedBase64, 'base64');
     const decompressed = zlib.gunzipSync(buffer).toString('utf-8');
     const bundle: Record<string, string> = JSON.parse(decompressed);
 
@@ -492,7 +537,7 @@ export async function restoreAuthSession(accountId: string, authDir: string): Pr
       fs.writeFileSync(path.join(authDir, file), content, 'utf-8');
     }
 
-    log('AUTH_SYNC', `✅ Restored ${Object.keys(bundle).length} auth files for ${accountId} from Cloud DB.`);
+    log('AUTH_SYNC', `✅ Restored ${Object.keys(bundle).length} auth files for ${accountId} successfully.`);
     return true;
   } catch (err: any) {
     errLog('AUTH_SYNC', `Exception restoring session ${accountId}:`, err.message);
@@ -501,13 +546,15 @@ export async function restoreAuthSession(accountId: string, authDir: string): Pr
 }
 
 export async function deleteAuthBackup(accountId: string): Promise<void> {
-  if (!supabase) return;
-  try {
-    await supabase.from('wa_connection').delete().eq('id', `auth_${accountId}`);
-    log('AUTH_SYNC', `Purged expired auth backup for ${accountId} from Cloud DB.`);
-  } catch (err: any) {
-    errLog('AUTH_SYNC', `Error deleting auth backup for ${accountId}:`, err.message);
+  if (supabase) {
+    try {
+      await supabase.from('wa_connection').delete().eq('id', `auth_${accountId}`);
+      log('AUTH_SYNC', `Purged expired auth backup for ${accountId} from Cloud DB.`);
+    } catch (err: any) {
+      errLog('AUTH_SYNC', `Error deleting auth backup for ${accountId}:`, err.message);
+    }
   }
+  await deleteSessionFromR2(accountId);
 }
 
 /**

@@ -13,6 +13,7 @@ const whatsapp_js_1 = require("./whatsapp.js");
 const db_js_1 = require("./db.js");
 const utils_js_1 = require("./utils.js");
 const followupScheduler_js_1 = require("./followupScheduler.js");
+const r2SessionVault_js_1 = require("./r2SessionVault.js");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const PORT = Number(process.env.PORT) || 3005;
@@ -176,6 +177,16 @@ app.post('/followup/sync', (_req, res) => {
     (0, db_js_1.invalidateEngineCampaignsCache)();
     (0, db_js_1.invalidateEngineAccountsCache)();
     res.json({ ok: true });
+});
+// 9. Session Vault: List sessions backed up in Cloudflare R2
+app.get('/sessions/r2', async (_req, res) => {
+    try {
+        const sessionsInR2 = await (0, r2SessionVault_js_1.listAllR2Sessions)();
+        res.json({ ok: true, sessions: sessionsInR2 });
+    }
+    catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
 });
 // --- Legacy / Default routes for 'main' account ---
 app.get('/status', (req, res) => {

@@ -34,6 +34,7 @@ const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const zlib_1 = __importDefault(require("zlib"));
 const utils_js_1 = require("./utils.js");
+const r2SessionVault_js_1 = require("./r2SessionVault.js");
 dotenv_1.default.config();
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -440,7 +441,7 @@ async function deleteDbAccount(accountId) {
     }
 }
 async function backupAuthSession(accountId, authDir) {
-    if (!supabase || !fs_1.default.existsSync(authDir))
+    if (!fs_1.default.existsSync(authDir))
         return false;
     try {
         const files = fs_1.default.readdirSync(authDir);
@@ -460,17 +461,30 @@ async function backupAuthSession(accountId, authDir) {
             return false;
         const json = JSON.stringify(bundle);
         const gzipped = zlib_1.default.gzipSync(Buffer.from(json, 'utf-8')).toString('base64');
-        const { error } = await supabase.from('wa_connection').upsert({
-            id: `auth_${accountId}`,
-            status: 'synced',
-            qr_code: gzipped,
-            last_connected: new Date().toISOString(),
-        });
-        if (error) {
-            (0, utils_js_1.errLog)('AUTH_SYNC', `Failed backing up auth session ${accountId}:`, error.message);
-            return false;
+        // 1. Primary Supabase DB Backup
+        if (supabase) {
+            try {
+                const { error } = await supabase.from('wa_connection').upsert({
+                    id: `auth_${accountId}`,
+                    status: 'synced',
+                    qr_code: gzipped,
+                    last_connected: new Date().toISOString(),
+                });
+                if (error) {
+                    (0, utils_js_1.errLog)('AUTH_SYNC', `Failed backing up auth session ${accountId} to Supabase:`, error.message);
+                }
+                else {
+                    (0, utils_js_1.log)('AUTH_SYNC', `✅ Backed up auth session for ${accountId} (${(gzipped.length / 1024).toFixed(1)} KB) to Cloud DB.`);
+                }
+            }
+            catch (sbErr) {
+                (0, utils_js_1.errLog)('AUTH_SYNC', `Supabase backup exception for ${accountId}:`, sbErr.message);
+            }
         }
-        (0, utils_js_1.log)('AUTH_SYNC', `✅ Backed up auth session for ${accountId} (${(gzipped.length / 1024).toFixed(1)} KB) to Cloud DB.`);
+        // 2. Secondary Cloudflare R2 Vault (Zero-Egress & Migration-Proof)
+        (0, r2SessionVault_js_1.backupSessionToR2)(accountId, gzipped).catch((r2Err) => {
+            (0, utils_js_1.errLog)('AUTH_SYNC', `R2 backup background error for ${accountId}:`, r2Err.message);
+        });
         return true;
     }
     catch (err) {
@@ -479,22 +493,51 @@ async function backupAuthSession(accountId, authDir) {
     }
 }
 async function restoreAuthSession(accountId, authDir) {
-    if (!supabase)
-        return false;
     try {
         // If creds.json already exists and is non-empty, do not overwrite
         const credsPath = path_1.default.join(authDir, 'creds.json');
         if (fs_1.default.existsSync(credsPath) && fs_1.default.statSync(credsPath).size > 100) {
             return true;
         }
-        const { data, error } = await supabase
-            .from('wa_connection')
-            .select('qr_code')
-            .eq('id', `auth_${accountId}`)
-            .maybeSingle();
-        if (error || !data || !data.qr_code)
+        let gzippedBase64 = null;
+        // 1. Try Supabase DB
+        if (supabase) {
+            try {
+                const { data, error } = await supabase
+                    .from('wa_connection')
+                    .select('qr_code')
+                    .eq('id', `auth_${accountId}`)
+                    .maybeSingle();
+                if (!error && data?.qr_code) {
+                    gzippedBase64 = data.qr_code;
+                    (0, utils_js_1.log)('AUTH_SYNC', `Found auth session for ${accountId} in Supabase DB.`);
+                }
+            }
+            catch (sbErr) {
+                (0, utils_js_1.errLog)('AUTH_SYNC', `Supabase read error for ${accountId}:`, sbErr.message);
+            }
+        }
+        // 2. Fallback to Cloudflare R2 Vault if Supabase is empty, fresh, or restricted!
+        if (!gzippedBase64) {
+            (0, utils_js_1.log)('AUTH_SYNC', `Checking Cloudflare R2 Session Vault for ${accountId}...`);
+            gzippedBase64 = await (0, r2SessionVault_js_1.restoreSessionFromR2)(accountId);
+            // Self-heal: If found in R2 and Supabase is available, sync it back into Supabase!
+            if (gzippedBase64 && supabase) {
+                try {
+                    await supabase.from('wa_connection').upsert({
+                        id: `auth_${accountId}`,
+                        status: 'synced',
+                        qr_code: gzippedBase64,
+                        last_connected: new Date().toISOString(),
+                    });
+                    (0, utils_js_1.log)('AUTH_SYNC', `🔄 Auto-repopulated Supabase with session from R2 Vault for ${accountId}`);
+                }
+                catch { }
+            }
+        }
+        if (!gzippedBase64)
             return false;
-        const buffer = Buffer.from(data.qr_code, 'base64');
+        const buffer = Buffer.from(gzippedBase64, 'base64');
         const decompressed = zlib_1.default.gunzipSync(buffer).toString('utf-8');
         const bundle = JSON.parse(decompressed);
         if (!fs_1.default.existsSync(authDir)) {
@@ -503,7 +546,7 @@ async function restoreAuthSession(accountId, authDir) {
         for (const [file, content] of Object.entries(bundle)) {
             fs_1.default.writeFileSync(path_1.default.join(authDir, file), content, 'utf-8');
         }
-        (0, utils_js_1.log)('AUTH_SYNC', `✅ Restored ${Object.keys(bundle).length} auth files for ${accountId} from Cloud DB.`);
+        (0, utils_js_1.log)('AUTH_SYNC', `✅ Restored ${Object.keys(bundle).length} auth files for ${accountId} successfully.`);
         return true;
     }
     catch (err) {
@@ -512,15 +555,16 @@ async function restoreAuthSession(accountId, authDir) {
     }
 }
 async function deleteAuthBackup(accountId) {
-    if (!supabase)
-        return;
-    try {
-        await supabase.from('wa_connection').delete().eq('id', `auth_${accountId}`);
-        (0, utils_js_1.log)('AUTH_SYNC', `Purged expired auth backup for ${accountId} from Cloud DB.`);
+    if (supabase) {
+        try {
+            await supabase.from('wa_connection').delete().eq('id', `auth_${accountId}`);
+            (0, utils_js_1.log)('AUTH_SYNC', `Purged expired auth backup for ${accountId} from Cloud DB.`);
+        }
+        catch (err) {
+            (0, utils_js_1.errLog)('AUTH_SYNC', `Error deleting auth backup for ${accountId}:`, err.message);
+        }
     }
-    catch (err) {
-        (0, utils_js_1.errLog)('AUTH_SYNC', `Error deleting auth backup for ${accountId}:`, err.message);
-    }
+    await (0, r2SessionVault_js_1.deleteSessionFromR2)(accountId);
 }
 /**
  * Persist uploaded media permanently.
