@@ -86,7 +86,7 @@ export default function WhatsAppDashboardPage() {
     return true;
   });
   const [openAddNumberModal, setOpenAddNumberModal] = useState<boolean>(false);
-  const [showRunningCampaigns, setShowRunningCampaigns] = useState<boolean>(false);
+  const [showRunningCampaigns, setShowRunningCampaigns] = useState<boolean>(true);
   const [authData, setAuthData] = useState<any>(null);
 
   const fetchDashboardData = async () => {
