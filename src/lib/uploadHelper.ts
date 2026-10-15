@@ -7,8 +7,8 @@ export interface UploadResult {
   parsedContent?: string;
 }
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://vqnoaodavbiyenbqqbib.supabase.co';
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_secret_tme1q7VZR_zQeytlaCCZug_Zjjo9cZ1';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 let browserClient: SupabaseClient | null = null;
 
