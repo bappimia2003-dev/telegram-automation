@@ -1010,9 +1010,9 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
  * Main scheduler loop: runs every 15 seconds in background with strict mutex lock.
  */
 export function startFollowupScheduler(): void {
-  const INTERVAL_MS = 15 * 1000; // 15 seconds
+  const INTERVAL_MS = 30 * 1000; // 30 seconds
 
-  log('FOLLOWUP', '🚀 Intelligent Multi-Step Follow-up Scheduler started (polling every 15s with staggered anti-blast pacing)...');
+  log('FOLLOWUP', '🚀 Intelligent Multi-Step Follow-up Scheduler started (polling every 30s with staggered anti-blast pacing)...');
 
   const runCycle = async () => {
     if (isCycleRunning) return; // Prevent concurrent cycle execution

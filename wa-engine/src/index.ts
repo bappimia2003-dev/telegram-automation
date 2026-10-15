@@ -14,7 +14,7 @@ import {
   isSessionActive,
   updateAccountInfo,
 } from './whatsapp.js';
-import { getAllDbAccounts, saveMediaBackup, restoreMediaBackup } from './db.js';
+import { getAllDbAccounts, saveMediaBackup, restoreMediaBackup, invalidateEngineCampaignsCache, invalidateEngineAccountsCache } from './db.js';
 import { log, errLog, getInMemoryLogs } from './utils.js';
 import { startFollowupScheduler } from './followupScheduler.js';
 
@@ -196,6 +196,8 @@ app.put('/accounts/:id', (req, res) => {
 // 8. Follow-up: Sync settings and variations
 app.post('/followup/sync', (_req, res) => {
   log('FOLLOWUP', '🔄 Follow-up configuration sync received from web dashboard.');
+  invalidateEngineCampaignsCache();
+  invalidateEngineAccountsCache();
   res.json({ ok: true });
 });
 
@@ -251,7 +253,7 @@ app.listen(PORT, '0.0.0.0', () => {
   // Start the follow-up scheduler (checks every 60s for pending follow-ups)
   startFollowupScheduler();
 
-  // Watcher: Poll DB every 12s for any account marked 'connecting' or 'connected' without an active socket
+  // Watcher: Poll DB every 45s for any account marked 'connecting' or 'connected' without an active socket
   setInterval(async () => {
     try {
       const dbAccounts = await getAllDbAccounts();
@@ -266,6 +268,6 @@ app.listen(PORT, '0.0.0.0', () => {
     } catch (err: any) {
       // transient network error
     }
-  }, 12000);
+  }, 45000);
 });
 

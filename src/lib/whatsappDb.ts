@@ -289,7 +289,7 @@ function rowToConnection(r: any): WaConnection {
 // =============================================
 let campaignsCache: WaCampaign[] | null = null;
 let campaignsCacheTime = 0;
-const CAMPAIGNS_CACHE_TTL_MS = 4000; // 4 seconds short-term cache for lightning fast responses
+const CAMPAIGNS_CACHE_TTL_MS = 15000; // 15 seconds short-term cache
 
 export function invalidateCampaignsCache() {
   campaignsCache = null;
@@ -584,7 +584,7 @@ export async function getMessageLogs(campaignId?: string, limit = 100): Promise<
 // =============================================
 let connectionsCache: WaConnection[] | null = null;
 let connectionsCacheTime = 0;
-const CONNECTIONS_CACHE_TTL = 3000;
+const CONNECTIONS_CACHE_TTL = 15000;
 
 export async function getAllWaConnections(): Promise<WaConnection[]> {
   const now = Date.now();
@@ -803,7 +803,7 @@ export async function performRolling30DayCleanup(days = 30): Promise<{ deletedLo
 const SYSTEM_CLIENTS_ROW_ID = 'system_clients';
 let clientsCache: WaClientProfile[] | null = null;
 let clientsCacheTime = 0;
-const CLIENTS_CACHE_TTL_MS = 3000;
+const CLIENTS_CACHE_TTL_MS = 15000;
 
 export function invalidateClientsCache() {
   clientsCache = null;

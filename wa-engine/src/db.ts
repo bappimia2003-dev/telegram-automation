@@ -139,7 +139,21 @@ function rowToCampaign(r: any): WaCampaign {
   };
 }
 
-export async function getActiveCampaigns(): Promise<WaCampaign[]> {
+// In-Memory Cache for Campaigns to prevent Supabase Egress Quota Exhaustion
+let cachedActiveCampaigns: WaCampaign[] | null = null;
+let lastCampaignsFetchTime = 0;
+const CAMPAIGNS_CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL
+
+export function invalidateEngineCampaignsCache(): void {
+  cachedActiveCampaigns = null;
+  lastCampaignsFetchTime = 0;
+}
+
+export async function getActiveCampaigns(force = false): Promise<WaCampaign[]> {
+  const now = Date.now();
+  if (!force && cachedActiveCampaigns && (now - lastCampaignsFetchTime < CAMPAIGNS_CACHE_TTL_MS)) {
+    return cachedActiveCampaigns;
+  }
   if (!supabase) return [];
   try {
     const [{ data, error }, { data: sysClientsRow }] = await Promise.all([
@@ -191,6 +205,8 @@ export async function getActiveCampaigns(): Promise<WaCampaign[]> {
       activeCampaigns.push(camp);
     }
 
+    cachedActiveCampaigns = activeCampaigns;
+    lastCampaignsFetchTime = now;
     return activeCampaigns;
   } catch (e: any) {
     errLog('DB', 'Exception getting active campaigns:', e.message);
@@ -324,12 +340,26 @@ export async function updateWaConnectionState(accountId: string, updates: Partia
     if (updates.lastConnected !== undefined) row.last_connected = updates.lastConnected;
 
     await supabase.from('wa_connection').upsert(row);
+    invalidateEngineAccountsCache();
   } catch (e: any) {
     errLog('DB', 'Exception updating wa_connection state:', e.message);
   }
 }
 
-export async function getAllDbAccounts(): Promise<WaConnection[]> {
+let cachedDbAccounts: WaConnection[] | null = null;
+let lastAccountsFetchTime = 0;
+const ACCOUNTS_CACHE_TTL_MS = 30 * 1000;
+
+export function invalidateEngineAccountsCache(): void {
+  cachedDbAccounts = null;
+  lastAccountsFetchTime = 0;
+}
+
+export async function getAllDbAccounts(force = false): Promise<WaConnection[]> {
+  const now = Date.now();
+  if (!force && cachedDbAccounts && (now - lastAccountsFetchTime < ACCOUNTS_CACHE_TTL_MS)) {
+    return cachedDbAccounts;
+  }
   if (!supabase) return [];
   try {
     const { data, error } = await supabase
@@ -373,6 +403,10 @@ export async function getAllDbAccounts(): Promise<WaConnection[]> {
         clientId,
       };
     });
+
+    cachedDbAccounts = mapped;
+    lastAccountsFetchTime = now;
+    return mapped;
   } catch (e: any) {
     errLog('DB', 'Exception getting db accounts:', e.message);
     return [];
@@ -384,6 +418,7 @@ export async function deleteDbAccount(accountId: string): Promise<void> {
   try {
     await supabase.from('wa_connection').delete().in('id', [accountId, `auth_${accountId}`]);
     await supabase.from('wa_connection').delete().like('id', `auth_${accountId}%`);
+    invalidateEngineAccountsCache();
   } catch (e: any) {
     errLog('DB', 'Exception deleting account from db:', e.message);
   }
