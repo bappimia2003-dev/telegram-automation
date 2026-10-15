@@ -5,10 +5,10 @@ import { log, errLog } from './utils.js';
 
 dotenv.config();
 
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '';
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '74b43556742be3e2b1e44e9465084ef4';
 const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || 'telegramautomation';
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '';
-const rawSecret = process.env.R2_SECRET_ACCESS_KEY || '';
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || 'f88e0483320a0702a7bc9f3456c7e643';
+const rawSecret = process.env.R2_SECRET_ACCESS_KEY || '1b054a65efa235c23fcf8d001fcc894efb1a4f1125059c894bed9e7b88823270';
 
 const R2_SECRET_ACCESS_KEY = rawSecret.startsWith('cfat_')
   ? crypto.createHash('sha256').update(rawSecret).digest('hex')
