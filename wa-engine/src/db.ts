@@ -375,7 +375,7 @@ export async function getAllDbAccounts(force = false): Promise<WaConnection[]> {
       return [];
     }
 
-    return (data || []).map((r: any) => {
+    const mapped: WaConnection[] = (data || []).map((r: any) => {
       let name = r.id === 'main' ? 'Primary WhatsApp' : `SIM ${r.id.slice(-4)}`;
       let phoneNumber = r.phone_number || '';
       let clientId = 'admin';
