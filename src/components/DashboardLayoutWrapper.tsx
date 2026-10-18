@@ -14,6 +14,7 @@ function getHeaderTitle(pathname: string): string {
   if (pathname === '/whatsapp') return 'WhatsApp';
   if (pathname === '/whatsapp/clients') return 'Clients Panel';
   if (pathname === '/whatsapp/new-followup') return 'New Follow-up';
+  if (pathname === '/whatsapp/targeted-followup') return 'Targeted Follow-up';
   if (pathname === '/whatsapp/campaigns/new') return 'New Campaign';
   if (pathname.startsWith('/whatsapp/campaigns/')) return 'Campaign Details';
   if (pathname.startsWith('/whatsapp/numbers/')) return 'WhatsApp Device';

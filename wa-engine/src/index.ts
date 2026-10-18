@@ -18,6 +18,14 @@ import { getAllDbAccounts, saveMediaBackup, restoreMediaBackup, invalidateEngine
 import { log, errLog, getInMemoryLogs } from './utils.js';
 import { startFollowupScheduler } from './followupScheduler.js';
 import { listAllR2Sessions } from './r2SessionVault.js';
+import {
+  startTargetedFollowupScheduler,
+  startNewTargetedJob,
+  pauseTargetedJob,
+  resumeTargetedJob,
+  stopTargetedJob,
+  getTargetedJobStatus,
+} from './targetedFollowupEngine.js';
 
 dotenv.config();
 
@@ -212,6 +220,36 @@ app.get('/sessions/r2', async (_req, res) => {
   }
 });
 
+// 10. Targeted Paced Follow-up Endpoints
+app.get('/targeted-followup/status', (_req, res) => {
+  const job = getTargetedJobStatus();
+  res.json({ ok: true, job });
+});
+
+app.post('/targeted-followup/start', (req, res) => {
+  try {
+    const job = startNewTargetedJob(req.body);
+    res.json({ ok: true, job });
+  } catch (err: any) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/targeted-followup/pause', (_req, res) => {
+  const job = pauseTargetedJob();
+  res.json({ ok: true, job });
+});
+
+app.post('/targeted-followup/resume', (_req, res) => {
+  const job = resumeTargetedJob();
+  res.json({ ok: true, job });
+});
+
+app.post('/targeted-followup/stop', (_req, res) => {
+  const job = stopTargetedJob();
+  res.json({ ok: true, job });
+});
+
 // --- Legacy / Default routes for 'main' account ---
 app.get('/status', (req, res) => {
   const accountId = (req.query?.accountId as string) || 'main';
@@ -263,6 +301,9 @@ app.listen(PORT, '0.0.0.0', () => {
 
   // Start the follow-up scheduler (checks every 60s for pending follow-ups)
   startFollowupScheduler();
+
+  // Start the targeted paced follow-up scheduler (runs background loop for 300-number campaigns)
+  startTargetedFollowupScheduler();
 
   // Watcher: Poll DB every 45s for any account marked 'connecting' or 'connected' without an active socket
   setInterval(async () => {

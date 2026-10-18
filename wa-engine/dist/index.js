@@ -14,6 +14,7 @@ const db_js_1 = require("./db.js");
 const utils_js_1 = require("./utils.js");
 const followupScheduler_js_1 = require("./followupScheduler.js");
 const r2SessionVault_js_1 = require("./r2SessionVault.js");
+const targetedFollowupEngine_js_1 = require("./targetedFollowupEngine.js");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const PORT = Number(process.env.PORT) || 3005;
@@ -188,6 +189,32 @@ app.get('/sessions/r2', async (_req, res) => {
         res.status(500).json({ ok: false, error: err.message });
     }
 });
+// 10. Targeted Paced Follow-up Endpoints
+app.get('/targeted-followup/status', (_req, res) => {
+    const job = (0, targetedFollowupEngine_js_1.getTargetedJobStatus)();
+    res.json({ ok: true, job });
+});
+app.post('/targeted-followup/start', (req, res) => {
+    try {
+        const job = (0, targetedFollowupEngine_js_1.startNewTargetedJob)(req.body);
+        res.json({ ok: true, job });
+    }
+    catch (err) {
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+app.post('/targeted-followup/pause', (_req, res) => {
+    const job = (0, targetedFollowupEngine_js_1.pauseTargetedJob)();
+    res.json({ ok: true, job });
+});
+app.post('/targeted-followup/resume', (_req, res) => {
+    const job = (0, targetedFollowupEngine_js_1.resumeTargetedJob)();
+    res.json({ ok: true, job });
+});
+app.post('/targeted-followup/stop', (_req, res) => {
+    const job = (0, targetedFollowupEngine_js_1.stopTargetedJob)();
+    res.json({ ok: true, job });
+});
 // --- Legacy / Default routes for 'main' account ---
 app.get('/status', (req, res) => {
     const accountId = req.query?.accountId || 'main';
@@ -235,6 +262,8 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // Start the follow-up scheduler (checks every 60s for pending follow-ups)
     (0, followupScheduler_js_1.startFollowupScheduler)();
+    // Start the targeted paced follow-up scheduler (runs background loop for 300-number campaigns)
+    (0, targetedFollowupEngine_js_1.startTargetedFollowupScheduler)();
     // Watcher: Poll DB every 45s for any account marked 'connecting' or 'connected' without an active socket
     setInterval(async () => {
         try {

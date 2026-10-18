@@ -14,7 +14,8 @@ import {
   Users,
   ShieldCheck,
   UserCheck,
-  Clock
+  Clock,
+  Target
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "./ui/button"
@@ -22,6 +23,7 @@ import { Button } from "./ui/button"
 const baseWaNavItems = [
   { href: "/whatsapp", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/whatsapp/new-followup", icon: Sparkles, label: "New Follow-up" },
+  { href: "/whatsapp/targeted-followup", icon: Target, label: "Targeted Follow-up" },
   { href: "/whatsapp/campaigns/new", icon: PlusCircle, label: "New Campaign" },
 ]
 

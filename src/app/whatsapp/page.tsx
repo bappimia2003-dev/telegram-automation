@@ -16,7 +16,8 @@ import {
   Smartphone,
   Sparkles,
   Phone,
-  ChevronDown
+  ChevronDown,
+  Target
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WaCampaign, WaDashboardStats, WaConnection } from '@/lib/whatsappTypes';
@@ -306,6 +307,16 @@ export default function WhatsAppDashboardPage() {
             </Button>
           </Link>
         )}
+
+        <Link href="/whatsapp/targeted-followup" className="col-span-2 sm:col-span-1 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            className="w-full h-11 sm:h-10 px-4 rounded-[14px] sm:rounded-xl border-[1.5px] border-[#164E43]/40 dark:border-[#34D399]/40 bg-[#164E43]/5 dark:bg-[#34D399]/5 text-[#164E43] dark:text-[#34D399] hover:bg-[#164E43]/10 font-bold text-sm sm:text-xs flex items-center justify-center gap-2"
+          >
+            <Target className="w-4 h-4 shrink-0 text-[#164E43] dark:text-[#34D399]" />
+            <span>Targeted Follow-up</span>
+          </Button>
+        </Link>
 
         {isClientExpired || campaignQuotaReached ? (
           <Button
