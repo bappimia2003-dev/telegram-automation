@@ -220,9 +220,10 @@ app.get('/sessions/r2', async (_req, res) => {
   }
 });
 
-// 10. Targeted Paced Follow-up Endpoints
-app.get('/targeted-followup/status', (_req, res) => {
-  const job = getTargetedJobStatus();
+// 10. Targeted Paced Follow-up Endpoints (Multi-tenant for Admin & Client Panel)
+app.get('/targeted-followup/status', (req, res) => {
+  const ownerId = (req.query?.ownerId || req.query?.clientId || 'admin') as string;
+  const job = getTargetedJobStatus(ownerId);
   res.json({ ok: true, job });
 });
 
@@ -235,18 +236,21 @@ app.post('/targeted-followup/start', (req, res) => {
   }
 });
 
-app.post('/targeted-followup/pause', (_req, res) => {
-  const job = pauseTargetedJob();
+app.post('/targeted-followup/pause', (req, res) => {
+  const ownerId = (req.body?.ownerId || req.body?.clientId || 'admin') as string;
+  const job = pauseTargetedJob(ownerId);
   res.json({ ok: true, job });
 });
 
-app.post('/targeted-followup/resume', (_req, res) => {
-  const job = resumeTargetedJob();
+app.post('/targeted-followup/resume', (req, res) => {
+  const ownerId = (req.body?.ownerId || req.body?.clientId || 'admin') as string;
+  const job = resumeTargetedJob(ownerId);
   res.json({ ok: true, job });
 });
 
-app.post('/targeted-followup/stop', (_req, res) => {
-  const job = stopTargetedJob();
+app.post('/targeted-followup/stop', (req, res) => {
+  const ownerId = (req.body?.ownerId || req.body?.clientId || 'admin') as string;
+  const job = stopTargetedJob(ownerId);
   res.json({ ok: true, job });
 });
 
