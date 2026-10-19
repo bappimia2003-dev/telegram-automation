@@ -24,6 +24,7 @@ exports.getContactLogs = getContactLogs;
 exports.logInboundMessage = logInboundMessage;
 exports.clearContactInboundReplies = clearContactInboundReplies;
 exports.triggerPostChatFollowup = triggerPostChatFollowup;
+exports.invalidateContactCampaignCache = invalidateContactCampaignCache;
 exports.findContactCampaign = findContactCampaign;
 exports.logFollowupStep = logFollowupStep;
 exports.schedulePromiseFollowup = schedulePromiseFollowup;
@@ -255,6 +256,7 @@ async function markAsContacted(entry) {
     if (!supabase)
         return;
     try {
+        invalidateContactCampaignCache(entry.phoneNumber);
         const { error } = await supabase.from('wa_contacted_users').upsert({
             id: entry.id,
             campaign_id: entry.campaignId,
@@ -789,6 +791,7 @@ async function triggerPostChatFollowup(campaignId, phoneNumber, contactName, key
             .eq('phone_number', phoneNumber)
             .maybeSingle();
         const finalName = existing?.contact_name || contactName || 'Customer';
+        invalidateContactCampaignCache(phoneNumber);
         if (existing?.id) {
             await supabase
                 .from('wa_contacted_users')
@@ -823,10 +826,30 @@ async function triggerPostChatFollowup(campaignId, phoneNumber, contactName, key
         (0, utils_js_1.errLog)('DB', 'Error triggering post-chat followup:', err.message);
     }
 }
+// In-memory cache for fast contact-campaign lookups (30s TTL)
+const contactCampaignCache = new Map();
+function invalidateContactCampaignCache(phoneNumber) {
+    if (phoneNumber) {
+        for (const key of contactCampaignCache.keys()) {
+            if (key.startsWith(phoneNumber)) {
+                contactCampaignCache.delete(key);
+            }
+        }
+    }
+    else {
+        contactCampaignCache.clear();
+    }
+}
 /**
  * Find the most recent campaign for a phone number (optionally scoped to account).
  */
 async function findContactCampaign(phoneNumber, accountId) {
+    const cacheKey = `${phoneNumber}:${accountId || 'all'}`;
+    const cached = contactCampaignCache.get(cacheKey);
+    const now = Date.now();
+    if (cached && now - cached.time < 30000) {
+        return cached.campaignId;
+    }
     if (!supabase)
         return null;
     try {
@@ -835,20 +858,27 @@ async function findContactCampaign(phoneNumber, accountId) {
             .select('campaign_id, sent_at')
             .eq('phone_number', phoneNumber)
             .order('sent_at', { ascending: false });
-        if (!data || data.length === 0)
+        if (!data || data.length === 0) {
+            contactCampaignCache.set(cacheKey, { campaignId: null, time: now });
             return null;
+        }
         if (!accountId) {
-            return data[0].campaign_id || null;
+            const res = data[0].campaign_id || null;
+            contactCampaignCache.set(cacheKey, { campaignId: res, time: now });
+            return res;
         }
         // Prefer campaigns belonging to this accountId or 'all'
         const campaigns = await getActiveCampaigns();
         for (const record of data) {
             const camp = campaigns.find((c) => c.id === record.campaign_id);
             if (camp && (!camp.accountId || camp.accountId === 'all' || camp.accountId === accountId)) {
+                contactCampaignCache.set(cacheKey, { campaignId: camp.id, time: now });
                 return camp.id;
             }
         }
-        return data[0].campaign_id || null;
+        const fallback = data[0].campaign_id || null;
+        contactCampaignCache.set(cacheKey, { campaignId: fallback, time: now });
+        return fallback;
     }
     catch {
         return null;

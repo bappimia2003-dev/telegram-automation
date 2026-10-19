@@ -86,26 +86,28 @@ function analyzeContactFollowupState(logs, initialContactTimeMs, fupConfig) {
         if (l.messageType === 'opt_out' && (effectiveStartMs === 0 || logTimeMs > effectiveStartMs)) {
             hasReplied = true;
         }
-        // 3. Customer Inbound Messages:
+        // 3. Customer Inbound Messages (Voice, Audio, Text, Media):
         // If followupCondition is 'always', never stop automated follow-up on regular customer messages.
         // If followupCondition is 'no_reply' or default:
-        // - Customer messages during initial 3-minute burst (asking price, details) do NOT cancel Step 1.
-        // - Customer messages after Step 1 has sent OR after 3 minutes will politely pause follow-up.
+        // Any customer inbound message received after the initial trigger (with a 10s buffer) immediately stops automated follow-ups!
         if (l.messageType === 'incoming' &&
-            (effectiveStartMs === 0 || logTimeMs > effectiveStartMs) &&
+            (effectiveStartMs === 0 || logTimeMs > effectiveStartMs + 10000) &&
             fupConfig?.followupCondition !== 'always') {
-            const timeSinceStart = logTimeMs - effectiveStartMs;
-            if (timeSinceStart > 3 * 60 * 1000 || highestStep >= 1) {
-                hasReplied = true;
-            }
+            hasReplied = true;
         }
+        // CRITICAL: Skipped steps ('skipped: step_window_expired') or failed steps ('failed: max_retries_exceeded')
+        // mark that the step is closed (highestStep advances), but MUST NEVER update lastStepTimeMs as a sent message!
+        const isStepSkipOrFailed = typeof l.fileUrl === 'string' &&
+            (l.fileUrl.startsWith('skipped:') || l.fileUrl.startsWith('failed:'));
         if (isPostChat) {
             const pcMatch = /^postchat_step(\d+)(?:_rep_(\d+))?$/.exec(l.messageType || '');
             if (pcMatch) {
                 const sNum = parseInt(pcMatch[1], 10);
                 const rNum = pcMatch[2] ? parseInt(pcMatch[2], 10) : 0;
                 highestStep = Math.max(highestStep, sNum);
-                lastStepTimeMs = Math.max(lastStepTimeMs, logTimeMs);
+                if (!isStepSkipOrFailed) {
+                    lastStepTimeMs = Math.max(lastStepTimeMs, logTimeMs);
+                }
                 if (rNum > 0) {
                     repeatCounts[sNum] = Math.max(repeatCounts[sNum] || 0, rNum);
                 }
@@ -114,7 +116,9 @@ function analyzeContactFollowupState(logs, initialContactTimeMs, fupConfig) {
         else {
             if (l.messageType === 'followup') {
                 highestStep = Math.max(highestStep, 1);
-                lastStepTimeMs = Math.max(lastStepTimeMs, logTimeMs);
+                if (!isStepSkipOrFailed) {
+                    lastStepTimeMs = Math.max(lastStepTimeMs, logTimeMs);
+                }
             }
             else {
                 const fupMatch = /^followup_step(\d+)(?:_rep_(\d+))?$/.exec(l.messageType || '');
@@ -122,7 +126,9 @@ function analyzeContactFollowupState(logs, initialContactTimeMs, fupConfig) {
                     const sNum = parseInt(fupMatch[1], 10);
                     const rNum = fupMatch[2] ? parseInt(fupMatch[2], 10) : 0;
                     highestStep = Math.max(highestStep, sNum);
-                    lastStepTimeMs = Math.max(lastStepTimeMs, logTimeMs);
+                    if (!isStepSkipOrFailed) {
+                        lastStepTimeMs = Math.max(lastStepTimeMs, logTimeMs);
+                    }
                     if (rNum > 0) {
                         repeatCounts[sNum] = Math.max(repeatCounts[sNum] || 0, rNum);
                     }
@@ -140,6 +146,7 @@ function analyzeContactFollowupState(logs, initialContactTimeMs, fupConfig) {
         hasReplied,
         highestStep,
         lastStepTimeMs: lastStepTimeMs || effectiveStartMs,
+        realLastStepSentTimeMs: lastStepTimeMs,
         promiseTargetDate,
         promiseAlreadySent,
         isPostChat,
@@ -661,9 +668,11 @@ async function processCampaignFollowups(campaign) {
     const hasLongOrRepeatableSteps = fup.postChatFollowupEnabled ||
         (fup.steps || []).some((s) => s.repeatable || s.delayUnit === 'weeks' || s.delayUnit === 'months') ||
         (fup.postChatSteps || []).some((s) => s.repeatable || s.delayUnit === 'weeks' || s.delayUnit === 'months');
+    // For standard campaigns (Step 1: 3-5m, Step 2: 3-4h, Step 3: next day):
+    // Strictly limit database lookback to 2 days (48h) so old contacts from days ago are NEVER fetched!
     const maxDaysBack = hasLongOrRepeatableSteps
         ? Math.max(Number(fup.totalDurationDays) || 365, 365)
-        : Number(fup.totalDurationDays) || 30;
+        : 2;
     const contacts = await (0, db_js_1.getRecentContactedUsers)(campaign.id, minAgeDays, maxDaysBack);
     if (contacts.length === 0)
         return;
@@ -679,10 +688,24 @@ async function processCampaignFollowups(campaign) {
             const initialContactMs = new Date(contact.sentAt).getTime();
             const ageMs = now - initialContactMs;
             const ageDays = ageMs / (24 * 60 * 60 * 1000);
+            const leadAgeMinutes = ageMs / (60 * 1000);
+            const leadAgeHours = ageMs / (60 * 60 * 1000);
+            const isStandardCampaignFollowup = !fup.postChatFollowupEnabled && !hasLongOrRepeatableSteps && minAgeDays === 0;
+            // 1. Safety lifetime ceiling:
+            // If standard campaign and lead is older than 36 hours, permanently stop follow-up!
+            if (isStandardCampaignFollowup && leadAgeHours > 36.0) {
+                continue;
+            }
             if (minAgeDays > 0 && ageDays < minAgeDays) {
                 continue;
             }
             if (maxDaysBack > 0 && ageDays > maxDaysBack) {
+                continue;
+            }
+            // 2. Strict Campaign Isolation: Prevent cross-campaign follow-up blasts to the same contact
+            // If the contact interacted with another campaign more recently, this campaign must step aside!
+            const latestCampaignId = await (0, db_js_1.findContactCampaign)(contact.phoneNumber, accountId);
+            if (latestCampaignId && latestCampaignId !== campaign.id) {
                 continue;
             }
             const logs = await (0, db_js_1.getContactLogs)(campaign.id, contact.phoneNumber);
@@ -821,36 +844,81 @@ async function processCampaignFollowups(campaign) {
             const nextStepNumber = state.highestStep + 1;
             if (nextStepNumber <= maxConfiguredStep) {
                 const nextStepMeta = activeStepsList.find((s) => s.stepNumber === nextStepNumber);
-                const requiredDelayMs = getStepRequiredDelayMs(nextStepMeta, nextStepNumber, fup, contact.phoneNumber, minAgeDays, state.isPostChat);
-                const referenceTimeMs = nextStepNumber === 1
-                    ? state.isPostChat
-                        ? state.postChatTriggerTimeMs
-                        : initialContactMs
-                    : (state.lastStepTimeMs || initialContactMs);
-                const elapsedMs = now - referenceTimeMs;
-                // Safety ceiling check:
-                // For Step 1 (short delay, e.g. < 15 minutes):
-                // If elapsedMs > 45 minutes, lead is too old for a 3-minute Step 1 check-in!
-                // Mark Step 1 as expired so Step 2 can evaluate at the 3-hour mark without awkward blasts.
-                if (!state.isPostChat && minAgeDays === 0 && requiredDelayMs < 15 * 60 * 1000) {
-                    const step1CeilingMs = 45 * 60 * 1000; // 45 minutes
-                    if (elapsedMs > step1CeilingMs) {
-                        (0, utils_js_1.log)('FOLLOWUP', `ℹ️ [Step 1 Expired] Lead ${contact.phoneNumber} is ${(elapsedMs / 60000).toFixed(0)}m old. Skipping Step 1 to prevent awkward delayed check-in.`);
-                        await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 1, 'text', 'skipped: step_window_expired');
+                let isStepDue = false;
+                if (isStandardCampaignFollowup) {
+                    // ── Strict Standard Timeline: Step 1 (3-5m), Step 2 (3-4h), Step 3 (Next Day 20-24h) ──
+                    if (nextStepNumber === 1) {
+                        // Step 1: 3 to 5 minutes after initial contact (Window: 3m to 20m)
+                        const minWaitMinutes = Math.max(3, Math.min(10, Number(nextStepMeta?.delayValue) || Number(fup.minDelayMinutes) || 3));
+                        if (leadAgeMinutes < minWaitMinutes) {
+                            continue; // Not ready yet
+                        }
+                        if (leadAgeMinutes > 20) {
+                            (0, utils_js_1.log)('FOLLOWUP', `ℹ️ [Step 1 Expired] Lead ${contact.phoneNumber} is ${leadAgeMinutes.toFixed(1)}m old. Skipping Step 1.`);
+                            await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 1, 'text', 'skipped: step_window_expired');
+                            continue;
+                        }
+                        isStepDue = true;
+                    }
+                    else if (nextStepNumber === 2) {
+                        // Step 2: 3 to 4 hours after initial contact (Window: 3.0h to 6.5h)
+                        // Also ensure at least 2.5 hours have elapsed since Step 1 was actually sent
+                        const minWaitHours = Math.max(2.5, Math.min(5, Number(nextStepMeta?.delayValue) || 3));
+                        if (leadAgeHours < minWaitHours) {
+                            continue; // Not ready yet
+                        }
+                        if (state.realLastStepSentTimeMs > 0) {
+                            const hoursSinceStep1 = (now - state.realLastStepSentTimeMs) / (60 * 60 * 1000);
+                            if (hoursSinceStep1 < 2.5) {
+                                continue; // Wait until 2.5 hours after Step 1 delivery
+                            }
+                        }
+                        if (leadAgeHours > 6.5) {
+                            (0, utils_js_1.log)('FOLLOWUP', `ℹ️ [Step 2 Expired] Lead ${contact.phoneNumber} is ${leadAgeHours.toFixed(1)}h old. Skipping Step 2.`);
+                            await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 2, 'text', 'skipped: step_window_expired');
+                            continue;
+                        }
+                        isStepDue = true;
+                    }
+                    else if (nextStepNumber === 3) {
+                        // Step 3: Next day (20 to 24 hours after initial contact, Window: 20h to 32h)
+                        // Also ensure at least 12 hours have elapsed since Step 2 was actually sent
+                        if (leadAgeHours < 20.0) {
+                            continue; // Not ready yet
+                        }
+                        if (state.realLastStepSentTimeMs > 0) {
+                            const hoursSinceStep2 = (now - state.realLastStepSentTimeMs) / (60 * 60 * 1000);
+                            if (hoursSinceStep2 < 12.0) {
+                                continue; // Wait until 12 hours after Step 2 delivery
+                            }
+                        }
+                        if (leadAgeHours > 32.0) {
+                            (0, utils_js_1.log)('FOLLOWUP', `ℹ️ [Step 3 Expired] Lead ${contact.phoneNumber} is ${leadAgeHours.toFixed(1)}h old. Skipping Step 3.`);
+                            await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, 3, 'text', 'skipped: step_window_expired');
+                            continue;
+                        }
+                        isStepDue = true;
+                    }
+                    else {
+                        // Steps > 3 not part of standard campaign
                         continue;
                     }
                 }
-                else if (!state.isPostChat && minAgeDays === 0 && requiredDelayMs < 24 * 60 * 60 * 1000) {
-                    // For Step 2 (e.g. 3-4 hours):
-                    // Max ceiling 24 hours
-                    const step2CeilingMs = 24 * 60 * 60 * 1000;
-                    if (elapsedMs > step2CeilingMs) {
-                        (0, utils_js_1.log)('FOLLOWUP', `ℹ️ [Step ${nextStepNumber} Expired] Lead ${contact.phoneNumber} exceeded 24h ceiling. Skipping.`);
-                        await (0, db_js_1.logFollowupStep)(campaign.id, contact.phoneNumber, contact.contactName, nextStepNumber, 'text', 'skipped: step_window_expired');
+                else {
+                    // ── Non-Standard / Post-Chat / Long-Term Sequence ──
+                    const requiredDelayMs = getStepRequiredDelayMs(nextStepMeta, nextStepNumber, fup, contact.phoneNumber, minAgeDays, state.isPostChat);
+                    const referenceTimeMs = nextStepNumber === 1
+                        ? state.isPostChat
+                            ? state.postChatTriggerTimeMs
+                            : initialContactMs
+                        : (state.lastStepTimeMs || initialContactMs);
+                    const elapsedMs = now - referenceTimeMs;
+                    if (elapsedMs < requiredDelayMs) {
                         continue;
                     }
+                    isStepDue = true;
                 }
-                if (elapsedMs >= requiredDelayMs) {
+                if (isStepDue) {
                     const logPrefix = state.isPostChat ? 'postchat_step' : 'followup_step';
                     const customLogType = `${logPrefix}${nextStepNumber}`;
                     const failKey = `${campaign.id}:${contact.phoneNumber}:${customLogType}`;

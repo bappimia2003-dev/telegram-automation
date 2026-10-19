@@ -239,6 +239,7 @@ export async function isAlreadyContacted(campaignId: string, phoneNumber: string
 export async function markAsContacted(entry: WaContactedUser): Promise<void> {
   if (!supabase) return;
   try {
+    invalidateContactCampaignCache(entry.phoneNumber);
     const { error } = await supabase.from('wa_contacted_users').upsert({
       id: entry.id,
       campaign_id: entry.campaignId,
@@ -809,6 +810,7 @@ export async function triggerPostChatFollowup(
       .maybeSingle();
 
     const finalName = existing?.contact_name || contactName || 'Customer';
+    invalidateContactCampaignCache(phoneNumber);
     if (existing?.id) {
       await supabase
         .from('wa_contacted_users')
@@ -844,10 +846,32 @@ export async function triggerPostChatFollowup(
   }
 }
 
+// In-memory cache for fast contact-campaign lookups (30s TTL)
+const contactCampaignCache = new Map<string, { campaignId: string | null; time: number }>();
+
+export function invalidateContactCampaignCache(phoneNumber?: string): void {
+  if (phoneNumber) {
+    for (const key of contactCampaignCache.keys()) {
+      if (key.startsWith(phoneNumber)) {
+        contactCampaignCache.delete(key);
+      }
+    }
+  } else {
+    contactCampaignCache.clear();
+  }
+}
+
 /**
  * Find the most recent campaign for a phone number (optionally scoped to account).
  */
 export async function findContactCampaign(phoneNumber: string, accountId?: string): Promise<string | null> {
+  const cacheKey = `${phoneNumber}:${accountId || 'all'}`;
+  const cached = contactCampaignCache.get(cacheKey);
+  const now = Date.now();
+  if (cached && now - cached.time < 30000) {
+    return cached.campaignId;
+  }
+
   if (!supabase) return null;
   try {
     const { data } = await supabase
@@ -856,10 +880,15 @@ export async function findContactCampaign(phoneNumber: string, accountId?: strin
       .eq('phone_number', phoneNumber)
       .order('sent_at', { ascending: false });
 
-    if (!data || data.length === 0) return null;
+    if (!data || data.length === 0) {
+      contactCampaignCache.set(cacheKey, { campaignId: null, time: now });
+      return null;
+    }
 
     if (!accountId) {
-      return data[0].campaign_id || null;
+      const res = data[0].campaign_id || null;
+      contactCampaignCache.set(cacheKey, { campaignId: res, time: now });
+      return res;
     }
 
     // Prefer campaigns belonging to this accountId or 'all'
@@ -867,11 +896,14 @@ export async function findContactCampaign(phoneNumber: string, accountId?: strin
     for (const record of data) {
       const camp = campaigns.find((c) => c.id === record.campaign_id);
       if (camp && (!camp.accountId || camp.accountId === 'all' || camp.accountId === accountId)) {
+        contactCampaignCache.set(cacheKey, { campaignId: camp.id, time: now });
         return camp.id;
       }
     }
 
-    return data[0].campaign_id || null;
+    const fallback = data[0].campaign_id || null;
+    contactCampaignCache.set(cacheKey, { campaignId: fallback, time: now });
+    return fallback;
   } catch {
     return null;
   }
