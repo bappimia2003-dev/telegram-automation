@@ -63,7 +63,11 @@ function getActiveSock(preferAccountId: string | null): any | null {
 /**
  * Analyze all logs for a contact to determine follow-up state (unlimited steps, repeats, & post-chat mode).
  */
-function analyzeContactFollowupState(logs: any[], initialContactTimeMs: number) {
+function analyzeContactFollowupState(
+  logs: any[],
+  initialContactTimeMs: number,
+  fupConfig?: WaFollowupConfig
+) {
   let hasReplied = false;
   let highestStep = 0;
   let lastStepTimeMs = 0;
@@ -94,9 +98,30 @@ function analyzeContactFollowupState(logs: any[], initialContactTimeMs: number) 
       continue;
     }
 
-    // Inbound reply from customer strictly after effective start -> manual takeover!
-    if (l.messageType === 'incoming' && (effectiveStartMs === 0 || logTimeMs > effectiveStartMs)) {
+    // 1. Admin Manual Takeover: Human agent sent a message from phone or WhatsApp Web
+    if (l.messageType === 'admin_reply' && (effectiveStartMs === 0 || logTimeMs > effectiveStartMs)) {
       hasReplied = true;
+    }
+
+    // 2. Explicit Customer Opt-Out ("lagbena", "cancel", "stop", etc.)
+    if (l.messageType === 'opt_out' && (effectiveStartMs === 0 || logTimeMs > effectiveStartMs)) {
+      hasReplied = true;
+    }
+
+    // 3. Customer Inbound Messages:
+    // If followupCondition is 'always', never stop automated follow-up on regular customer messages.
+    // If followupCondition is 'no_reply' or default:
+    // - Customer messages during initial 3-minute burst (asking price, details) do NOT cancel Step 1.
+    // - Customer messages after Step 1 has sent OR after 3 minutes will politely pause follow-up.
+    if (
+      l.messageType === 'incoming' &&
+      (effectiveStartMs === 0 || logTimeMs > effectiveStartMs) &&
+      fupConfig?.followupCondition !== 'always'
+    ) {
+      const timeSinceStart = logTimeMs - effectiveStartMs;
+      if (timeSinceStart > 3 * 60 * 1000 || highestStep >= 1) {
+        hasReplied = true;
+      }
     }
 
     if (isPostChat) {
@@ -559,16 +584,16 @@ function applyAccountCooldown(accountId: string, fup: WaFollowupConfig): void {
 
   if (currentBatch >= batchTarget) {
     accountBatchCountMap.set(accountId, 0);
-    const batchPauseSeconds = Math.floor(Math.random() * (300 - 180 + 1)) + 180;
+    const batchPauseSeconds = Math.floor(Math.random() * (30 - 15 + 1)) + 15; // 15-30s pause
     const batchPauseMs = batchPauseSeconds * 1000 + Math.floor(Math.random() * 999);
     accountCooldownMap.set(accountId, Date.now() + batchPauseMs);
-    log('FOLLOWUP', `🛑 [Batch limit of ${batchTarget} reached on Acc: ${accountId}] Anti-ban pause for ${(batchPauseSeconds / 60).toFixed(1)} minutes before next batch.`);
+    log('FOLLOWUP', `🛑 [Batch pacing on Acc: ${accountId}] Anti-ban pause for ${batchPauseSeconds}s.`);
   } else {
     accountBatchCountMap.set(accountId, currentBatch);
-    const gapSeconds = Math.floor(Math.random() * (40 - 15 + 1)) + 15;
+    const gapSeconds = Math.floor(Math.random() * (10 - 5 + 1)) + 5; // 5-10s gap
     const gapMs = gapSeconds * 1000 + Math.floor(Math.random() * 999);
     accountCooldownMap.set(accountId, Date.now() + gapMs);
-    log('FOLLOWUP', `⏳ [Staggered Pacing on Acc: ${accountId}] Next follow-up allowed in ${gapSeconds}s (${(gapSeconds / 60).toFixed(2)} min). Batch progress: ${currentBatch}/${batchTarget}.`);
+    log('FOLLOWUP', `⏳ [Pacing on Acc: ${accountId}] Next follow-up allowed in ${gapSeconds}s.`);
   }
 }
 
@@ -645,8 +670,9 @@ function getStepRequiredDelayMs(
     if (!isPostChat && stepNumber === 1 && stepMeta.delayUnit === 'minutes' && fup.antiBanJitter !== false) {
       const phoneDigits = phoneNumber.replace(/\D/g, '');
       const seed = phoneDigits.length >= 4 ? parseInt(phoneDigits.slice(-4), 10) : 1234;
-      const jitterMs = (((seed % 120) / 60) + ((seed % 10) * 0.05)) * 60 * 1000;
-      return baseMs + jitterMs;
+      // Controlled, natural jitter: -10s to +20s with millisecond dispersion
+      const jitterMs = ((seed % 30) - 10) * 1000 + (seed % 999);
+      return Math.max(60 * 1000, baseMs + jitterMs);
     }
     return baseMs;
   }
@@ -663,9 +689,8 @@ function getStepRequiredDelayMs(
     if (minAgeDays === 0 && (minDelay <= 0 || minDelay > 15)) minDelay = 2;
     const phoneDigits = phoneNumber.replace(/\D/g, '');
     const seed = phoneDigits.length >= 4 ? parseInt(phoneDigits.slice(-4), 10) : 1234;
-    const jitterMinutes = ((seed % 120) / 60) + ((seed % 10) * 0.05);
-    const targetMinutes = minDelay + (fup.antiBanJitter !== false ? jitterMinutes : 0);
-    return targetMinutes * 60 * 1000;
+    const jitterMs = ((seed % 30) - 10) * 1000 + (seed % 999);
+    return Math.max(60 * 1000, minDelay * 60 * 1000 + (fup.antiBanJitter !== false ? jitterMs : 0));
   }
   if (stepNumber === 2) {
     return 3 * 60 * 60 * 1000; // 3 hours
@@ -719,6 +744,8 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
   if (contacts.length === 0) return;
 
   const todayStr = new Date().toISOString().split('T')[0];
+  let messagesSentThisCycle = 0;
+  const MAX_DISPATCH_PER_CYCLE = 2; // Up to 2 contacts per campaign per 15s cycle
 
   for (const contact of contacts) {
     const flightKey = `${campaign.id}:${contact.phoneNumber}`;
@@ -739,7 +766,7 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
       }
 
       const logs = await getContactLogs(campaign.id, contact.phoneNumber);
-      const state = analyzeContactFollowupState(logs, initialContactMs);
+      const state = analyzeContactFollowupState(logs, initialContactMs, fup);
       const gender = ruleBasedGender(contact.contactName, '');
 
       // If this contact is in Post-Chat mode, ensure postChatFollowupEnabled is ON;
@@ -784,7 +811,10 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
             }
 
             applyAccountCooldown(accountId, fup);
-            break;
+            messagesSentThisCycle++;
+            if (messagesSentThisCycle >= MAX_DISPATCH_PER_CYCLE) break;
+            await sleep(3000 + Math.floor(Math.random() * 2000));
+            continue;
           } finally {
             inFlightKeys.delete(flightKey);
           }
@@ -818,8 +848,6 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
 
       // ─────────────────────────────────────────────────────────────────────────
       // Case C: Check if the current highestStep is REPEATABLE and due for repeat
-      // (When either highestStep is the final step OR highestStep has repeatable=true
-      //  and there is no next step due sooner)
       // ─────────────────────────────────────────────────────────────────────────
       const currentStepMeta = activeStepsList.find((s) => s.stepNumber === state.highestStep);
       if (
@@ -873,7 +901,10 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
               if (success) {
                 stepFailCountMap.delete(failKey);
                 applyAccountCooldown(accountId, fup);
-                break;
+                messagesSentThisCycle++;
+                if (messagesSentThisCycle >= MAX_DISPATCH_PER_CYCLE) break;
+                await sleep(3000 + Math.floor(Math.random() * 2000));
+                continue;
               } else {
                 const fails = (stepFailCountMap.get(failKey) || 0) + 1;
                 stepFailCountMap.set(failKey, fails);
@@ -890,7 +921,10 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
                   stepFailCountMap.delete(failKey);
                 }
                 applyAccountCooldown(accountId, fup);
-                break;
+                messagesSentThisCycle++;
+                if (messagesSentThisCycle >= MAX_DISPATCH_PER_CYCLE) break;
+                await sleep(3000 + Math.floor(Math.random() * 2000));
+                continue;
               }
             } finally {
               inFlightKeys.delete(flightKey);
@@ -919,14 +953,42 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
             ? state.isPostChat
               ? state.postChatTriggerTimeMs
               : initialContactMs
-            : state.lastStepTimeMs;
+            : (state.lastStepTimeMs || initialContactMs);
 
         const elapsedMs = now - referenceTimeMs;
 
-        // Safety ceiling for short-delay steps (only when delay is under 24h)
-        if (!state.isPostChat && minAgeDays === 0 && requiredDelayMs < 24 * 60 * 60 * 1000) {
-          const maxCeilingMs = Math.max(requiredDelayMs * 4, 48 * 60 * 60 * 1000);
-          if (elapsedMs > maxCeilingMs) {
+        // Safety ceiling check:
+        // For Step 1 (short delay, e.g. < 15 minutes):
+        // If elapsedMs > 45 minutes, lead is too old for a 3-minute Step 1 check-in!
+        // Mark Step 1 as expired so Step 2 can evaluate at the 3-hour mark without awkward blasts.
+        if (!state.isPostChat && minAgeDays === 0 && requiredDelayMs < 15 * 60 * 1000) {
+          const step1CeilingMs = 45 * 60 * 1000; // 45 minutes
+          if (elapsedMs > step1CeilingMs) {
+            log('FOLLOWUP', `ℹ️ [Step 1 Expired] Lead ${contact.phoneNumber} is ${(elapsedMs / 60000).toFixed(0)}m old. Skipping Step 1 to prevent awkward delayed check-in.`);
+            await logFollowupStep(
+              campaign.id,
+              contact.phoneNumber,
+              contact.contactName,
+              1,
+              'text',
+              'skipped: step_window_expired'
+            );
+            continue;
+          }
+        } else if (!state.isPostChat && minAgeDays === 0 && requiredDelayMs < 24 * 60 * 60 * 1000) {
+          // For Step 2 (e.g. 3-4 hours):
+          // Max ceiling 24 hours
+          const step2CeilingMs = 24 * 60 * 60 * 1000;
+          if (elapsedMs > step2CeilingMs) {
+            log('FOLLOWUP', `ℹ️ [Step ${nextStepNumber} Expired] Lead ${contact.phoneNumber} exceeded 24h ceiling. Skipping.`);
+            await logFollowupStep(
+              campaign.id,
+              contact.phoneNumber,
+              contact.contactName,
+              nextStepNumber,
+              'text',
+              'skipped: step_window_expired'
+            );
             continue;
           }
         }
@@ -969,7 +1031,10 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
             if (success) {
               stepFailCountMap.delete(failKey);
               applyAccountCooldown(accountId, fup);
-              break;
+              messagesSentThisCycle++;
+              if (messagesSentThisCycle >= MAX_DISPATCH_PER_CYCLE) break;
+              await sleep(3000 + Math.floor(Math.random() * 2000));
+              continue;
             } else {
               const fails = (stepFailCountMap.get(failKey) || 0) + 1;
               stepFailCountMap.set(failKey, fails);
@@ -990,7 +1055,10 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
                 stepFailCountMap.delete(failKey);
               }
               applyAccountCooldown(accountId, fup);
-              break;
+              messagesSentThisCycle++;
+              if (messagesSentThisCycle >= MAX_DISPATCH_PER_CYCLE) break;
+              await sleep(3000 + Math.floor(Math.random() * 2000));
+              continue;
             }
           } finally {
             inFlightKeys.delete(flightKey);
@@ -1010,9 +1078,9 @@ async function processCampaignFollowups(campaign: WaCampaign): Promise<void> {
  * Main scheduler loop: runs every 15 seconds in background with strict mutex lock.
  */
 export function startFollowupScheduler(): void {
-  const INTERVAL_MS = 30 * 1000; // 30 seconds
+  const INTERVAL_MS = 15 * 1000; // 15 seconds
 
-  log('FOLLOWUP', '🚀 Intelligent Multi-Step Follow-up Scheduler started (polling every 30s with staggered anti-blast pacing)...');
+  log('FOLLOWUP', '🚀 Intelligent Multi-Step Follow-up Scheduler started (polling every 15s with staggered anti-blast pacing)...');
 
   const runCycle = async () => {
     if (isCycleRunning) return; // Prevent concurrent cycle execution

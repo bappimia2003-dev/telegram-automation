@@ -242,12 +242,28 @@ async function startWhatsApp(accountId = 'main', accountName) {
                     msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
                     msg.message?.interactiveResponseMessage?.body?.text ||
                     '';
-                // ── Check if Admin sent a Closing Keyword (fromMe === true) to trigger Post-Chat Follow-up ──
+                // ── Check if Admin sent a message (fromMe === true) ──
                 if (msg.key.fromMe) {
                     const outText = rawText.trim();
-                    if (!outText || outText.length > 180 || (0, campaigns_js_1.isAutoReplyInProgress)(sender, accountId)) {
+                    if (!outText || outText.length > 500 || (0, campaigns_js_1.isAutoReplyInProgress)(sender, accountId)) {
                         continue;
                     }
+                    // Record admin_reply for manual takeover tracking
+                    (0, db_js_1.findContactCampaign)(sender, accountId).then(async (existingCampId) => {
+                        if (existingCampId) {
+                            await (0, db_js_1.addMessageLog)({
+                                id: `adm_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                                campaignId: existingCampId,
+                                phoneNumber: sender,
+                                contactName: 'Admin',
+                                messageType: 'admin_reply',
+                                fileUrl: '',
+                                status: 'sent',
+                                errorMessage: outText.slice(0, 200),
+                                sentAt: new Date().toISOString(),
+                            });
+                        }
+                    }).catch(() => { });
                     (0, db_js_1.getActiveCampaigns)()
                         .then(async (activeCamps) => {
                         const accountCamps = activeCamps.filter((c) => c.isActive &&
@@ -312,15 +328,31 @@ async function startWhatsApp(accountId = 'main', accountName) {
                             (0, utils_js_1.log)('WA', `ℹ️ [${session.name}] Ignoring quick message "${messageText}" from ${sender} while initial auto-reply is still delivering.`);
                             return;
                         }
-                        // B. CUSTOMER REPLY! (Customer replied to our message)
-                        // Follow-up is turned OFF IMMEDIATELY for this customer!
                         let campaignId = await (0, db_js_1.findContactCampaign)(sender, accountId);
                         if (!campaignId) {
                             const activeCamps = await (0, db_js_1.getActiveCampaigns)();
                             const accountCamps = activeCamps.filter((c) => !c.accountId || c.accountId === 'all' || c.accountId === accountId);
                             campaignId = accountCamps[0]?.id || activeCamps[0]?.id || 'general';
                         }
-                        (0, utils_js_1.log)('WA', `🛑 Customer ${sender} replied: "${messageText}". Follow-up turned OFF immediately!`);
+                        // Check if customer explicitly opted out ("lagbena", "cancel", "stop", etc.)
+                        const isOptOut = /^(lagbena|লাগবে না|না|cancel|stop|dorkar nai|দরকার নাই|দরকার নেই|no thanks|ভুল|wrong number)$/i.test(messageText.trim());
+                        if (isOptOut) {
+                            (0, utils_js_1.log)('WA', `🛑 Customer ${sender} opted out: "${messageText}". Follow-up permanently stopped.`);
+                            await (0, db_js_1.addMessageLog)({
+                                id: `opt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                                campaignId,
+                                phoneNumber: sender,
+                                contactName: pushName,
+                                messageType: 'opt_out',
+                                fileUrl: '',
+                                status: 'sent',
+                                errorMessage: messageText.slice(0, 200),
+                                sentAt: new Date().toISOString(),
+                            });
+                            return;
+                        }
+                        // B. CUSTOMER INBOUND MESSAGE
+                        (0, utils_js_1.log)('WA', `📩 Inbound message from ${sender}: "${messageText}". Logging for campaign ${campaignId}.`);
                         await (0, db_js_1.logInboundMessage)(campaignId, sender, pushName, messageText);
                         // Check if customer gave a promise date ("কাল নিব", "শুক্রবার", "২ দিন পর", etc.)
                         const analysis = await (0, ai_js_1.detectGenderAndIntent)(pushName, messageText);

@@ -100,7 +100,7 @@ export interface WaMessageLog {
   campaignId: string;
   phoneNumber: string;
   contactName: string;
-  messageType: 'image' | 'video' | 'audio' | 'text' | 'document';
+  messageType: 'image' | 'video' | 'audio' | 'text' | 'document' | string;
   fileUrl: string;
   status: 'sent' | 'failed';
   errorMessage: string;

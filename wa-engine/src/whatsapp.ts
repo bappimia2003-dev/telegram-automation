@@ -11,6 +11,7 @@ import {
   deleteAuthBackup,
   findContactCampaign,
   logInboundMessage,
+  addMessageLog,
   schedulePromiseFollowup,
   getActiveCampaigns,
   triggerPostChatFollowup,
@@ -272,12 +273,30 @@ export async function startWhatsApp(accountId = 'main', accountName?: string): P
           (msg.message as any)?.interactiveResponseMessage?.body?.text ||
           '';
 
-        // ── Check if Admin sent a Closing Keyword (fromMe === true) to trigger Post-Chat Follow-up ──
+        // ── Check if Admin sent a message (fromMe === true) ──
         if (msg.key.fromMe) {
           const outText = rawText.trim();
-          if (!outText || outText.length > 180 || isAutoReplyInProgress(sender, accountId)) {
+          if (!outText || outText.length > 500 || isAutoReplyInProgress(sender, accountId)) {
             continue;
           }
+
+          // Record admin_reply for manual takeover tracking
+          findContactCampaign(sender, accountId).then(async (existingCampId) => {
+            if (existingCampId) {
+              await addMessageLog({
+                id: `adm_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                campaignId: existingCampId,
+                phoneNumber: sender,
+                contactName: 'Admin',
+                messageType: 'admin_reply',
+                fileUrl: '',
+                status: 'sent',
+                errorMessage: outText.slice(0, 200),
+                sentAt: new Date().toISOString(),
+              });
+            }
+          }).catch(() => {});
+
           getActiveCampaigns()
             .then(async (activeCamps) => {
               const accountCamps = activeCamps.filter(
@@ -355,8 +374,6 @@ export async function startWhatsApp(accountId = 'main', accountName?: string): P
               return;
             }
 
-            // B. CUSTOMER REPLY! (Customer replied to our message)
-            // Follow-up is turned OFF IMMEDIATELY for this customer!
             let campaignId = await findContactCampaign(sender, accountId);
             if (!campaignId) {
               const activeCamps = await getActiveCampaigns();
@@ -366,7 +383,26 @@ export async function startWhatsApp(accountId = 'main', accountName?: string): P
               campaignId = accountCamps[0]?.id || activeCamps[0]?.id || 'general';
             }
 
-            log('WA', `🛑 Customer ${sender} replied: "${messageText}". Follow-up turned OFF immediately!`);
+            // Check if customer explicitly opted out ("lagbena", "cancel", "stop", etc.)
+            const isOptOut = /^(lagbena|লাগবে না|না|cancel|stop|dorkar nai|দরকার নাই|দরকার নেই|no thanks|ভুল|wrong number)$/i.test(messageText.trim());
+            if (isOptOut) {
+              log('WA', `🛑 Customer ${sender} opted out: "${messageText}". Follow-up permanently stopped.`);
+              await addMessageLog({
+                id: `opt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                campaignId,
+                phoneNumber: sender,
+                contactName: pushName,
+                messageType: 'opt_out',
+                fileUrl: '',
+                status: 'sent',
+                errorMessage: messageText.slice(0, 200),
+                sentAt: new Date().toISOString(),
+              });
+              return;
+            }
+
+            // B. CUSTOMER INBOUND MESSAGE
+            log('WA', `📩 Inbound message from ${sender}: "${messageText}". Logging for campaign ${campaignId}.`);
             await logInboundMessage(campaignId, sender, pushName, messageText);
 
             // Check if customer gave a promise date ("কাল নিব", "শুক্রবার", "২ দিন পর", etc.)

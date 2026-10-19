@@ -706,7 +706,7 @@ export async function getContactLogs(
       .from('wa_message_logs')
       .select('*')
       .eq('phone_number', phoneNumber)
-      .or(`campaign_id.eq.${campaignId},message_type.eq.incoming`)
+      .or(`campaign_id.eq.${campaignId},campaign_id.eq.general,campaign_id.is.null`)
       .order('sent_at', { ascending: true });
 
     if (error) return [];
@@ -761,20 +761,13 @@ export async function logInboundMessage(
 export async function clearContactInboundReplies(campaignId: string, phoneNumber: string): Promise<void> {
   if (!supabase) return;
   try {
-    // 1. Delete all previous incoming logs for this phone number across any campaign_id
-    await supabase
-      .from('wa_message_logs')
-      .delete()
-      .eq('phone_number', phoneNumber)
-      .eq('message_type', 'incoming');
-
-    // 2. Delete previous follow-up & post-chat step logs for this specific campaign + phone number
+    // Strictly isolate deletion to THIS campaign only, preserving other campaigns' history!
     await supabase
       .from('wa_message_logs')
       .delete()
       .eq('campaign_id', campaignId)
       .eq('phone_number', phoneNumber)
-      .or('message_type.like.followup%,message_type.like.postchat%');
+      .or('message_type.eq.incoming,message_type.like.followup%,message_type.like.postchat%');
   } catch (err: any) {
     // non-fatal
   }
