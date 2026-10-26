@@ -4,136 +4,101 @@ import * as React from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { ToastProvider } from '@/components/ui/toast';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { LanguageToggle } from '@/components/LanguageToggle';
+import { useLanguage } from '@/components/LanguageProvider';
 import { usePathname } from 'next/navigation';
-import { Clock, AlertTriangle, User, ShieldCheck } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import Link from 'next/link';
+import { Plus, ChevronRight } from 'lucide-react';
 
-function getHeaderTitle(pathname: string): string {
-  if (!pathname || pathname === '/' || pathname === '/dashboard') return 'Dashboard';
-  if (pathname === '/api-keys') return 'API Keys';
-  if (pathname === '/whatsapp') return 'WhatsApp';
-  if (pathname === '/whatsapp/clients') return 'Clients Panel';
-  if (pathname === '/whatsapp/new-followup') return 'New Follow-up';
-  if (pathname === '/whatsapp/targeted-followup') return 'Targeted Follow-up';
-  if (pathname === '/whatsapp/campaigns/new') return 'New Campaign';
-  if (pathname.startsWith('/whatsapp/campaigns/')) return 'Campaign Details';
-  if (pathname.startsWith('/whatsapp/numbers/')) return 'WhatsApp Device';
-  if (pathname === '/bots/new') return 'New Bot';
-  if (pathname.startsWith('/bots/') && pathname.endsWith('/settings')) return 'Bot Settings';
-  if (pathname.startsWith('/bots/')) return 'Manage Bot';
-
-  const parts = pathname.split('/').filter(Boolean);
-  const lastPart = parts.pop() || '';
-  if (/^[0-9a-fA-F-]{8,}$/.test(lastPart) || /^[0-9]+$/.test(lastPart)) {
-    const parentPart = parts.pop();
-    if (parentPart) {
-      return parentPart.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-    }
-    return '';
+function getBreadcrumb(pathname: string, t: (en: string, bn: string) => string): { channel: string; page: string } {
+  if (pathname.startsWith('/dashboard') || pathname.startsWith('/bots') || pathname.startsWith('/api-keys')) {
+    if (pathname === '/dashboard') return { channel: t('Telegram', 'টেলিগ্রাম'), page: t('Bots Overview', 'বট ওভারভিউ') };
+    if (pathname === '/bots/new') return { channel: t('Telegram', 'টেলিগ্রাম'), page: t('New Bot', 'নতুন বট') };
+    if (pathname === '/api-keys') return { channel: t('Telegram', 'টেলিগ্রাম'), page: t('API Keys', 'এপিআই কী') };
+    return { channel: t('Telegram', 'টেলিগ্রাম'), page: t('Bot Settings', 'বট সেটিংস') };
   }
-
-  return lastPart.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  if (pathname === '/whatsapp/clients') return { channel: t('WhatsApp', 'হোয়াটসঅ্যাপ'), page: t('Clients Management', 'ক্লায়েন্ট ম্যানেজমেন্ট') };
+  if (pathname === '/whatsapp/new-followup') return { channel: t('WhatsApp', 'হোয়াটসঅ্যাপ'), page: t('Smart Sequence', 'স্মার্ট সিকোয়েন্স') };
+  if (pathname === '/whatsapp/targeted-followup') return { channel: t('WhatsApp', 'হোয়াটসঅ্যাপ'), page: t('Targeted Follow-up', 'টার্গেটেড ফলো-আপ') };
+  if (pathname === '/whatsapp/campaigns/new') return { channel: t('WhatsApp', 'হোয়াটসঅ্যাপ'), page: t('New Campaign', 'নতুন ক্যাম্পেইন') };
+  if (pathname.startsWith('/whatsapp/campaigns/')) return { channel: t('WhatsApp', 'হোয়াটসঅ্যাপ'), page: t('Campaign Details', 'ক্যাম্পেইনের বিবরণ') };
+  if (pathname.startsWith('/whatsapp/numbers/')) return { channel: t('WhatsApp', 'হোয়াটসঅ্যাপ'), page: t('Device Console', 'ডিভাইস কনসোল') };
+  return { channel: t('WhatsApp', 'হোয়াটসঅ্যাপ'), page: t('Overview & Campaigns', 'ওভারভিউ ও ক্যাম্পেইন') };
 }
 
 export function DashboardLayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const displayTitle = getHeaderTitle(pathname);
-  const [authData, setAuthData] = React.useState<any>(null);
-
-  React.useEffect(() => {
-    const loadAuth = () => {
-      fetch(`/api/auth?t=${Date.now()}`, { cache: 'no-store' })
-        .then((r) => r.json())
-        .then((d) => {
-          if (d?.authenticated) setAuthData(d);
-        })
-        .catch(() => {});
-    };
-    loadAuth();
-    const timer = setInterval(loadAuth, 15000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const isClient = authData?.role === 'client';
-  const clientInfo = authData?.client;
-  const remainingDays = clientInfo?.remainingDays;
-  const isExpired = clientInfo?.isExpired;
+  const { t } = useLanguage();
+  const breadcrumb = getBreadcrumb(pathname, t);
+  const isWhatsApp = !pathname.startsWith('/dashboard') && !pathname.startsWith('/bots') && !pathname.startsWith('/api-keys');
 
   return (
     <ToastProvider>
-      <div className="flex min-h-screen bg-[#F4F1EB] dark:bg-[#111215] text-gray-900 dark:text-gray-100 relative transition-colors duration-200">
+      <div className="flex min-h-screen bg-background text-foreground transition-colors duration-150">
         <Sidebar />
         
         <div className="flex-1 md:ml-64 flex flex-col min-h-screen w-full min-w-0">
-          <header className="h-16 border-b border-[#E6E2D8] dark:border-[#1F2429] bg-[#F4F1EB] dark:bg-[#111215] flex items-center justify-between px-4 sm:px-6 md:px-8 sticky top-0 z-20 transition-colors duration-200">
-            <div className="flex items-center gap-3 pl-12 md:pl-0">
-              {displayTitle && (
-                <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white truncate max-w-[200px] sm:max-w-xs md:max-w-md">
-                  {displayTitle}
-                </h2>
-              )}
+          {/* Sticky Top Bar following Top Bar Contract */}
+          <header className="h-14 border-b border-border bg-card/90 backdrop-blur-md flex items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 sticky top-0 z-20">
+            {/* Zone 1: Mobile Brand + Contextual Breadcrumb */}
+            <div className="flex items-center gap-2 pl-10 md:pl-0 text-xs sm:text-sm min-w-0">
+              <Link prefetch={false} href="/whatsapp" className="flex md:hidden items-center gap-1.5 shrink-0 mr-1">
+                <img
+                  src="/jalabot-logo.svg"
+                  alt="JalaBot"
+                  className="w-6 h-6 rounded-md shrink-0"
+                />
+                <span className="font-extrabold text-foreground tracking-tight">
+                  {t('JalaBot', 'জালাবট')}
+                </span>
+              </Link>
+              <span className="hidden sm:inline text-muted-foreground font-medium whitespace-nowrap shrink-0">
+                {breadcrumb.channel}
+              </span>
+              <ChevronRight className="hidden sm:inline w-3.5 h-3.5 text-muted-foreground/60 shrink-0" />
+              <span className="font-bold text-foreground truncate">
+                {breadcrumb.page}
+              </span>
             </div>
-            
-            <div className="flex items-center space-x-2.5 sm:space-x-3.5">
+
+            {/* Zone 3: Language Toggle + Day/Night Toggle + 1 Primary CTA */}
+            <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+              {/* Bangla / English Language Toggle */}
+              <LanguageToggle />
+
               {/* Day / Night Theme Toggle */}
               <ThemeToggle />
 
-              {/* Profile Pill with Pop-up Day Counter Badge */}
-              {isClient && clientInfo ? (
-                <div className="relative pt-1">
-                  {remainingDays !== null && remainingDays !== undefined && (
-                    <span
-                      className={cn(
-                        "absolute -top-2 -right-1 z-10 px-2 py-0.5 rounded-full text-[10px] font-extrabold tracking-tight shadow-sm border flex items-center gap-1 leading-none",
-                        isExpired || remainingDays <= 0
-                          ? "bg-red-600 text-white border-red-400 animate-pulse"
-                          : remainingDays <= 5
-                          ? "bg-amber-500 text-white border-amber-300"
-                          : "bg-[#164E43] text-white border-[#227968]"
-                      )}
-                    >
-                      <Clock className="w-2.5 h-2.5" />
-                      <span>{isExpired || remainingDays <= 0 ? '0d (Off)' : `${remainingDays} Days`}</span>
-                    </span>
-                  )}
-                  <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-[#1B1D1A] dark:text-[#E9EEF2] bg-[#FAF8F5] dark:bg-[#181A1F] px-3.5 py-1.5 rounded-full border border-[#E6E2D8] dark:border-[#262930] shadow-sm">
-                    <span
-                      className={cn(
-                        "w-2.5 h-2.5 rounded-full",
-                        isExpired ? "bg-red-500" : "bg-[#15803D] dark:bg-[#10B981] animate-pulse"
-                      )}
-                    />
-                    <User className="w-3.5 h-3.5 text-[#164E43] dark:text-[#34D399]" />
-                    <span className="truncate max-w-[110px] sm:max-w-[160px]">{clientInfo.name}</span>
-                  </div>
-                </div>
+              <div className="h-4 w-px bg-border hidden sm:block" />
+
+              {/* Quick Primary CTA */}
+              {isWhatsApp ? (
+                <Link prefetch={false} href="/whatsapp/campaigns/new" className="shrink-0">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 h-8 bg-[#075E54] hover:bg-[#064E46] dark:bg-[#00A884] dark:hover:bg-[#008f6f] text-white dark:text-[#0B141A] px-3 rounded-lg text-xs font-bold transition-all active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5 shrink-0" />
+                    <span className="hidden sm:inline">{t('New Campaign', 'নতুন ক্যাম্পেইন')}</span>
+                    <span className="sm:hidden">{t('Create', 'তৈরি করুন')}</span>
+                  </button>
+                </Link>
               ) : (
-                <div className="flex items-center text-xs sm:text-sm font-bold text-[#164E43] dark:text-[#34D399] bg-[#FAF8F5] dark:bg-[#181A1F] px-3.5 py-1.5 rounded-full border border-[#E6E2D8] dark:border-[#262930] shadow-sm">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#15803D] dark:bg-[#10B981] mr-2 animate-pulse" />
-                  <ShieldCheck className="w-3.5 h-3.5 mr-1.5 hidden sm:inline" />
-                  <span className="hidden sm:inline">System Active</span>
-                  <span className="sm:hidden">Active</span>
-                </div>
+                <Link prefetch={false} href="/bots/new" className="shrink-0">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 h-8 bg-[#0088CC] hover:bg-[#0077B5] dark:bg-[#229ED9] dark:hover:bg-[#1E8CC0] text-white px-3 rounded-lg text-xs font-bold transition-all active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5 shrink-0" />
+                    <span>{t('New Bot', 'নতুন বট')}</span>
+                  </button>
+                </Link>
               )}
             </div>
           </header>
 
-          {/* Expired Subscription Banner for Clients */}
-          {isClient && isExpired && (
-            <div className="bg-red-600/10 dark:bg-red-950/40 border-b border-red-500/30 px-4 sm:px-8 py-2.5 flex items-center justify-between text-xs sm:text-sm text-red-700 dark:text-red-300 font-semibold">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
-                <span>
-                  আপনার সাবস্ক্রিপশনের নির্ধারিত সময় শেষ হয়ে গেছে (0 Days Left)। সকল ক্যাম্পেইন স্বয়ংক্রিয়ভাবে অফ হয়ে গেছে। পুনরায় চালু করতে অ্যাডমিনের সাথে যোগাযোগ করুন।
-                </span>
-              </div>
-            </div>
-          )}
-
-          <main className="flex-1 p-4 sm:p-6 md:p-8 w-full">
-            <div className="max-w-6xl mx-auto w-full">
-              {children}
-            </div>
+          <main className="flex-1 px-4 sm:px-6 lg:px-8 py-5 sm:py-6 pb-20 md:pb-10 w-full max-w-[1440px] mx-auto">
+            {children}
           </main>
         </div>
       </div>

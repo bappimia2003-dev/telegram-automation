@@ -10,7 +10,7 @@ import { Button } from "./ui/button"
 import { 
   Key, 
   Plus, 
-  Sparkles, 
+  Zap, 
   Mail, 
   Mic, 
   Image as ImageIcon, 
@@ -507,7 +507,7 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
       {/* AI Personality */}
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-1.5">
-          <Sparkles className="w-4 h-4 text-purple-400" />
+          <Zap className="w-4 h-4 text-[#0088CC]" />
           AI Personality (How the AI talks)
         </label>
         <Textarea 
@@ -678,8 +678,8 @@ export function BotForm({ bot, apiKeys, onSubmit, loading }: BotFormProps) {
       <div className="p-4 sm:p-5 border border-purple-500/30 bg-purple-950/15 rounded-2xl space-y-4">
         <div className="flex items-center justify-between pb-2 border-b border-[#E6E2D8] dark:border-[#262930]">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
-              <Sparkles className="w-5 h-5" />
+            <div className="p-2 rounded-xl bg-[#0088CC]/10 text-[#0088CC]">
+              <Zap className="w-5 h-5" />
             </div>
             <div>
               <h3 className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white">AI Superpowers & Capabilities (ফিচারসমূহ)</h3>

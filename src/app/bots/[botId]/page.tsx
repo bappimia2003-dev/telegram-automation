@@ -6,10 +6,10 @@ import Link from 'next/link';
 import { 
   ChevronRight, Power, Settings, MessageSquare, Trash2, 
   Bot, Clock, Calendar, ArrowRight,
-  Mic, Image as ImageIcon, FileText, Globe, Sparkles,
+  Mic, Image as ImageIcon, FileText, Globe, Zap,
   Film, Store, Video, Music, FileSpreadsheet, CheckCircle2
 } from 'lucide-react';
-
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 export default function BotDetailPage() {
   const params = useParams();
@@ -21,6 +21,7 @@ export default function BotDetailPage() {
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
   const [toggleError, setToggleError] = useState('');
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const fetchBot = async () => {
     try {
@@ -69,14 +70,17 @@ export default function BotDetailPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this bot? This action cannot be undone.')) return;
+  const executeDelete = async () => {
     try {
       await fetch(`/api/bots/${botId}`, { method: 'DELETE' });
       router.push('/dashboard');
     } catch (error) {
       console.error(error);
     }
+  };
+
+  const handleDelete = () => {
+    setConfirmDeleteOpen(true);
   };
 
   if (loading) {
@@ -224,11 +228,11 @@ export default function BotDetailPage() {
           </div>
 
           {/* AI Superpowers Status Card */}
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-4 shadow-sm">
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+          <div className="bg-card border border-border rounded-2xl p-6 space-y-4 day-box-shadow">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-green-700" />
-                <h3 className="font-bold text-gray-900 text-sm">AI Superpowers</h3>
+                <Zap className="w-4 h-4 text-[#0088CC] dark:text-[#229ED9]" />
+                <h3 className="font-bold text-foreground text-sm">AI Capabilities</h3>
               </div>
               <Link href={`/bots/${botId}/settings`} className="text-xs text-green-700 hover:underline font-semibold">
                 Configure
@@ -357,6 +361,20 @@ export default function BotDetailPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="Delete Telegram Bot?"
+        description={`Are you sure you want to delete "${bot.name}"? Click OK to confirm or Cancel to keep it.`}
+        confirmLabel="OK, Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={async () => {
+          setConfirmDeleteOpen(false);
+          await executeDelete();
+        }}
+        onCancel={() => setConfirmDeleteOpen(false)}
+      />
     </div>
   );
 }

@@ -63,6 +63,7 @@ export async function POST(request: Request) {
     const token = await createSession(authResult);
     const response = NextResponse.json({
       success: true,
+      token,
       role: authResult.role,
       clientId: authResult.clientId,
       clientName: authResult.clientName,
@@ -72,9 +73,9 @@ export async function POST(request: Request) {
     const isHttps = proto === 'https' || request.url.startsWith('https:');
 
     response.cookies.set(COOKIE_NAME, token, {
-      httpOnly: true,
+      httpOnly: false,
       secure: isHttps,
-      sameSite: 'lax',
+      sameSite: isHttps ? 'none' : 'lax',
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: '/',
     });
@@ -85,8 +86,18 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const proto = request.headers.get('x-forwarded-proto');
+  const isHttps = proto === 'https' || request.url.startsWith('https:');
+
   const response = NextResponse.json({ success: true });
-  response.cookies.delete(COOKIE_NAME);
+  response.cookies.set(COOKIE_NAME, '', {
+    httpOnly: false,
+    secure: isHttps,
+    sameSite: isHttps ? 'none' : 'lax',
+    maxAge: 0,
+    path: '/',
+  });
   return response;
 }
+

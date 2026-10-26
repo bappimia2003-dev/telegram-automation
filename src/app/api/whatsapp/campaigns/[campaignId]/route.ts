@@ -7,11 +7,13 @@ export const revalidate = 0;
 
 export async function GET(
   _request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> | { campaignId: string } }
 ) {
   try {
+    const resolved = await Promise.resolve(params);
+    const campaignId = resolved.campaignId;
     const session = await getSessionInfo();
-    const campaign = await getCampaignById(params.campaignId);
+    const campaign = await getCampaignById(campaignId);
     if (!campaign) {
       return NextResponse.json({ ok: false, error: 'Campaign not found' }, { status: 404 });
     }
@@ -26,11 +28,13 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> | { campaignId: string } }
 ) {
   try {
+    const resolved = await Promise.resolve(params);
+    const campaignId = resolved.campaignId;
     const session = await getSessionInfo();
-    const existing = await getCampaignById(params.campaignId);
+    const existing = await getCampaignById(campaignId);
     if (!existing) {
       return NextResponse.json({ ok: false, error: 'Campaign not found' }, { status: 404 });
     }
@@ -53,7 +57,7 @@ export async function PUT(
       body.clientId = existing.clientId || 'admin';
     }
 
-    const updated = await updateCampaign(params.campaignId, body);
+    const updated = await updateCampaign(campaignId, body);
     if (!updated) {
       return NextResponse.json({ ok: false, error: 'Failed to update campaign' }, { status: 404 });
     }
@@ -65,23 +69,19 @@ export async function PUT(
 
 export async function DELETE(
   _request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> | { campaignId: string } }
 ) {
   try {
+    const resolved = await Promise.resolve(params);
+    const campaignId = resolved.campaignId;
     const session = await getSessionInfo();
-    const existing = await getCampaignById(params.campaignId);
-    if (!existing) {
-      return NextResponse.json({ ok: false, error: 'Campaign not found' }, { status: 404 });
-    }
-    if (session.authenticated && session.role === 'client' && existing.clientId !== session.clientId) {
+    const existing = await getCampaignById(campaignId);
+    if (existing && session.authenticated && session.role === 'client' && existing.clientId !== session.clientId) {
       return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 });
     }
 
-    const success = await deleteCampaign(params.campaignId);
-    if (!success) {
-      return NextResponse.json({ ok: false, error: 'Failed to delete campaign' }, { status: 500 });
-    }
-    return NextResponse.json({ ok: true });
+    await deleteCampaign(campaignId);
+    return NextResponse.json({ ok: true, deleted: true, id: campaignId });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }

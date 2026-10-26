@@ -16,7 +16,6 @@ import {
   FileCheck, 
   Upload, 
   Trash2, 
-  Sparkles, 
   Save, 
   ArrowLeft, 
   Clock, 
@@ -1037,10 +1036,10 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
         {/* LEFT COLUMN: Campaign Information, Auto-Reply Variations & Delivery Controls */}
         <div className="flex flex-col gap-6 h-full">
           {/* 1. General Info & Keywords */}
-          <Card className="border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#181A1F] text-gray-900 dark:text-white">
+          <Card className="border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#181A1F] text-gray-900 dark:text-white day-box-shadow">
             <CardHeader className="pb-3 border-b border-[#E6E2D8] dark:border-[#262930]">
               <CardTitle className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-emerald-600" />
+                <Zap className="w-5 h-5 text-emerald-600" />
                 Campaign Information
               </CardTitle>
             </CardHeader>
@@ -1049,7 +1048,7 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
             <div className="space-y-2">
               <label className="text-xs font-medium text-gray-900 dark:text-white">Campaign Name *</label>
               <Input
-                placeholder="e.g. Gemini Pro Promotion"
+                placeholder="e.g. JalaBot Pro Promotion"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -2298,7 +2297,7 @@ export function CampaignForm({ initialData, isEditing, returnTo }: CampaignFormP
                   {/* How it works box (Matched Emerald Theme) */}
                   <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-xs text-gray-700 dark:text-gray-300 space-y-1.5">
                     <p className="font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5" />
+                      <Zap className="w-3.5 h-3.5" />
                       <span>কিভাবে কাজ করবে?</span>
                     </p>
                     <p className="text-[11px] leading-relaxed">

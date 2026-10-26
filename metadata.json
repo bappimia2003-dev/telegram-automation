@@ -1,0 +1,9 @@
+{
+  "name": "Telegram & WhatsApp Automation",
+  "description": "AI-Powered Telegram and WhatsApp Bot Management & Follow-up Platform",
+  "prompt": "telegram-automation",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

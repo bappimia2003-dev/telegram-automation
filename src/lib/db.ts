@@ -1,10 +1,54 @@
-import { getSupabase } from './supabase';
+import { getSupabase, handleSupabaseError } from './supabase';
 import { Bot, ApiKey, ChatMessage, DashboardStats } from './types';
 
 // In-memory fallback for local dev / testing before Supabase env vars are provided
+const defaultBot: Bot = {
+  id: 'bot_support_01',
+  name: 'Telegram AI Assistant',
+  telegramToken: '7123456789:AAExampleDummyTokenForAiBot',
+  aiPersonality: 'Helpful, concise, friendly customer support AI',
+  aiDetails: 'You are a professional assistant helping customers with order inquiries and product information.',
+  responseStyle: 'friendly',
+  maxTokens: 500,
+  apiKeyId: 'key_gemini_default',
+  currentModel: 'gemini-2.5-flash',
+  isActive: true,
+  webhookUrl: '',
+  messageCount: 142,
+  enableVoice: true,
+  enableVision: true,
+  enableFiles: true,
+  enableWebSearch: false,
+  enableWelcomeMedia: false,
+  welcomeImageUrl: '',
+  welcomeAudioUrl: '',
+  welcomeAudioType: 'voice',
+  welcomeVideoUrl: '',
+  welcomeMessage: 'Hello! I am your AI assistant. How can I assist you today?',
+  workInfo: 'Available 24/7 for customer support',
+  productFileUrl: '',
+  productFileName: '',
+  productFileContent: '',
+  createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
+  updatedAt: new Date().toISOString(),
+};
+
+const defaultApiKey: ApiKey = {
+  id: 'key_gemini_default',
+  key: 'AIzaSy' + 'B...preview_key',
+  gmail: 'support@example.com',
+  label: 'Primary Gemini Key',
+  status: 'active',
+  requestsToday: 45,
+  tokensUsed: 12500,
+  lastUsed: new Date().toISOString(),
+  lastReset: new Date().toISOString(),
+  createdAt: new Date(Date.now() - 14 * 86400000).toISOString(),
+};
+
 const memoryStore = {
-  bots: [] as Bot[],
-  apiKeys: [] as ApiKey[],
+  bots: [defaultBot] as Bot[],
+  apiKeys: [defaultApiKey] as ApiKey[],
   messages: {} as Record<string, ChatMessage[]>,
 };
 
@@ -190,12 +234,17 @@ export async function getAllBots(): Promise<Bot[]> {
   if (!supabase) {
     return memoryStore.bots;
   }
-  const { data, error } = await supabase.from('bots').select('*').order('created_at', { ascending: false });
-  if (error) {
-    console.error('Error fetching bots from Supabase:', error.message);
+  try {
+    const { data, error } = await supabase.from('bots').select('*').order('created_at', { ascending: false });
+    if (error) {
+      handleSupabaseError('fetching bots from Supabase', error);
+      return memoryStore.bots;
+    }
+    return (data || []).map(rowToBot);
+  } catch (err: any) {
+    handleSupabaseError('fetching bots from Supabase', err);
     return memoryStore.bots;
   }
-  return (data || []).map(rowToBot);
 }
 
 export async function getBotById(id: string): Promise<Bot | null> {
@@ -203,12 +252,17 @@ export async function getBotById(id: string): Promise<Bot | null> {
   if (!supabase) {
     return memoryStore.bots.find(b => b.id === id) || null;
   }
-  const { data, error } = await supabase.from('bots').select('*').eq('id', id).maybeSingle();
-  if (error || !data) {
-    if (error) console.error('Error fetching bot by id:', error.message);
+  try {
+    const { data, error } = await supabase.from('bots').select('*').eq('id', id).maybeSingle();
+    if (error || !data) {
+      if (error) handleSupabaseError('fetching bot by id', error);
+      return memoryStore.bots.find(b => b.id === id) || null;
+    }
+    return rowToBot(data);
+  } catch (err: any) {
+    handleSupabaseError('fetching bot by id', err);
     return memoryStore.bots.find(b => b.id === id) || null;
   }
-  return rowToBot(data);
 }
 
 export async function createBot(bot: Bot): Promise<Bot> {
@@ -218,13 +272,19 @@ export async function createBot(bot: Bot): Promise<Bot> {
     return bot;
   }
   const row = botToRow(bot);
-  const { data, error } = await supabase.from('bots').insert(row).select().single();
-  if (error) {
-    console.error('Error creating bot in Supabase:', error.message);
+  try {
+    const { data, error } = await supabase.from('bots').insert(row).select().single();
+    if (error) {
+      handleSupabaseError('creating bot in Supabase', error);
+      memoryStore.bots.push(bot);
+      return bot;
+    }
+    return rowToBot(data);
+  } catch (err: any) {
+    handleSupabaseError('creating bot in Supabase', err);
     memoryStore.bots.push(bot);
     return bot;
   }
-  return rowToBot(data);
 }
 
 export async function updateBot(id: string, updates: Partial<Bot>): Promise<Bot | null> {
@@ -246,15 +306,23 @@ export async function updateBot(id: string, updates: Partial<Bot>): Promise<Bot 
     return memoryStore.bots[index];
   }
 
-  const { data, error } = await supabase.from('bots').update(rowUpdates).eq('id', id).select().maybeSingle();
-  if (error || !data) {
-    if (error) console.error('Error updating bot in Supabase:', error.message);
+  try {
+    const { data, error } = await supabase.from('bots').update(rowUpdates).eq('id', id).select().maybeSingle();
+    if (error || !data) {
+      if (error) handleSupabaseError('updating bot in Supabase', error);
+      const index = memoryStore.bots.findIndex(b => b.id === id);
+      if (index === -1) return null;
+      memoryStore.bots[index] = mergedBot;
+      return memoryStore.bots[index];
+    }
+    return rowToBot(data);
+  } catch (err: any) {
+    handleSupabaseError('updating bot in Supabase', err);
     const index = memoryStore.bots.findIndex(b => b.id === id);
     if (index === -1) return null;
     memoryStore.bots[index] = mergedBot;
     return memoryStore.bots[index];
   }
-  return rowToBot(data);
 }
 
 export async function deleteBot(id: string): Promise<boolean> {
@@ -266,14 +334,19 @@ export async function deleteBot(id: string): Promise<boolean> {
     return memoryStore.bots.length < before;
   }
 
-  // Delete associated messages first
-  await supabase.from('chat_messages').delete().eq('bot_id', id);
-  const { error } = await supabase.from('bots').delete().eq('id', id);
-  if (error) {
-    console.error('Error deleting bot from Supabase:', error.message);
+  try {
+    // Delete associated messages first
+    await supabase.from('chat_messages').delete().eq('bot_id', id);
+    const { error } = await supabase.from('bots').delete().eq('id', id);
+    if (error) {
+      handleSupabaseError('deleting bot from Supabase', error);
+      return false;
+    }
+    return true;
+  } catch (err: any) {
+    handleSupabaseError('deleting bot from Supabase', err);
     return false;
   }
-  return true;
 }
 
 // --- API KEYS ---
@@ -282,12 +355,17 @@ export async function getAllApiKeys(): Promise<ApiKey[]> {
   if (!supabase) {
     return memoryStore.apiKeys;
   }
-  const { data, error } = await supabase.from('api_keys').select('*').order('created_at', { ascending: false });
-  if (error) {
-    console.error('Error fetching api keys from Supabase:', error.message);
+  try {
+    const { data, error } = await supabase.from('api_keys').select('*').order('created_at', { ascending: false });
+    if (error) {
+      handleSupabaseError('fetching api keys from Supabase', error);
+      return memoryStore.apiKeys;
+    }
+    return (data || []).map(rowToApiKey);
+  } catch (err: any) {
+    handleSupabaseError('fetching api keys from Supabase', err);
     return memoryStore.apiKeys;
   }
-  return (data || []).map(rowToApiKey);
 }
 
 export async function getApiKeyById(id: string): Promise<ApiKey | null> {
@@ -295,12 +373,17 @@ export async function getApiKeyById(id: string): Promise<ApiKey | null> {
   if (!supabase) {
     return memoryStore.apiKeys.find(k => k.id === id) || null;
   }
-  const { data, error } = await supabase.from('api_keys').select('*').eq('id', id).maybeSingle();
-  if (error || !data) {
-    if (error) console.error('Error fetching api key by id:', error.message);
+  try {
+    const { data, error } = await supabase.from('api_keys').select('*').eq('id', id).maybeSingle();
+    if (error || !data) {
+      if (error) handleSupabaseError('fetching api key by id', error);
+      return memoryStore.apiKeys.find(k => k.id === id) || null;
+    }
+    return rowToApiKey(data);
+  } catch (err: any) {
+    handleSupabaseError('fetching api key by id', err);
     return memoryStore.apiKeys.find(k => k.id === id) || null;
   }
-  return rowToApiKey(data);
 }
 
 export async function createApiKey(apiKey: ApiKey): Promise<ApiKey> {
@@ -310,13 +393,19 @@ export async function createApiKey(apiKey: ApiKey): Promise<ApiKey> {
     return apiKey;
   }
   const row = apiKeyToRow(apiKey);
-  const { data, error } = await supabase.from('api_keys').insert(row).select().single();
-  if (error) {
-    console.error('Error creating api key in Supabase:', error.message);
+  try {
+    const { data, error } = await supabase.from('api_keys').insert(row).select().single();
+    if (error) {
+      handleSupabaseError('creating api key in Supabase', error);
+      memoryStore.apiKeys.push(apiKey);
+      return apiKey;
+    }
+    return rowToApiKey(data);
+  } catch (err: any) {
+    handleSupabaseError('creating api key in Supabase', err);
     memoryStore.apiKeys.push(apiKey);
     return apiKey;
   }
-  return rowToApiKey(data);
 }
 
 export async function updateApiKey(id: string, updates: Partial<ApiKey>): Promise<ApiKey | null> {
@@ -330,15 +419,23 @@ export async function updateApiKey(id: string, updates: Partial<ApiKey>): Promis
     return memoryStore.apiKeys[index];
   }
 
-  const { data, error } = await supabase.from('api_keys').update(rowUpdates).eq('id', id).select().maybeSingle();
-  if (error || !data) {
-    if (error) console.error('Error updating api key in Supabase:', error.message);
+  try {
+    const { data, error } = await supabase.from('api_keys').update(rowUpdates).eq('id', id).select().maybeSingle();
+    if (error || !data) {
+      if (error) handleSupabaseError('updating api key in Supabase', error);
+      const index = memoryStore.apiKeys.findIndex(k => k.id === id);
+      if (index === -1) return null;
+      memoryStore.apiKeys[index] = { ...memoryStore.apiKeys[index], ...updates };
+      return memoryStore.apiKeys[index];
+    }
+    return rowToApiKey(data);
+  } catch (err: any) {
+    handleSupabaseError('updating api key in Supabase', err);
     const index = memoryStore.apiKeys.findIndex(k => k.id === id);
     if (index === -1) return null;
     memoryStore.apiKeys[index] = { ...memoryStore.apiKeys[index], ...updates };
     return memoryStore.apiKeys[index];
   }
-  return rowToApiKey(data);
 }
 
 export async function deleteApiKey(id: string): Promise<boolean> {
@@ -348,12 +445,17 @@ export async function deleteApiKey(id: string): Promise<boolean> {
     memoryStore.apiKeys = memoryStore.apiKeys.filter(k => k.id !== id);
     return memoryStore.apiKeys.length < before;
   }
-  const { error } = await supabase.from('api_keys').delete().eq('id', id);
-  if (error) {
-    console.error('Error deleting api key from Supabase:', error.message);
+  try {
+    const { error } = await supabase.from('api_keys').delete().eq('id', id);
+    if (error) {
+      handleSupabaseError('deleting api key from Supabase', error);
+      return false;
+    }
+    return true;
+  } catch (err: any) {
+    handleSupabaseError('deleting api key from Supabase', err);
     return false;
   }
-  return true;
 }
 
 export async function getActiveApiKeys(): Promise<ApiKey[]> {
@@ -368,18 +470,23 @@ export async function getMessages(botId: string, limit: number = 100): Promise<C
     const all = memoryStore.messages[botId] || [];
     return all.slice(-limit);
   }
-  const { data, error } = await supabase
-    .from('chat_messages')
-    .select('*')
-    .eq('bot_id', botId)
-    .order('timestamp', { ascending: true })
-    .limit(limit);
+  try {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('bot_id', botId)
+      .order('timestamp', { ascending: true })
+      .limit(limit);
 
-  if (error) {
-    console.error('Error fetching chat messages from Supabase:', error.message);
+    if (error) {
+      handleSupabaseError('fetching chat messages from Supabase', error);
+      return (memoryStore.messages[botId] || []).slice(-limit);
+    }
+    return (data || []).map(rowToMessage);
+  } catch (err: any) {
+    handleSupabaseError('fetching chat messages from Supabase', err);
     return (memoryStore.messages[botId] || []).slice(-limit);
   }
-  return (data || []).map(rowToMessage);
 }
 
 export async function addMessage(message: ChatMessage): Promise<void> {

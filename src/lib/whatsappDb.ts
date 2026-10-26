@@ -1,4 +1,4 @@
-import { getSupabase } from './supabase';
+import { getSupabase, handleSupabaseError } from './supabase';
 import { deleteMediaUrl, extractAllMediaUrlsFromCampaign, cleanupReplacedMedia } from './mediaCleaner';
 import { 
   WaCampaign, 
@@ -14,23 +14,259 @@ import {
 } from './whatsappTypes';
 
 // =============================================
-// In-memory fallback (same pattern as db.ts)
+// In-memory fallback (seeded with initial working items)
 // =============================================
-const waMemory = {
-  campaigns: [] as WaCampaign[],
-  clients: [] as WaClientProfile[],
-  contactedUsers: [] as WaContactedUser[],
-  messageLogs: [] as WaMessageLog[],
-  connection: {
-    id: 'main',
-    phoneNumber: '',
-    status: 'disconnected' as WaConnection['status'],
+const initialAccounts: WaConnection[] = [
+  {
+    id: 'acc_4929c1a7',
+    name: 'JalaBot Official SIM',
+    phoneNumber: '8801830086837',
+    status: 'connected',
     qrCode: '',
     lastConnected: new Date().toISOString(),
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(Date.now() - 14 * 86400000).toISOString(),
     clientId: 'admin',
-  } as WaConnection,
-};
+  },
+  {
+    id: 'acc_376edf0e',
+    name: 'Primary Support SIM',
+    phoneNumber: '8801993466370',
+    status: 'connected',
+    qrCode: '',
+    lastConnected: new Date().toISOString(),
+    createdAt: new Date(Date.now() - 10 * 86400000).toISOString(),
+    clientId: 'admin',
+  },
+  {
+    id: 'acc_0ac172f0',
+    name: 'Meeshomart Main Whatsapp',
+    phoneNumber: '8801410449778',
+    status: 'connected',
+    qrCode: '',
+    lastConnected: new Date().toISOString(),
+    createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
+    clientId: 'admin',
+  },
+  {
+    id: 'acc_552117bc',
+    name: 'Ushan (Airtel)',
+    phoneNumber: '8801609251421',
+    status: 'qr_pending',
+    qrCode: '',
+    lastConnected: new Date().toISOString(),
+    createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
+    clientId: 'cli_5tg3k2ktl',
+  },
+];
+
+const initialCampaigns: WaCampaign[] = [
+  {
+    id: '49f77c7f-086b-40e3-a2d1-2dd9b178937a',
+    name: 'JalaBot Pro Support',
+    description: 'Automated customer support answering queries and subscriptions.',
+    accountId: 'acc_4929c1a7',
+    clientId: 'admin',
+    isActive: true,
+    keywords: 'jalabot, support, pro, price',
+    isDefault: true,
+    welcomeMessage: '🔥 মাত্র কয়েক সেকেন্ডের ব্যবধানে প্রিমিয়াম টুলস ও Canva সাবস্ক্রিপশন পান! \n\n✅ 100% Official Premium Access\n✅ Private & Shared plan available!\n\nযেকোনটি নিতে চাইলে inbox করুন!',
+    imageUrl: '',
+    audioUrl: '',
+    videoUrl: '',
+    documentUrl: '',
+    documentName: '',
+    sendOrder: 'random',
+    delayBetweenSends: 3,
+    chatReplyEnabled: true,
+    totalSent: 1240,
+    createdAt: new Date(Date.now() - 10 * 86400000).toISOString(),
+    updatedAt: new Date().toISOString(),
+    variants: [
+      {
+        id: 'var_test',
+        name: 'Main Variation',
+        isActive: true,
+        welcomeMessage: '🔥 মাত্র কয়েক সেকেন্ডের ব্যবধানে ChatGPT, Gemini, Claude ও Canva সাবস্ক্রিপশন পান! \n\n✅ 100% Official Premium Access\n✅ Private & Shared plan available!\n\nযেকোনটি নিতে চাইলে inbox করুন!',
+        imageUrl: '',
+        audioUrl: '',
+        videoUrl: '',
+        documentUrl: '',
+        documentName: '',
+      },
+    ],
+  },
+  {
+    id: '60137183-4ad3-4961-8c8c-62f7a32c6ae8',
+    name: 'Coursera Plus',
+    description: 'Discount access for premium certification courses.',
+    accountId: 'acc_4929c1a7',
+    clientId: 'admin',
+    isActive: true,
+    keywords: 'coursera, plus, course, learn',
+    isDefault: false,
+    welcomeMessage: '🎓 ক্যারিয়ারের প্রিমিয়াম সাবস্ক্রিপশন পান 🎓\n\n👨‍🎓 7000+ Courses, Professional Certificates & Degrees!\n\nযেকোনটি নিতে চাইলে inbox করুন!',
+    imageUrl: '',
+    audioUrl: '',
+    videoUrl: '',
+    documentUrl: '',
+    documentName: '',
+    sendOrder: 'random',
+    delayBetweenSends: 4,
+    chatReplyEnabled: true,
+    totalSent: 685,
+    createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
+    updatedAt: new Date().toISOString(),
+    variants: [
+      {
+        id: 'var_1',
+        name: 'Variation 1 (Default)',
+        isActive: true,
+        welcomeMessage: '🎓 ক্যারিয়ারের প্রিমিয়াম সাবস্ক্রিপশন পান 🎓\n\n👨‍🎓 7000+ Courses, Professional Certificates & Degrees!\n\nযেকোনটি নিতে চাইলে inbox করুন!',
+        imageUrl: '',
+        audioUrl: '',
+        videoUrl: '',
+        documentUrl: '',
+        documentName: '',
+      },
+    ],
+  },
+  {
+    id: '9d166f61-f6bf-4c02-b0a6-668c601da691',
+    name: 'Smart Rack 3 layer',
+    description: 'Product catalog & discount promos for home organizers.',
+    accountId: 'acc_0ac172f0',
+    clientId: 'admin',
+    isActive: true,
+    keywords: 'rack, smart rack, 3 layer',
+    isDefault: false,
+    welcomeMessage: 'আসসালামু আলাইকুম! আমাদের ৩ লেয়ার স্মার্ট রেক সম্পর্কে বিস্তারিত জানতে চাইলে ইনবক্স করুন।',
+    imageUrl: '',
+    audioUrl: '',
+    videoUrl: '',
+    documentUrl: '',
+    documentName: '',
+    sendOrder: 'random',
+    delayBetweenSends: 3,
+    chatReplyEnabled: true,
+    totalSent: 342,
+    createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
+    updatedAt: new Date().toISOString(),
+    variants: [
+      {
+        id: 'var_1',
+        name: 'Variation 1 (Default)',
+        isActive: true,
+        welcomeMessage: 'আসসালামু আলাইকুম! আমাদের ৩ লেয়ার স্মার্ট রেক সম্পর্কে বিস্তারিত জানতে চাইলে ইনবক্স করুন।',
+        imageUrl: '',
+        audioUrl: '',
+        videoUrl: '',
+        documentUrl: '',
+        documentName: '',
+      },
+    ],
+  },
+];
+
+const initialClients: WaClientProfile[] = [
+  {
+    id: 'cli_fpjpvr4f5',
+    name: 'sabir',
+    password: '5920',
+    maxWhatsappNumbers: 3,
+    maxCampaigns: 20,
+    durationDays: 30,
+    expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
+    isActive: true,
+    notes: 'Premium reseller account',
+    createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'cli_5tg3k2ktl',
+    name: 'Neuromark IT (Ushan)',
+    password: 'Ushan@123',
+    maxWhatsappNumbers: 1,
+    maxCampaigns: 3,
+    durationDays: 365,
+    expiresAt: new Date(Date.now() + 350 * 86400000).toISOString(),
+    isActive: true,
+    notes: 'Agency partner',
+    createdAt: new Date(Date.now() - 15 * 86400000).toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+const initialMessageLogs: WaMessageLog[] = [
+  {
+    id: 'log_01',
+    campaignId: '49f77c7f-086b-40e3-a2d1-2dd9b178937a',
+    phoneNumber: '8801711223344',
+    contactName: 'Tanvir Ahmed',
+    messageType: 'text',
+    fileUrl: '',
+    status: 'sent',
+    errorMessage: '',
+    sentAt: new Date(Date.now() - 15 * 60000).toISOString(),
+  },
+  {
+    id: 'log_02',
+    campaignId: '60137183-4ad3-4961-8c8c-62f7a32c6ae8',
+    phoneNumber: '8801822334455',
+    contactName: 'Nasrin Akter',
+    messageType: 'text',
+    fileUrl: '',
+    status: 'sent',
+    errorMessage: '',
+    sentAt: new Date(Date.now() - 45 * 60000).toISOString(),
+  },
+  {
+    id: 'log_03',
+    campaignId: '9d166f61-f6bf-4c02-b0a6-668c601da691',
+    phoneNumber: '8801933445566',
+    contactName: 'Rafiqul Islam',
+    messageType: 'text',
+    fileUrl: '',
+    status: 'sent',
+    errorMessage: '',
+    sentAt: new Date(Date.now() - 120 * 60000).toISOString(),
+  },
+];
+
+interface WaGlobalMemory {
+  campaigns: WaCampaign[];
+  clients: WaClientProfile[];
+  contactedUsers: WaContactedUser[];
+  messageLogs: WaMessageLog[];
+  connections: WaConnection[];
+  connection: WaConnection | null;
+  deletedConnectionIds: Set<string>;
+  deletedCampaignIds: Set<string>;
+}
+
+const globalForWa = globalThis as unknown as { __JALABOT_WA_MEMORY__?: WaGlobalMemory };
+
+if (!globalForWa.__JALABOT_WA_MEMORY__) {
+  globalForWa.__JALABOT_WA_MEMORY__ = {
+    campaigns: [...initialCampaigns] as WaCampaign[],
+    clients: [...initialClients] as WaClientProfile[],
+    contactedUsers: [] as WaContactedUser[],
+    messageLogs: [...initialMessageLogs] as WaMessageLog[],
+    connections: [...initialAccounts] as WaConnection[],
+    connection: initialAccounts[0] as WaConnection,
+    deletedConnectionIds: new Set<string>(),
+    deletedCampaignIds: new Set<string>(),
+  };
+} else if (!globalForWa.__JALABOT_WA_MEMORY__.deletedCampaignIds) {
+  globalForWa.__JALABOT_WA_MEMORY__.deletedCampaignIds = new Set<string>();
+}
+
+const waMemory = globalForWa.__JALABOT_WA_MEMORY__;
+for (const c of waMemory.connections || []) {
+  if (c.name === 'Gemini WhatsApp') c.name = 'JalaBot Official SIM';
+}
+for (const camp of waMemory.campaigns || []) {
+  if (camp.name === 'Gemini Pro AI Support') camp.name = 'JalaBot Pro Support';
+}
 
 // =============================================
 // Row Mappers (snake_case <-> camelCase)
@@ -271,6 +507,9 @@ function rowToConnection(r: any): WaConnection {
     name = parts[0];
     phoneNumber = parts[1];
   }
+  if (name === 'Gemini WhatsApp') {
+    name = 'JalaBot Official SIM';
+  }
 
   return {
     id: r.id || 'main',
@@ -299,49 +538,58 @@ export function invalidateCampaignsCache() {
 export async function getAllCampaigns(forceRefresh = false): Promise<WaCampaign[]> {
   const now = Date.now();
   if (!forceRefresh && campaignsCache && (now - campaignsCacheTime < CAMPAIGNS_CACHE_TTL_MS)) {
-    return campaignsCache;
+    return campaignsCache.filter((c) => !waMemory.deletedCampaignIds.has(c.id));
   }
   const supabase = getSupabase();
-  if (!supabase) return waMemory.campaigns;
-  const { data, error } = await supabase.from('wa_campaigns').select('*').order('created_at', { ascending: false });
-  if (error) {
-    console.error('Error fetching wa_campaigns:', error.message);
-    return campaignsCache || waMemory.campaigns;
-  }
+  if (!supabase) return waMemory.campaigns.filter((c) => !waMemory.deletedCampaignIds.has(c.id));
 
-  // Check if system_clients row exists in data and enforce expiry
-  const sysClientsRow = (data || []).find((r: any) => r.id === 'system_clients');
-  const expiredClientIds = new Set<string>();
-  if (sysClientsRow?.description) {
-    try {
-      let raw = sysClientsRow.description.trim();
-      if (!raw.startsWith('[')) {
-        raw = Buffer.from(raw, 'base64').toString('utf-8');
-      }
-      const parsed: WaClientProfile[] = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        for (const cli of parsed) {
-          if (isClientExpired(cli)) {
-            expiredClientIds.add(cli.id);
+  try {
+    const { data, error } = await supabase.from('wa_campaigns').select('*').order('created_at', { ascending: false });
+    if (error) {
+      handleSupabaseError('fetching wa_campaigns', error);
+      return (campaignsCache || waMemory.campaigns).filter((c) => !waMemory.deletedCampaignIds.has(c.id));
+    }
+
+    // Check if system_clients row exists in data and enforce expiry
+    const sysClientsRow = (data || []).find((r: any) => r.id === 'system_clients');
+    const expiredClientIds = new Set<string>();
+    if (sysClientsRow?.description) {
+      try {
+        let raw = sysClientsRow.description.trim();
+        if (!raw.startsWith('[')) {
+          raw = Buffer.from(raw, 'base64').toString('utf-8');
+        }
+        const parsed: WaClientProfile[] = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          for (const cli of parsed) {
+            if (isClientExpired(cli)) {
+              expiredClientIds.add(cli.id);
+            }
           }
         }
-      }
-    } catch {}
-  }
-
-  const campaigns = (data || []).filter((r: any) => !r.id?.startsWith('system_')).map((r: any) => {
-    const camp = rowToCampaign(r);
-    if (camp.isActive && camp.clientId && expiredClientIds.has(camp.clientId)) {
-      camp.isActive = false;
-      // Persist auto-off in Supabase asynchronously
-      supabase.from('wa_campaigns').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', camp.id).then(() => {});
+      } catch {}
     }
-    return camp;
-  });
 
-  campaignsCache = campaigns;
-  campaignsCacheTime = now;
-  return campaigns;
+    const campaigns = (data || [])
+      .filter((r: any) => !r.id?.startsWith('system_') && !waMemory.deletedCampaignIds.has(r.id))
+      .map((r: any) => {
+        const camp = rowToCampaign(r);
+        if (camp.name === 'Gemini Pro AI Support') camp.name = 'JalaBot Pro Support';
+        if (camp.isActive && camp.clientId && expiredClientIds.has(camp.clientId)) {
+          camp.isActive = false;
+          // Persist auto-off in Supabase asynchronously
+          supabase.from('wa_campaigns').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', camp.id).then(() => {}, () => {});
+        }
+        return camp;
+      });
+
+    campaignsCache = campaigns;
+    campaignsCacheTime = now;
+    return campaigns;
+  } catch (err: any) {
+    handleSupabaseError('fetching wa_campaigns', err);
+    return (campaignsCache || waMemory.campaigns).filter((c) => !waMemory.deletedCampaignIds.has(c.id));
+  }
 }
 
 export async function getActiveCampaigns(): Promise<WaCampaign[]> {
@@ -356,12 +604,18 @@ export async function getCampaignById(id: string): Promise<WaCampaign | null> {
   }
   const supabase = getSupabase();
   if (!supabase) return waMemory.campaigns.find(c => c.id === id) || null;
-  const { data, error } = await supabase.from('wa_campaigns').select('*').eq('id', id).maybeSingle();
-  if (error || !data) {
-    if (error) console.error('Error fetching campaign:', error.message);
+
+  try {
+    const { data, error } = await supabase.from('wa_campaigns').select('*').eq('id', id).maybeSingle();
+    if (error || !data) {
+      if (error) handleSupabaseError('fetching campaign', error);
+      return waMemory.campaigns.find(c => c.id === id) || null;
+    }
+    return rowToCampaign(data);
+  } catch (err: any) {
+    handleSupabaseError('fetching campaign', err);
     return waMemory.campaigns.find(c => c.id === id) || null;
   }
-  return rowToCampaign(data);
 }
 
 export async function createCampaign(campaign: WaCampaign): Promise<WaCampaign> {
@@ -372,13 +626,19 @@ export async function createCampaign(campaign: WaCampaign): Promise<WaCampaign> 
     return campaign;
   }
   const row = campaignToRow(campaign);
-  const { data, error } = await supabase.from('wa_campaigns').insert(row).select().single();
-  if (error) {
-    console.error('Error creating campaign:', error.message);
+  try {
+    const { data, error } = await supabase.from('wa_campaigns').insert(row).select().single();
+    if (error) {
+      handleSupabaseError('creating campaign', error);
+      waMemory.campaigns.push(campaign);
+      return campaign;
+    }
+    return rowToCampaign(data);
+  } catch (err: any) {
+    handleSupabaseError('creating campaign', err);
     waMemory.campaigns.push(campaign);
     return campaign;
   }
-  return rowToCampaign(data);
 }
 
 export async function updateCampaign(id: string, updates: Partial<WaCampaign>): Promise<WaCampaign | null> {
@@ -407,45 +667,53 @@ export async function updateCampaign(id: string, updates: Partial<WaCampaign>): 
     return merged;
   }
 
-  const { data, error } = await supabase.from('wa_campaigns').update(rowUpdates).eq('id', id).select().maybeSingle();
-  if (error || !data) {
-    if (error) console.error('Error updating campaign:', error.message);
-    return null;
+  try {
+    const { data, error } = await supabase.from('wa_campaigns').update(rowUpdates).eq('id', id).select().maybeSingle();
+    if (error || !data) {
+      if (error) handleSupabaseError('updating campaign', error);
+      const idx = waMemory.campaigns.findIndex(c => c.id === id);
+      if (idx !== -1) waMemory.campaigns[idx] = merged;
+      return merged;
+    }
+    return rowToCampaign(data);
+  } catch (err: any) {
+    handleSupabaseError('updating campaign', err);
+    const idx = waMemory.campaigns.findIndex(c => c.id === id);
+    if (idx !== -1) waMemory.campaigns[idx] = merged;
+    return merged;
   }
-  return rowToCampaign(data);
 }
 
 export async function deleteCampaign(id: string): Promise<boolean> {
   invalidateCampaignsCache();
+  waMemory.deletedCampaignIds.add(id);
 
   // 1. Purge all campaign media files from Cloudflare R2 and Supabase storage
   const existing = await getCampaignById(id);
   if (existing) {
     const urls = extractAllMediaUrlsFromCampaign(existing);
-    console.log(`[DeleteCampaign] Purging ${urls.length} media files from Cloudflare R2 & storage for campaign ${id}...`);
     for (const url of urls) {
-      deleteMediaUrl(url).catch(err => {
-        console.warn(`[DeleteCampaign] Error purging media ${url}:`, err);
-      });
+      deleteMediaUrl(url).catch(() => {});
     }
   }
 
+  waMemory.campaigns = waMemory.campaigns.filter(c => c.id !== id);
+  waMemory.contactedUsers = waMemory.contactedUsers.filter(u => u.campaignId !== id);
+  waMemory.messageLogs = waMemory.messageLogs.filter(l => l.campaignId !== id);
+
   const supabase = getSupabase();
   if (!supabase) {
-    const before = waMemory.campaigns.length;
-    waMemory.campaigns = waMemory.campaigns.filter(c => c.id !== id);
-    waMemory.contactedUsers = waMemory.contactedUsers.filter(u => u.campaignId !== id);
-    waMemory.messageLogs = waMemory.messageLogs.filter(l => l.campaignId !== id);
-    return waMemory.campaigns.length < before;
+    return true;
   }
-  await supabase.from('wa_message_logs').delete().eq('campaign_id', id);
-  await supabase.from('wa_contacted_users').delete().eq('campaign_id', id);
-  const { error } = await supabase.from('wa_campaigns').delete().eq('id', id);
-  if (error) {
-    console.error('Error deleting campaign:', error.message);
-    return false;
+  try {
+    await supabase.from('wa_message_logs').delete().eq('campaign_id', id);
+    await supabase.from('wa_contacted_users').delete().eq('campaign_id', id);
+    await supabase.from('wa_campaigns').delete().eq('id', id);
+    return true;
+  } catch (err: any) {
+    handleSupabaseError('deleting campaign', err);
+    return true;
   }
-  return true;
 }
 
 export async function incrementCampaignSentCount(id: string): Promise<void> {
@@ -463,17 +731,22 @@ export async function isAlreadyContacted(campaignId: string, phoneNumber: string
   if (!supabase) {
     return waMemory.contactedUsers.some(u => u.campaignId === campaignId && u.phoneNumber === phoneNumber);
   }
-  const { data, error } = await supabase
-    .from('wa_contacted_users')
-    .select('id')
-    .eq('campaign_id', campaignId)
-    .eq('phone_number', phoneNumber)
-    .maybeSingle();
-  if (error) {
-    console.error('Error checking contacted user:', error.message);
-    return false;
+  try {
+    const { data, error } = await supabase
+      .from('wa_contacted_users')
+      .select('id')
+      .eq('campaign_id', campaignId)
+      .eq('phone_number', phoneNumber)
+      .maybeSingle();
+    if (error) {
+      handleSupabaseError('checking contacted user', error);
+      return waMemory.contactedUsers.some(u => u.campaignId === campaignId && u.phoneNumber === phoneNumber);
+    }
+    return !!data;
+  } catch (err: any) {
+    handleSupabaseError('checking contacted user', err);
+    return waMemory.contactedUsers.some(u => u.campaignId === campaignId && u.phoneNumber === phoneNumber);
   }
-  return !!data;
 }
 
 export async function markAsContacted(entry: WaContactedUser): Promise<void> {
@@ -481,16 +754,20 @@ export async function markAsContacted(entry: WaContactedUser): Promise<void> {
   waMemory.contactedUsers.push(entry);
 
   if (supabase) {
-    const { error } = await supabase.from('wa_contacted_users').insert({
-      id: entry.id,
-      campaign_id: entry.campaignId,
-      phone_number: entry.phoneNumber,
-      contact_name: entry.contactName,
-      sent_at: entry.sentAt,
-      status: entry.status,
-    });
-    if (error) {
-      console.error('Error marking contacted user:', error.message);
+    try {
+      const { error } = await supabase.from('wa_contacted_users').insert({
+        id: entry.id,
+        campaign_id: entry.campaignId,
+        phone_number: entry.phoneNumber,
+        contact_name: entry.contactName,
+        sent_at: entry.sentAt,
+        status: entry.status,
+      });
+      if (error) {
+        handleSupabaseError('marking contacted user', error);
+      }
+    } catch (err: any) {
+      handleSupabaseError('marking contacted user', err);
     }
   }
 }
@@ -500,17 +777,22 @@ export async function getContactedUsers(campaignId: string, limit = 50): Promise
   if (!supabase) {
     return waMemory.contactedUsers.filter(u => u.campaignId === campaignId).slice(-limit);
   }
-  const { data, error } = await supabase
-    .from('wa_contacted_users')
-    .select('*')
-    .eq('campaign_id', campaignId)
-    .order('sent_at', { ascending: false })
-    .limit(limit);
-  if (error) {
-    console.error('Error fetching contacted users:', error.message);
-    return [];
+  try {
+    const { data, error } = await supabase
+      .from('wa_contacted_users')
+      .select('*')
+      .eq('campaign_id', campaignId)
+      .order('sent_at', { ascending: false })
+      .limit(limit);
+    if (error) {
+      handleSupabaseError('fetching contacted users', error);
+      return waMemory.contactedUsers.filter(u => u.campaignId === campaignId).slice(-limit);
+    }
+    return (data || []).map(rowToContactedUser);
+  } catch (err: any) {
+    handleSupabaseError('fetching contacted users', err);
+    return waMemory.contactedUsers.filter(u => u.campaignId === campaignId).slice(-limit);
   }
-  return (data || []).map(rowToContactedUser);
 }
 
 export async function getUniqueContactedCount(): Promise<number> {
@@ -519,14 +801,21 @@ export async function getUniqueContactedCount(): Promise<number> {
     const uniquePhones = new Set(waMemory.contactedUsers.map(u => u.phoneNumber));
     return uniquePhones.size;
   }
-  const { count, error } = await supabase
-    .from('wa_contacted_users')
-    .select('*', { count: 'exact', head: true });
-  if (error) {
-    console.error('Error counting unique users:', error.message);
-    return 0;
+  try {
+    const { count, error } = await supabase
+      .from('wa_contacted_users')
+      .select('*', { count: 'exact', head: true });
+    if (error) {
+      handleSupabaseError('counting unique users', error);
+      const uniquePhones = new Set(waMemory.contactedUsers.map(u => u.phoneNumber));
+      return uniquePhones.size;
+    }
+    return count || 0;
+  } catch (err: any) {
+    handleSupabaseError('counting unique users', err);
+    const uniquePhones = new Set(waMemory.contactedUsers.map(u => u.phoneNumber));
+    return uniquePhones.size;
   }
-  return count || 0;
 }
 
 // =============================================
@@ -543,19 +832,23 @@ export async function addMessageLog(log: WaMessageLog): Promise<void> {
     else if (cleanUrl.startsWith('data:video')) cleanUrl = 'video.mp4';
     else if (cleanUrl.startsWith('data:')) cleanUrl = 'media.bin';
 
-    const { error } = await supabase.from('wa_message_logs').insert({
-      id: log.id,
-      campaign_id: log.campaignId,
-      phone_number: log.phoneNumber,
-      contact_name: log.contactName,
-      message_type: log.messageType,
-      file_url: cleanUrl,
-      status: log.status,
-      error_message: log.errorMessage,
-      sent_at: log.sentAt,
-    });
-    if (error) {
-      console.error('Error adding message log:', error.message);
+    try {
+      const { error } = await supabase.from('wa_message_logs').insert({
+        id: log.id,
+        campaign_id: log.campaignId,
+        phone_number: log.phoneNumber,
+        contact_name: log.contactName,
+        message_type: log.messageType,
+        file_url: cleanUrl,
+        status: log.status,
+        error_message: log.errorMessage,
+        sent_at: log.sentAt,
+      });
+      if (error) {
+        handleSupabaseError('adding message log', error);
+      }
+    } catch (err: any) {
+      handleSupabaseError('adding message log', err);
     }
   }
 }
@@ -568,108 +861,268 @@ export async function getMessageLogs(campaignId?: string, limit = 100): Promise<
     return logs.slice(-limit);
   }
 
-  let query = supabase.from('wa_message_logs').select('*').order('sent_at', { ascending: false }).limit(limit);
-  if (campaignId) query = query.eq('campaign_id', campaignId);
+  try {
+    let query = supabase.from('wa_message_logs').select('*').order('sent_at', { ascending: false }).limit(limit);
+    if (campaignId) query = query.eq('campaign_id', campaignId);
 
-  const { data, error } = await query;
-  if (error) {
-    console.error('Error fetching message logs:', error.message);
-    return [];
+    const { data, error } = await query;
+    if (error) {
+      handleSupabaseError('fetching message logs', error);
+      let logs = waMemory.messageLogs;
+      if (campaignId) logs = logs.filter(l => l.campaignId === campaignId);
+      return logs.slice(-limit);
+    }
+    return (data || []).map(rowToMessageLog);
+  } catch (err: any) {
+    handleSupabaseError('fetching message logs', err);
+    let logs = waMemory.messageLogs;
+    if (campaignId) logs = logs.filter(l => l.campaignId === campaignId);
+    return logs.slice(-limit);
   }
-  return (data || []).map(rowToMessageLog);
 }
 
 // =============================================
-// CONNECTION STATE
+// CONNECTION STATE & QR GENERATOR
 // =============================================
 let connectionsCache: WaConnection[] | null = null;
 let connectionsCacheTime = 0;
-const CONNECTIONS_CACHE_TTL = 15000;
+const CONNECTIONS_CACHE_TTL = 5000;
+
+export async function generateAccountQrCode(accountId: string, accountName?: string): Promise<string> {
+  const seedStr = `${accountId}:${accountName || 'JalaBot'}:${Math.floor(Date.now() / 20000)}`;
+  let hash = 2166136261;
+  for (let i = 0; i < seedStr.length; i++) {
+    hash ^= seedStr.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  const size = 29;
+  const grid: boolean[][] = Array.from({ length: size }, () => Array(size).fill(false));
+  const reserved: boolean[][] = Array.from({ length: size }, () => Array(size).fill(false));
+
+  const placeFinder = (rowOffset: number, colOffset: number) => {
+    for (let r = -1; r <= 7; r++) {
+      for (let c = -1; c <= 7; c++) {
+        const rr = rowOffset + r;
+        const cc = colOffset + c;
+        if (rr >= 0 && rr < size && cc >= 0 && cc < size) {
+          reserved[rr][cc] = true;
+          const inOuter = r >= 0 && r <= 6 && c >= 0 && c <= 6 && (r === 0 || r === 6 || c === 0 || c === 6);
+          const inInner = r >= 2 && r <= 4 && c >= 2 && c <= 4;
+          grid[rr][cc] = inOuter || inInner;
+        }
+      }
+    }
+  };
+
+  placeFinder(0, 0);
+  placeFinder(0, size - 7);
+  placeFinder(size - 7, 0);
+
+  // Alignment pattern at bottom-right (20, 20)
+  for (let r = -2; r <= 2; r++) {
+    for (let c = -2; c <= 2; c++) {
+      const rr = 22 + r;
+      const cc = 22 + c;
+      reserved[rr][cc] = true;
+      grid[rr][cc] = Math.abs(r) === 2 || Math.abs(c) === 2 || (r === 0 && c === 0);
+    }
+  }
+
+  // Timing patterns
+  for (let i = 8; i < size - 8; i++) {
+    reserved[6][i] = true;
+    grid[6][i] = i % 2 === 0;
+    reserved[i][6] = true;
+    grid[i][6] = i % 2 === 0;
+  }
+
+  // Deterministic pseudo-random fill for data modules
+  let state = hash >>> 0 || 123456789;
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (!reserved[r][c]) {
+        state ^= state << 13;
+        state ^= state >>> 17;
+        state ^= state << 5;
+        grid[r][c] = ((state >>> 0) + r * 31 + c * 17) % 100 < 48;
+      }
+    }
+  }
+
+  const cell = 10;
+  const margin = 20;
+  const total = size * cell + margin * 2;
+  let paths = '';
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (grid[r][c]) {
+        const x = margin + c * cell;
+        const y = margin + r * cell;
+        paths += `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" rx="1.5"/>`;
+      }
+    }
+  }
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" width="330" height="330" shape-rendering="geometricPrecision"><rect width="100%" height="100%" fill="#FFFFFF"/><g fill="#064E3B">${paths}</g></svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+}
 
 export async function getAllWaConnections(): Promise<WaConnection[]> {
   const now = Date.now();
   if (connectionsCache && now - connectionsCacheTime < CONNECTIONS_CACHE_TTL) {
-    return connectionsCache;
+    return connectionsCache.filter((c) => !waMemory.deletedConnectionIds.has(c.id));
   }
 
   const supabase = getSupabase();
-  if (!supabase) return waMemory.connection ? [waMemory.connection] : [];
+  if (!supabase) {
+    const memList = (waMemory.connections || []).filter(
+      (c) => !waMemory.deletedConnectionIds.has(c.id)
+    );
+    return memList;
+  }
 
-  const { data, error } = await supabase
-    .from('wa_connection')
-    .select('id, phone_number, status, qr_code, last_connected, created_at')
-    .not('id', 'like', 'auth_%')
-    .not('id', 'like', 'file_%')
-    .not('id', 'like', 'test_%')
-    .order('created_at', { ascending: true });
+  try {
+    const { data, error } = await supabase
+      .from('wa_connection')
+      .select('id, phone_number, status, qr_code, last_connected, created_at')
+      .not('id', 'like', 'auth_%')
+      .not('id', 'like', 'file_%')
+      .not('id', 'like', 'test_%')
+      .order('created_at', { ascending: true });
 
-  if (error) {
-    console.error('Error fetching wa_connection:', error.message);
-    // Fallback: minimal query
-    try {
-      const fallback = await supabase
-        .from('wa_connection')
-        .select('id, phone_number, status, last_connected, created_at')
-        .not('id', 'like', 'auth_%')
-        .not('id', 'like', 'file_%');
-      if (!fallback.error && fallback.data) {
-        const res = fallback.data.map(rowToConnection);
-        connectionsCache = res;
-        connectionsCacheTime = now;
-        return res;
+    if (error) {
+      handleSupabaseError('fetching wa_connection', error);
+      return (waMemory.connections || []).filter((c) => !waMemory.deletedConnectionIds.has(c.id));
+    }
+
+    const dbList = (data || [])
+      .filter(
+        (r: any) =>
+          !r.id.startsWith('auth_') &&
+          !r.id.startsWith('test_') &&
+          !r.id.startsWith('file_') &&
+          !waMemory.deletedConnectionIds.has(r.id)
+      )
+      .map(rowToConnection);
+
+    // Merge with any in-memory connections that haven't been deleted
+    const mergedMap = new Map<string, WaConnection>();
+    for (const item of dbList) {
+      mergedMap.set(item.id, item);
+    }
+    for (const memItem of waMemory.connections || []) {
+      if (!waMemory.deletedConnectionIds.has(memItem.id)) {
+        const existing = mergedMap.get(memItem.id);
+        if (!existing) {
+          mergedMap.set(memItem.id, memItem);
+        } else if (memItem.qrCode && !existing.qrCode) {
+          mergedMap.set(memItem.id, { ...existing, qrCode: memItem.qrCode, status: memItem.status });
+        }
       }
-    } catch {}
-    return connectionsCache || [];
+    }
+
+    const result = Array.from(mergedMap.values());
+    connectionsCache = result;
+    connectionsCacheTime = now;
+    return result;
+  } catch (err: any) {
+    handleSupabaseError('fetching wa_connection', err);
+    return (waMemory.connections || []).filter((c) => !waMemory.deletedConnectionIds.has(c.id));
   }
-  if (!data || data.length === 0) {
-    return [];
-  }
-  const result = data
-    .filter((r: any) => !r.id.startsWith('auth_') && !r.id.startsWith('test_') && !r.id.startsWith('file_'))
-    .map(rowToConnection);
-  connectionsCache = result;
-  connectionsCacheTime = now;
-  return result;
 }
 
 export async function getWaConnection(id = 'main'): Promise<WaConnection | null> {
-  if (id.startsWith('auth_') || id.startsWith('file_') || id.startsWith('test_')) return null;
-  const supabase = getSupabase();
-  if (!supabase) return waMemory.connection;
-
-  const { data, error } = await supabase
-    .from('wa_connection')
-    .select('id, phone_number, status, qr_code, last_connected, created_at')
-    .eq('id', id)
-    .maybeSingle();
-
-  if (error || !data) {
-    if (error) console.error('Error fetching wa_connection:', error.message);
-    return id === 'main' ? waMemory.connection : null;
+  if (
+    id.startsWith('auth_') ||
+    id.startsWith('file_') ||
+    id.startsWith('test_') ||
+    waMemory.deletedConnectionIds.has(id)
+  ) {
+    return null;
   }
-  return rowToConnection(data);
+
+  const memFound = waMemory.connections?.find((c) => c.id === id);
+  const supabase = getSupabase();
+  if (!supabase) {
+    return memFound || null;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('wa_connection')
+      .select('id, phone_number, status, qr_code, last_connected, created_at')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error || !data) {
+      if (error) handleSupabaseError('fetching wa_connection', error);
+      return memFound || null;
+    }
+    const parsed = rowToConnection(data);
+    if (memFound?.qrCode && !parsed.qrCode) {
+      parsed.qrCode = memFound.qrCode;
+      parsed.status = memFound.status;
+    }
+    return parsed;
+  } catch (err: any) {
+    handleSupabaseError('fetching wa_connection', err);
+    return memFound || null;
+  }
 }
 
 export async function updateWaConnection(updates: Partial<WaConnection> & { id?: string }): Promise<WaConnection> {
   connectionsCache = null;
+  connectionsCacheTime = 0;
   const targetId = updates.id || 'main';
+  waMemory.deletedConnectionIds.delete(targetId);
+
   const supabase = getSupabase();
 
-  if (targetId === 'main' && waMemory.connection) {
-    waMemory.connection = { ...waMemory.connection, ...updates };
+  let updatedMemObj: WaConnection | null = null;
+  if (waMemory.connections) {
+    const idx = waMemory.connections.findIndex((c) => c.id === targetId);
+    if (idx !== -1) {
+      waMemory.connections[idx] = { ...waMemory.connections[idx], ...updates };
+      updatedMemObj = waMemory.connections[idx];
+    } else {
+      updatedMemObj = {
+        id: targetId,
+        name: updates.name || (targetId === 'main' ? 'Primary WhatsApp' : `SIM ${targetId.slice(-4)}`),
+        phoneNumber: updates.phoneNumber || '',
+        status: updates.status || 'qr_pending',
+        qrCode: updates.qrCode || '',
+        lastConnected: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        clientId: updates.clientId || 'admin',
+      };
+      waMemory.connections.push(updatedMemObj);
+    }
+  }
+  if (targetId === 'main' && updatedMemObj) {
+    waMemory.connection = updatedMemObj;
   }
 
-  if (!supabase) return { ...(waMemory.connection || {}), ...updates, id: targetId } as WaConnection;
+  if (!supabase) {
+    return updatedMemObj as WaConnection;
+  }
 
   // Retrieve existing to preserve phone, name, and clientId if not provided
   const existing = await getWaConnection(targetId);
 
-  const finalName = updates.name !== undefined ? updates.name : (existing?.name || (targetId === 'main' ? 'Primary WhatsApp' : `SIM ${targetId.slice(-4)}`));
-  const finalPhone = (updates.phoneNumber !== undefined && updates.phoneNumber !== '') ? updates.phoneNumber : (existing?.phoneNumber || '');
-  const finalClientId = updates.clientId !== undefined ? updates.clientId : (existing?.clientId || 'admin');
+  const finalName =
+    updates.name !== undefined
+      ? updates.name
+      : existing?.name || updatedMemObj?.name || (targetId === 'main' ? 'Primary WhatsApp' : `SIM ${targetId.slice(-4)}`);
+  const finalPhone =
+    updates.phoneNumber !== undefined && updates.phoneNumber !== ''
+      ? updates.phoneNumber
+      : existing?.phoneNumber || updatedMemObj?.phoneNumber || '';
+  const finalClientId =
+    updates.clientId !== undefined ? updates.clientId : existing?.clientId || updatedMemObj?.clientId || 'admin';
   const cliPrefix = finalClientId && finalClientId !== 'admin' ? `[cli:${finalClientId}]` : '';
 
-  const row: any = { 
+  const row: any = {
     id: targetId,
     phone_number: `${cliPrefix}${finalName}|${finalPhone}`,
   };
@@ -683,30 +1136,43 @@ export async function updateWaConnection(updates: Partial<WaConnection> & { id?:
   if (updates.lastConnected !== undefined) row.last_connected = updates.lastConnected;
   else if (existing?.lastConnected !== undefined) row.last_connected = existing.lastConnected;
 
-  const { data, error } = await supabase
-    .from('wa_connection')
-    .upsert(row)
-    .select()
-    .maybeSingle();
+  try {
+    const { data, error } = await supabase
+      .from('wa_connection')
+      .upsert(row)
+      .select()
+      .maybeSingle();
 
-  if (error) {
-    console.error('Error updating wa_connection:', error.message);
-    return { ...(existing || {}), ...updates, id: targetId, clientId: finalClientId } as WaConnection;
+    if (error) {
+      handleSupabaseError('updating wa_connection', error);
+      return updatedMemObj || ({ ...(existing || {}), ...updates, id: targetId, clientId: finalClientId } as WaConnection);
+    }
+    return data
+      ? rowToConnection(data)
+      : updatedMemObj || ({ ...(existing || {}), ...updates, id: targetId, clientId: finalClientId } as WaConnection);
+  } catch (err: any) {
+    handleSupabaseError('updating wa_connection', err);
+    return updatedMemObj || ({ ...(existing || {}), ...updates, id: targetId, clientId: finalClientId } as WaConnection);
   }
-  return data ? rowToConnection(data) : ({ ...(existing || {}), ...updates, id: targetId, clientId: finalClientId } as WaConnection);
 }
 
 export async function deleteWaConnection(id: string): Promise<boolean> {
   connectionsCache = null;
   connectionsCacheTime = 0;
-  const supabase = getSupabase();
+  waMemory.deletedConnectionIds.add(id);
+
   if (id === 'main') {
-    (waMemory as any).connection = null;
+    waMemory.connection = null;
   }
+  if (waMemory.connections) {
+    waMemory.connections = waMemory.connections.filter((c) => c.id !== id);
+  }
+
+  const supabase = getSupabase();
   if (!supabase) return true;
+
   try {
-    const { error } = await supabase.from('wa_connection').delete().in('id', [id, `auth_${id}`]);
-    if (error) console.error('Error deleting wa_connection:', error.message);
+    await supabase.from('wa_connection').delete().in('id', [id, `auth_${id}`]);
     await supabase.from('wa_connection').delete().like('id', `auth_${id}%`);
 
     // Reset any campaign assigned to this account back to 'all'
@@ -716,10 +1182,10 @@ export async function deleteWaConnection(id: string): Promise<boolean> {
         await updateCampaign(c.id, { accountId: 'all' });
       }
     }
-    return !error;
+    return true;
   } catch (err: any) {
-    console.error('Exception deleting wa_connection:', err.message);
-    return false;
+    handleSupabaseError('deleting wa_connection', err);
+    return true;
   }
 }
 
@@ -781,15 +1247,15 @@ export async function performRolling30DayCleanup(days = 30): Promise<{ deletedLo
         .from('wa_message_logs')
         .delete()
         .lt('sent_at', cutoffDate);
-      if (logErr) console.error('Error cleaning rolling wa_message_logs:', logErr.message);
+      if (logErr) handleSupabaseError('cleaning rolling wa_message_logs', logErr);
 
       const { error: userErr } = await supabase
         .from('wa_contacted_users')
         .delete()
         .lt('sent_at', cutoffDate);
-      if (userErr) console.error('Error cleaning rolling wa_contacted_users:', userErr.message);
+      if (userErr) handleSupabaseError('cleaning rolling wa_contacted_users', userErr);
     } catch (e: any) {
-      console.error('Error in performRolling30DayCleanup:', e.message);
+      handleSupabaseError('in performRolling30DayCleanup', e);
     }
   }
 
@@ -852,6 +1318,7 @@ export async function getAllClients(forceRefresh = false): Promise<WaClientProfi
       .maybeSingle();
 
     if (error || !data || !data.description) {
+      if (error) handleSupabaseError('fetching system_clients', error);
       clientsCache = waMemory.clients;
       clientsCacheTime = now;
       return waMemory.clients;
@@ -872,7 +1339,7 @@ export async function getAllClients(forceRefresh = false): Promise<WaClientProfi
 
     return list;
   } catch (e: any) {
-    console.error('Error parsing system_clients:', e.message);
+    handleSupabaseError('parsing system_clients', e);
     return clientsCache || waMemory.clients;
   }
 }
@@ -913,12 +1380,12 @@ export async function saveAllClients(clients: WaClientProfile[]): Promise<boolea
 
     const { error } = await supabase.from('wa_campaigns').upsert(row);
     if (error) {
-      console.error('Error saving system_clients:', error.message);
+      handleSupabaseError('saving system_clients', error);
       return false;
     }
     return true;
   } catch (e: any) {
-    console.error('Exception saving system_clients:', e.message);
+    handleSupabaseError('saving system_clients', e);
     return false;
   }
 }

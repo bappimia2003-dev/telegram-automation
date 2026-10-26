@@ -21,7 +21,6 @@ import {
   Video,
   FileText,
   FileCheck,
-  Sparkles,
   Phone,
   Search,
   Filter,
@@ -39,6 +38,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -385,20 +385,24 @@ export default function TargetedFollowupPage() {
     }
   };
 
-  const handleStop = async () => {
-    if (!confirm('আপনি কি এই ক্যাম্পেইনটি সম্পূর্ণ বন্ধ ও রিসেট করতে চান?')) return;
+  const [confirmStopOpen, setConfirmStopOpen] = useState(false);
+
+  const executeStop = async () => {
     try {
-      const res = await fetch('/api/whatsapp/targeted-followup', {
+      await fetch('/api/whatsapp/targeted-followup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'stop' }),
       });
-      const data = await res.json();
       setJob(null);
       setActiveTab('config');
     } catch (err: any) {
       console.error(err);
     }
+  };
+
+  const handleStop = () => {
+    setConfirmStopOpen(true);
   };
 
   // Filtered queue items for live monitor
@@ -668,7 +672,7 @@ export default function TargetedFollowupPage() {
             <Card className="border-[#E6E2D8] dark:border-[#262930] shadow-xs">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-[#164E43] dark:text-[#34D399]" />
+                  <Zap className="w-4 h-4 text-[#164E43] dark:text-[#34D399]" />
                   <span>৩. বার্তা ও ফাইল অ্যাটাচমেন্ট</span>
                 </CardTitle>
                 <CardDescription className="text-xs">
@@ -1189,6 +1193,20 @@ export default function TargetedFollowupPage() {
           </Card>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmStopOpen}
+        title="Stop & Reset Campaign?"
+        description="আপনি কি এই ক্যাম্পেইনটি সম্পূর্ণ বন্ধ ও রিসেট করতে চান? নিশ্চিত করতে OK এবং না চাইলে Cancel চাপুন।"
+        confirmLabel="OK, Stop"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={async () => {
+          setConfirmStopOpen(false);
+          await executeStop();
+        }}
+        onCancel={() => setConfirmStopOpen(false)}
+      />
     </div>
   );
 }

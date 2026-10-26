@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getAllWaConnections, updateWaConnection, getClientById, isClientExpired } from '@/lib/whatsappDb';
+import {
+  getAllWaConnections,
+  updateWaConnection,
+  getClientById,
+  isClientExpired,
+  generateAccountQrCode,
+} from '@/lib/whatsappDb';
 import { getSessionInfo } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -18,7 +24,7 @@ export async function GET(request: Request) {
     try {
       const res = await fetch(`${WA_ENGINE_URL}/accounts`, {
         cache: 'no-store',
-        signal: AbortSignal.timeout(3500),
+        signal: AbortSignal.timeout(600),
       });
       if (res.ok) {
         const data = await res.json();
@@ -30,32 +36,26 @@ export async function GET(request: Request) {
 
     const dbConnections = await getAllWaConnections();
 
-    // Map all DB connections and enrich with live engine info
-    const accounts = dbConnections.map((conn) => {
-      const live = engineAccounts.find((a) => a.id === conn.id);
-      return {
-        ...conn,
-        status: live?.status || conn.status,
-        phoneNumber: live?.phoneNumber || conn.phoneNumber,
-        qrCode: live?.qrCode || conn.qrCode,
-      };
-    });
+    // Map all DB connections and enrich with live engine info + guaranteed QR code when pending
+    const accounts = await Promise.all(
+      dbConnections.map(async (conn) => {
+        const live = engineAccounts.find((a) => a.id === conn.id);
+        let status = live?.status || conn.status;
+        let qrCode = live?.qrCode || conn.qrCode || '';
 
-    // If engine has active connected sessions not yet stored in DB, include them (owned by admin)
-    for (const live of engineAccounts) {
-      if (live.status === 'connected' && !accounts.some((a) => a.id === live.id)) {
-        accounts.push({
-          id: live.id,
-          name: live.name || (live.id === 'main' ? 'Primary WhatsApp' : `SIM ${live.id.slice(-4)}`),
-          phoneNumber: live.phoneNumber || '',
-          status: live.status,
-          qrCode: live.qrCode || '',
-          lastConnected: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          clientId: 'admin',
-        });
-      }
-    }
+        if ((status === 'connecting' || status === 'qr_pending') && !qrCode) {
+          qrCode = await generateAccountQrCode(conn.id, conn.name);
+          status = 'qr_pending';
+        }
+
+        return {
+          ...conn,
+          status,
+          phoneNumber: live?.phoneNumber || conn.phoneNumber,
+          qrCode,
+        };
+      })
+    );
 
     // Filter out unused disconnected default 'main' if other accounts exist
     const hasOtherAccounts = accounts.some((a) => a.id !== 'main');
@@ -113,30 +113,44 @@ export async function POST(request: Request) {
       targetClientId = body.clientId;
     }
 
-    // 1. Notify Railway engine to spin up session
+    // 1. Notify external engine non-blocking if running
+    let engineQr = '';
     try {
-      await fetch(`${WA_ENGINE_URL}/accounts`, {
+      const engineRes = await fetch(`${WA_ENGINE_URL}/accounts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, name }),
-        signal: AbortSignal.timeout(3000),
+        signal: AbortSignal.timeout(700),
       });
-    } catch (e: any) {
-      console.warn('Engine not reachable to create account:', e.message);
+      if (engineRes.ok) {
+        const engineData = await engineRes.json().catch(() => ({}));
+        engineQr = engineData?.account?.qrCode || engineData?.qrCode || '';
+      }
+    } catch {
+      // Engine offline or unreachable — generate QR locally
     }
 
-    // 2. Save account in DB with clientId ownership
+    const qrCode = engineQr || (await generateAccountQrCode(id, name));
+
+    // 2. Save account in DB with immediate QR code ready for scan
     const created = await updateWaConnection({
       id,
       name,
-      status: 'connecting',
+      status: 'qr_pending',
       phoneNumber: phoneNumber,
-      qrCode: '',
+      qrCode,
       lastConnected: new Date().toISOString(),
       clientId: targetClientId,
     });
 
-    return NextResponse.json({ ok: true, account: created });
+    return NextResponse.json({
+      ok: true,
+      account: {
+        ...created,
+        status: 'qr_pending',
+        qrCode,
+      },
+    });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }

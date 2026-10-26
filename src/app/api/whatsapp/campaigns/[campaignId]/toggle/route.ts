@@ -4,11 +4,13 @@ import { getSessionInfo } from '@/lib/auth';
 
 export async function POST(
   request: Request,
-  { params }: { params: { campaignId: string } }
+  { params }: { params: Promise<{ campaignId: string }> | { campaignId: string } }
 ) {
   try {
+    const resolved = await Promise.resolve(params);
+    const campaignId = resolved.campaignId;
     const session = await getSessionInfo();
-    const campaign = await getCampaignById(params.campaignId);
+    const campaign = await getCampaignById(campaignId);
     if (!campaign) {
       return NextResponse.json({ ok: false, error: 'Campaign not found' }, { status: 404 });
     }
@@ -31,7 +33,7 @@ export async function POST(
       }
     }
 
-    const updated = await updateCampaign(params.campaignId, { isActive: newActiveState });
+    const updated = await updateCampaign(campaignId, { isActive: newActiveState });
     return NextResponse.json({ ok: true, campaign: updated });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

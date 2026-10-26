@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
@@ -58,11 +59,17 @@ export default function AdminClientsPage() {
   const [quotaDrafts, setQuotaDrafts] = useState<Record<string, { maxNumbers: number; maxCampaigns: number }>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
 
-  // Add number modal for client
+  // Add number modal for client & Confirm dialog state
   const [addNumberClientId, setAddNumberClientId] = useState<string | null>(null);
   const [newClientAccName, setNewClientAccName] = useState('');
   const [newClientAccPhone, setNewClientAccPhone] = useState('');
   const [addingNumber, setAddingNumber] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    description: string;
+    variant?: 'danger' | 'warning';
+    onConfirm: () => Promise<void>;
+  } | null>(null);
 
   const fetchClients = async () => {
     try {
@@ -250,16 +257,21 @@ export default function AdminClientsPage() {
     }
   };
 
-  const handleDeleteClient = async (clientId: string, clientName: string) => {
-    if (!confirm(`Are you sure you want to delete client "${clientName}"? All their active campaigns will be turned off.`)) {
-      return;
-    }
-    try {
-      await fetch(`/api/whatsapp/clients/${clientId}`, { method: 'DELETE' });
-      await fetchClients();
-    } catch (err) {
-      console.error(err);
-    }
+  const handleDeleteClient = (clientId: string, clientName: string) => {
+    setConfirmModal({
+      title: 'Delete Client Account?',
+      description: `Are you sure you want to delete client "${clientName}"? All their active campaigns will be turned off. Click OK to confirm or Cancel to keep it.`,
+      variant: 'danger',
+      onConfirm: async () => {
+        setClients((prev) => prev.filter((c) => c.id !== clientId));
+        try {
+          await fetch(`/api/whatsapp/clients/${clientId}`, { method: 'DELETE' });
+          await fetchClients();
+        } catch (err) {
+          console.error(err);
+        }
+      },
+    });
   };
 
   const handleToggleClientCampaign = async (campaignId: string, currentActive: boolean) => {
@@ -309,38 +321,40 @@ export default function AdminClientsPage() {
     }
   };
 
-  const handleDeleteClientAccount = async (accountId: string, clientName: string, accountName: string) => {
-    if (!confirm(`Are you sure you want to delete number "${accountName}" for client "${clientName}"?`)) return;
-    try {
-      const res = await fetch(`/api/whatsapp/accounts/${accountId}`, { method: 'DELETE' });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.ok) {
-        await fetchClients();
-      } else {
-        alert(data.error || 'Failed to delete number');
-      }
-    } catch (err: any) {
-      alert('Error deleting number: ' + err.message);
-    }
+  const handleDeleteClientAccount = (accountId: string, clientName: string, accountName: string) => {
+    setConfirmModal({
+      title: 'Delete WhatsApp Number?',
+      description: `Are you sure you want to delete number "${accountName}" for client "${clientName}"? Click OK to confirm or Cancel to keep it.`,
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await fetch(`/api/whatsapp/accounts/${accountId}`, { method: 'DELETE' });
+          await fetchClients();
+        } catch (err) {
+          console.error(err);
+        }
+      },
+    });
   };
 
-  const handleDisconnectClientAccount = async (accountId: string) => {
-    if (!confirm('Are you sure you want to disconnect this WhatsApp number?')) return;
-    try {
-      const res = await fetch(`/api/whatsapp/accounts/${accountId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'disconnect' }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.ok) {
-        await fetchClients();
-      } else {
-        alert(data.error || 'Failed to disconnect number');
-      }
-    } catch (err: any) {
-      alert('Error disconnecting number: ' + err.message);
-    }
+  const handleDisconnectClientAccount = (accountId: string) => {
+    setConfirmModal({
+      title: 'Disconnect WhatsApp Number?',
+      description: 'Are you sure you want to disconnect this WhatsApp number? Click OK to confirm or Cancel to keep it.',
+      variant: 'warning',
+      onConfirm: async () => {
+        try {
+          await fetch(`/api/whatsapp/accounts/${accountId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'disconnect' }),
+          });
+          await fetchClients();
+        } catch (err) {
+          console.error(err);
+        }
+      },
+    });
   };
 
   const totalActiveClients = clients.filter((c) => !c.isExpired && c.isActive).length;
@@ -348,18 +362,18 @@ export default function AdminClientsPage() {
   const totalClientNumbers = clients.reduce((sum, c) => sum + (c.usage?.whatsappNumbersCount || 0), 0);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-4 pb-12">
+    <div className="max-w-5xl mx-auto space-y-5 pb-12">
       {/* Compact Top Header & Action Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] rounded-xl px-4 py-3 shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-[#164E43]/10 dark:bg-[#34D399]/10 border border-[#164E43]/20 dark:border-[#34D399]/20 flex items-center justify-center text-[#164E43] dark:text-[#34D399] shrink-0">
-            <ShieldCheck className="w-4 h-4" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border rounded-2xl px-4 sm:px-5 py-4 day-box-shadow">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-[#075E54]/12 dark:bg-[#00A884]/15 flex items-center justify-center text-[#075E54] dark:text-[#00A884] shrink-0">
+            <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-base font-extrabold text-gray-900 dark:text-white tracking-tight leading-tight">
+            <h1 className="text-lg sm:text-xl font-extrabold text-foreground tracking-tight leading-tight">
               Client Management & Access Control
             </h1>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-muted-foreground mt-0.5">
               ক্লায়েন্টদের পাসওয়ার্ড, নাম্বার ও ক্যাম্পেইন লিমিট, ডে-কাউন্টার এবং অ্যাক্টিভিটি নিয়ন্ত্রণ করুন
             </p>
           </div>
@@ -367,7 +381,7 @@ export default function AdminClientsPage() {
 
         <Button
           onClick={() => setShowCreateModal(true)}
-          className="h-8 px-3.5 rounded-lg bg-[#164E43] hover:bg-[#124238] text-white font-bold text-xs shadow-sm flex items-center gap-1.5 shrink-0"
+          className="h-9 px-4 rounded-xl bg-[#075E54] hover:bg-[#064E46] dark:bg-[#00A884] text-white dark:text-[#0B141A] font-bold text-xs day-box-shadow flex items-center gap-1.5 shrink-0 cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>Add New Client</span>
@@ -375,22 +389,22 @@ export default function AdminClientsPage() {
       </div>
 
       {/* Compact Overview Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        <div className="rounded-xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] px-3.5 py-2.5 flex items-center justify-between">
-          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Total Clients</span>
-          <span className="text-lg font-extrabold text-gray-900 dark:text-white">{clients.length}</span>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="rounded-2xl bg-card border border-border px-4 py-3.5 day-box-shadow flex items-center justify-between">
+          <span className="text-xs font-semibold text-muted-foreground">Total Clients</span>
+          <span className="text-lg font-extrabold text-foreground">{clients.length}</span>
         </div>
-        <div className="rounded-xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] px-3.5 py-2.5 flex items-center justify-between">
-          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Active Plans</span>
-          <span className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">{totalActiveClients}</span>
+        <div className="rounded-2xl bg-card border border-border px-4 py-3.5 day-box-shadow flex items-center justify-between">
+          <span className="text-xs font-semibold text-muted-foreground">Active Plans</span>
+          <span className="text-lg font-extrabold text-[#075E54] dark:text-[#00A884]">{totalActiveClients}</span>
         </div>
-        <div className="rounded-xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] px-3.5 py-2.5 flex items-center justify-between">
-          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">WhatsApp Numbers</span>
-          <span className="text-lg font-extrabold text-gray-900 dark:text-white">{totalClientNumbers}</span>
+        <div className="rounded-2xl bg-card border border-border px-4 py-3.5 day-box-shadow flex items-center justify-between">
+          <span className="text-xs font-semibold text-muted-foreground">WhatsApp Numbers</span>
+          <span className="text-lg font-extrabold text-foreground">{totalClientNumbers}</span>
         </div>
-        <div className="rounded-xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] px-3.5 py-2.5 flex items-center justify-between">
-          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Campaigns</span>
-          <span className="text-lg font-extrabold text-gray-900 dark:text-white">{totalClientCampaigns}</span>
+        <div className="rounded-2xl bg-card border border-border px-4 py-3.5 day-box-shadow flex items-center justify-between">
+          <span className="text-xs font-semibold text-muted-foreground">Campaigns</span>
+          <span className="text-lg font-extrabold text-foreground">{totalClientCampaigns}</span>
         </div>
       </div>
 
@@ -1146,6 +1160,23 @@ export default function AdminClientsPage() {
           </div>
         </div>
       )}
+
+      {/* Confirm Delete / Disconnect Modal (OK / Cancel) */}
+      <ConfirmDialog
+        open={Boolean(confirmModal)}
+        title={confirmModal?.title}
+        description={confirmModal?.description}
+        confirmLabel="OK"
+        cancelLabel="Cancel"
+        variant={confirmModal?.variant || 'danger'}
+        onConfirm={async () => {
+          if (!confirmModal) return;
+          const fn = confirmModal.onConfirm;
+          setConfirmModal(null);
+          await fn();
+        }}
+        onCancel={() => setConfirmModal(null)}
+      />
     </div>
   );
 }

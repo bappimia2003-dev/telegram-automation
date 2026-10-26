@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getApiKeyById, updateApiKey, deleteApiKey, getAllBots } from '@/lib/db';
 
-export async function GET(request: Request, { params }: { params: { keyId: string } }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ keyId: string }> | { keyId: string } }
+) {
   try {
-    const key = await getApiKeyById(params.keyId);
+    const resolved = await Promise.resolve(params);
+    const key = await getApiKeyById(resolved.keyId);
     if (!key) {
       return NextResponse.json({ error: 'API key not found' }, { status: 404 });
     }
@@ -17,33 +21,37 @@ export async function GET(request: Request, { params }: { params: { keyId: strin
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { keyId: string } }) {
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ keyId: string }> | { keyId: string } }
+) {
   try {
-    const key = await getApiKeyById(params.keyId);
+    const resolved = await Promise.resolve(params);
+    const key = await getApiKeyById(resolved.keyId);
     if (!key) {
       return NextResponse.json({ error: 'API key not found' }, { status: 404 });
     }
     const body = await request.json();
     const updatedKey = { ...key, ...body };
-    await updateApiKey(params.keyId, updatedKey);
+    await updateApiKey(resolved.keyId, updatedKey);
     return NextResponse.json(updatedKey);
   } catch (error) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { keyId: string } }) {
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ keyId: string }> | { keyId: string } }
+) {
   try {
-    const key = await getApiKeyById(params.keyId);
-    if (!key) {
-      return NextResponse.json({ error: 'API key not found' }, { status: 404 });
-    }
+    const resolved = await Promise.resolve(params);
     const allBots = await getAllBots();
-    const isUsed = allBots.some(bot => bot.apiKeyId === params.keyId);
+    const isUsed = allBots.some(bot => bot.apiKeyId === resolved.keyId);
     if (isUsed) {
       return NextResponse.json({ error: 'API key is in use by one or more bots' }, { status: 400 });
     }
-    await deleteApiKey(params.keyId);
+    await deleteApiKey(resolved.keyId);
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

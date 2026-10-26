@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <defs>
+    <!-- Outer Squircle Background Gradient -->
+    <linearGradient id="jb_bg" x1="0" y1="60" x2="120" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="45%" stop-color="#065F46" />
+      <stop offset="100%" stop-color="#0D3B4C" />
+    </linearGradient>
+
+    <!-- Soft Radial Glow in Center-Left -->
+    <radialGradient id="jb_glow" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#34D399" stop-opacity="0.45" />
+      <stop offset="100%" stop-color="#0D3B4C" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Inner Chat Bubble / Robot Head Gradient -->
+    <linearGradient id="jb_bubble" x1="25" y1="25" x2="92" y2="95" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#E6FFF5" />
+      <stop offset="45%" stop-color="#6EE7B7" />
+      <stop offset="100%" stop-color="#00C48C" />
+    </linearGradient>
+
+    <!-- Inner Cutout Dark Teal Gradient -->
+    <linearGradient id="jb_cutout" x1="45" y1="45" x2="78" y2="82" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#064E3B" />
+      <stop offset="100%" stop-color="#0A2E36" />
+    </linearGradient>
+  </defs>
+
+  <!-- Main Rounded Squircle Container -->
+  <rect x="4" y="4" width="112" height="112" rx="28" fill="url(#jb_bg)" />
+  <rect x="4" y="4" width="112" height="112" rx="28" fill="url(#jb_glow)" />
+  <rect x="4.75" y="4.75" width="110.5" height="110.5" rx="27.25" stroke="#34D399" stroke-opacity="0.28" stroke-width="1.5" />
+
+  <!-- Bot Antenna Dot -->
+  <circle cx="60" cy="21" r="6.5" fill="url(#jb_bubble)" />
+
+  <!-- Speech Bubble + Bot Head Body with Top-Right Leaf Corner & Bottom-Left Tail -->
+  <path
+    d="M46 31H84C89.5228 31 94 35.4772 94 41V69C94 80.0457 85.0457 89 74 89H54L38 99V85.5C30.8203 81.5 26 73.8 26 65V51C26 39.9543 34.9543 31 46 31Z"
+    fill="url(#jb_bubble)"
+  />
+
+  <!-- Stylized 'J' + Eye Inside Bubble -->
+  <!-- Left Eye Dot -->
+  <rect x="43" y="48" width="8.5" height="12" rx="4.25" fill="url(#jb_cutout)" />
+
+  <!-- 'J' Hook Smile Shape -->
+  <path
+    d="M55 46H77V64C77 72.8366 69.8366 80 61 80C52.1634 80 45 72.8366 45 64V62H56V64C56 66.7614 58.2386 69 61 69C63.7614 69 66 66.7614 66 64V54H55V46Z"
+    fill="url(#jb_cutout)"
+  />
+</svg>

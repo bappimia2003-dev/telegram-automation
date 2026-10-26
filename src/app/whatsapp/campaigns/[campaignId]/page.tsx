@@ -6,7 +6,7 @@ import { CampaignForm } from '@/components/CampaignForm';
 import { WhatsAppMessageLog } from '@/components/WhatsAppMessageLog';
 import { WaCampaign, WaConnection } from '@/lib/whatsappTypes';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, Send, Clock, Phone, Globe } from 'lucide-react';
+import { ShieldCheck, Send, Clock, Phone, Globe } from 'lucide-react';
 
 export default function CampaignDetailPage() {
   const params = useParams();
@@ -54,7 +54,7 @@ export default function CampaignDetailPage() {
   return (
     <div className="space-y-8 pb-16">
       {/* Campaign Summary Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-6 rounded-2xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] shadow-sm">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-6 rounded-2xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] day-box-shadow">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">{campaign.name}</h1>
@@ -69,7 +69,7 @@ export default function CampaignDetailPage() {
             )}
             {campaign.isDefault && (
               <Badge variant="outline" className="text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-xs flex items-center gap-1 font-semibold">
-                <Sparkles className="w-3 h-3 text-amber-600" />
+                <ShieldCheck className="w-3 h-3 text-amber-600" />
                 Default Fallback
               </Badge>
             )}

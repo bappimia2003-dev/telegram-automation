@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
-  Sparkles, 
+  Zap, 
   ArrowLeft, 
   Send, 
   Users, 
@@ -44,84 +44,68 @@ export default function NewFollowupPage() {
   const [data, setData] = useState<any>(null);
   const [selectedFilter, setSelectedFilter] = useState('all');
 
-  // Fast-hydrating ON/OFF state with instant localStorage recall
-  const [autoFollowupEnabled, setAutoFollowupEnabled] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('wa_followup_auto_followup');
-      if (saved !== null) return saved === 'true';
-    }
-    return false;
-  });
+  // Fast-hydrating ON/OFF state with safe post-hydration localStorage recall
+  const [autoFollowupEnabled, setAutoFollowupEnabled] = useState<boolean>(false);
 
   // Variations State with robust localStorage fallback
-  const [variants, setVariants] = useState<WaCampaignVariant[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('wa_followup_variants');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch {}
-    }
-    return [];
-  });
+  const [variants, setVariants] = useState<WaCampaignVariant[]>([]);
 
-  const [openVariantIds, setOpenVariantIds] = useState<Record<string, boolean>>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('wa_followup_variants');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const openState: Record<string, boolean> = {};
-            parsed.forEach((v: any) => { openState[v.id] = true; });
-            return openState;
-          }
-        }
-      } catch {}
-    }
-    return {};
-  });
+  const [openVariantIds, setOpenVariantIds] = useState<Record<string, boolean>>({});
 
   const [uploadingVariant, setUploadingVariant] = useState<{ variantId: string; type: string } | null>(null);
 
-  // Accounts cache fallback to ensure all connected WhatsApp accounts are immediately available
-  const [cachedAccounts, setCachedAccounts] = useState<any[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('wa_cached_accounts');
-        if (cached) return JSON.parse(cached);
-      } catch {}
-    }
-    return [];
+  // Accounts cache fallback to ensure all connected WhatsApp accounts are available
+  const [cachedAccounts, setCachedAccounts] = useState<any[]>([]);
+
+  const [formSettings, setFormSettings] = useState({
+    min_delay_minutes: 45,
+    max_delay_minutes: 90,
+    min_batch_people: 3,
+    max_batch_people: 5,
+    duration_hours: 6,
+    total_duration_days: 30,
+    min_contact_age_days: 4,
+    started_date: '',
+    working_hours_start: '08:00',
+    working_hours_end: '23:59',
+    max_daily_messages: 50,
   });
 
-  const [formSettings, setFormSettings] = useState(() => {
-    const defaults = {
-      min_delay_minutes: 45,
-      max_delay_minutes: 90,
-      min_batch_people: 3,
-      max_batch_people: 5,
-      duration_hours: 6,
-      total_duration_days: 30,
-      min_contact_age_days: 4,
-      started_date: '',
-      working_hours_start: '08:00',
-      working_hours_end: '23:59',
-      max_daily_messages: 50,
-    };
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('wa_followup_settings');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          return { ...defaults, ...parsed };
+  useEffect(() => {
+    try {
+      const savedAuto = localStorage.getItem('wa_followup_auto_followup');
+      if (savedAuto !== null) setAutoFollowupEnabled(savedAuto === 'true');
+    } catch {}
+
+    try {
+      const savedVariants = localStorage.getItem('wa_followup_variants');
+      if (savedVariants) {
+        const parsed = JSON.parse(savedVariants);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setVariants(parsed);
+          const openState: Record<string, boolean> = {};
+          parsed.forEach((v: any) => { openState[v.id] = true; });
+          setOpenVariantIds(openState);
         }
-      } catch {}
-    }
-    return defaults;
-  });
+      }
+    } catch {}
+
+    try {
+      const cached = localStorage.getItem('wa_cached_accounts');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) setCachedAccounts(parsed);
+      }
+    } catch {}
+
+    try {
+      const savedSettings = localStorage.getItem('wa_followup_settings');
+      if (savedSettings) {
+        const parsed = JSON.parse(savedSettings);
+        setFormSettings(prev => ({ ...prev, ...parsed }));
+      }
+    } catch {}
+  }, []);
 
   const fetchData = async () => {
     try {
@@ -545,7 +529,7 @@ export default function NewFollowupPage() {
 
           <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white flex items-center gap-2.5 sm:gap-3">
             <span className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 flex items-center justify-center text-emerald-700 dark:text-emerald-400 shrink-0">
-              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
+              <Zap className="w-5 h-5 sm:w-6 sm:h-6" />
             </span>
             <span>New Follow-up</span>
           </h1>
@@ -588,7 +572,7 @@ export default function NewFollowupPage() {
                 ? "bg-[#164E43] text-white shadow-emerald-900/20" 
                 : "bg-gray-200 dark:bg-zinc-800 text-gray-500 dark:text-zinc-400"
             )}>
-              {autoFollowupEnabled ? <Sparkles className="w-6 h-6 animate-pulse" /> : <Play className="w-6 h-6 opacity-40" />}
+              {autoFollowupEnabled ? <Zap className="w-6 h-6 animate-pulse" /> : <Play className="w-6 h-6 opacity-40" />}
             </div>
             <div>
               <div className="flex items-center gap-2">

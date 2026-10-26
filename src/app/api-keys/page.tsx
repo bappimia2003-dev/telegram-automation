@@ -3,16 +3,21 @@
 import { useState, useEffect } from 'react';
 import { ApiKeyList } from '@/components/ApiKeyList';
 import { ApiKeyForm } from '@/components/ApiKeyForm';
-import { Key, Plus, AlertCircle, X, Bot, Activity, Zap } from 'lucide-react';
+import { StatsCard } from '@/components/StatsCard';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useLanguage } from '@/components/LanguageProvider';
+import { Key, Plus, X, Bot, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function ApiKeysPage() {
+  const { t } = useLanguage();
   const [keys, setKeys] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingKey, setEditingKey] = useState<any>(null);
   const [actionError, setActionError] = useState('');
+  const [confirmDeleteKeyId, setConfirmDeleteKeyId] = useState<string | null>(null);
 
   const fetchKeys = async () => {
     setLoading(true);
@@ -86,125 +91,140 @@ export default function ApiKeysPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this API key?')) return;
+  const executeDeleteKey = async (id: string) => {
+    setKeys(prev => prev.filter(k => k.id !== id));
     try {
       const res = await fetch(`/api/api-keys/${id}`, { method: 'DELETE' });
       if (res.ok) {
         fetchKeys();
       } else {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Failed to delete API key. Check if it is currently in use by bots.');
+        fetchKeys();
       }
     } catch (error) {
       console.error('Failed to delete API key:', error);
     }
   };
 
-  // Quick summary counts
   const totalBotsRunning = keys.reduce((acc, k) => acc + (k.activeBotsCount || 0), 0);
   const totalRequestsToday = keys.reduce((acc, k) => acc + (k.requestsToday || 0), 0);
   const activeKeysCount = keys.filter(k => (k.status || 'active').toLowerCase() === 'active').length;
 
   return (
-    <div className="space-y-6 pb-12 max-w-5xl mx-auto">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white flex items-center gap-2.5">
-            <Key className="text-amber-500 w-7 h-7" /> API Key Management
-          </h1>
+    <div className="space-y-6 pb-16 max-w-5xl mx-auto">
+      {/* Top Header Card */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl bg-card border border-border p-4 sm:px-5 day-box-shadow">
+        <div className="flex items-start sm:items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-[#0088CC]/12 dark:bg-[#229ED9]/15 text-[#0088CC] dark:text-[#229ED9] flex items-center justify-center shrink-0">
+            <Key className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground">
+              {t('AI API Key Management', 'এআই এপিআই কী ম্যানেজমেন্ট')}
+            </h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {t(
+                'Manage circular failover keys for automated bot response generation',
+                'স্বয়ংক্রিয় বট রিপ্লাই এবং ফেইলওভার রোটেশনের জন্য এপিআই কী পরিচালনা করুন'
+              )}
+            </p>
+          </div>
         </div>
         <button 
+          type="button"
           onClick={() => handleOpenModal()}
-          className="flex items-center justify-center gap-2 bg-[#164E43] hover:bg-[#124238] text-white px-5 py-2.5 rounded-xl transition-all font-bold text-sm shadow-sm shrink-0 self-start sm:self-auto cursor-pointer"
+          className="flex items-center justify-center gap-1.5 bg-[#0088CC] hover:bg-[#0077B5] dark:bg-[#229ED9] dark:hover:bg-[#1E8CC0] text-white px-4 h-9 rounded-xl transition-transform active:scale-95 font-bold text-xs day-box-shadow shrink-0 cursor-pointer"
         >
-          <Plus size={18} /> Add New Key
+          <Plus size={16} />
+          <span>{t('Add New Key', 'নতুন কী যুক্ত করুন')}</span>
         </button>
       </div>
 
-      {/* Summary KPI Cards - Styled like 5th picture */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-        <div className="p-5 rounded-2xl border transition-all shadow-sm bg-[#FBF9F4] dark:bg-[#0B2820] border-[#E6E2D8] dark:border-[#13382E] flex items-center justify-between gap-3.5">
-          <div>
-            <p className="text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">Active Keys / Total</p>
-            <p className="text-2xl sm:text-3xl font-black tracking-tight text-[#164E43] dark:text-white">{activeKeysCount} / {keys.length}</p>
-          </div>
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-[#164E43] text-white dark:bg-[#3D341B] dark:text-[#F59E0B]">
-            <Key size={20} />
-          </div>
-        </div>
-
-        <div className="p-5 rounded-2xl border transition-all shadow-sm bg-[#FBF9F4] dark:bg-[#0B2820] border-[#E6E2D8] dark:border-[#13382E] flex items-center justify-between gap-3.5">
-          <div>
-            <p className="text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">Active AI Bots Running</p>
-            <p className="text-2xl sm:text-3xl font-black tracking-tight text-[#164E43] dark:text-white">{totalBotsRunning} Bots Live</p>
-          </div>
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-[#164E43] text-white dark:bg-[#3D341B] dark:text-[#F59E0B]">
-            <Bot size={20} />
-          </div>
-        </div>
-
-        <div className="p-5 rounded-2xl border transition-all shadow-sm bg-[#FBF9F4] dark:bg-[#0B2820] border-[#E6E2D8] dark:border-[#13382E] flex items-center justify-between gap-3.5">
-          <div>
-            <p className="text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">Total Requests Today</p>
-            <p className="text-2xl sm:text-3xl font-black tracking-tight text-[#164E43] dark:text-white">{totalRequestsToday}</p>
-          </div>
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-[#164E43] text-white dark:bg-[#3D341B] dark:text-[#F59E0B]">
-            <Zap size={20} />
-          </div>
-        </div>
+      {/* Summary KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+        <StatsCard 
+          title={t('Active Keys / Total', 'সচল কী / মোট')} 
+          value={`${activeKeysCount} / ${keys.length}`} 
+          icon={Key} 
+        />
+        <StatsCard 
+          title={t('Active Bots', 'সচল বট')} 
+          value={`${totalBotsRunning} ${t('Bots Live', 'টি সচল')}`} 
+          icon={Bot} 
+        />
+        <StatsCard 
+          title={t('Requests Today', 'আজকের রিকোয়েস্ট')} 
+          value={totalRequestsToday.toString()} 
+          icon={Zap} 
+        />
       </div>
 
-      {/* Main Keys List Container - matching Picture 5 */}
-      <div className="bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] rounded-2xl p-4 sm:p-6 shadow-sm min-h-[300px]">
+      {/* Main Keys List Container */}
+      <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 day-box-shadow min-h-[260px]">
         {loading ? (
           <div className="space-y-3 animate-pulse">
             {[1, 2, 3].map(i => (
-              <div key={i} className="h-24 bg-gray-200 dark:bg-gray-800 rounded-xl" />
+              <div key={i} className="h-20 bg-secondary rounded-xl" />
             ))}
           </div>
         ) : (
           <ApiKeyList 
             apiKeys={keys} 
             onEdit={handleOpenModal} 
-            onDelete={handleDelete}
+            onDelete={(id: string) => setConfirmDeleteKeyId(id)}
             onToggleStatus={handleToggleStatus}
           />
         )}
       </div>
 
+      {/* Confirm Delete API Key Modal (OK / Cancel) */}
+      <ConfirmDialog
+        open={Boolean(confirmDeleteKeyId)}
+        title={t('Delete API Key?', 'এপিআই কী মুছে ফেলবেন?')}
+        description={t(
+          'Are you sure you want to delete this API key? Click OK to confirm or Cancel to keep it.',
+          'আপনি কি নিশ্চিতভাবে এই এপিআই কী মুছে ফেলতে চান? নিশ্চিত করতে OK এবং না চাইলে Cancel চাপুন।'
+        )}
+        confirmLabel={t('OK, Delete', 'ওকে (OK)')}
+        cancelLabel={t('Cancel', 'বাতিল (Cancel)')}
+        variant="danger"
+        onConfirm={async () => {
+          if (!confirmDeleteKeyId) return;
+          const id = confirmDeleteKeyId;
+          setConfirmDeleteKeyId(null);
+          await executeDeleteKey(id);
+        }}
+        onCancel={() => setConfirmDeleteKeyId(null)}
+      />
+
       {/* Centered, Responsive Modal Dialog */}
       <AnimatePresence>
         {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-            {/* Backdrop click to close */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
             <div className="fixed inset-0" onClick={handleCloseModal} />
             
-            {/* Centered Modal Card */}
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               transition={{ duration: 0.2 }}
-              className="relative w-full max-w-md bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] rounded-2xl shadow-2xl z-10 overflow-hidden my-auto"
+              className="relative w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl day-box-shadow z-10 overflow-hidden my-auto"
             >
-              <div className="flex items-center justify-between p-5 border-b border-[#E6E2D8] dark:border-[#262930]">
-                <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Key size={18} className="text-amber-500" />
-                  {editingKey ? 'Edit API Key' : 'Add New Gemini API Key'}
+              <div className="flex items-center justify-between p-5 border-b border-border">
+                <h3 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
+                  <Key size={18} className="text-[#0088CC] dark:text-[#229ED9]" />
+                  <span>{editingKey ? t('Edit API Key', 'এপিআই কী এডিট করুন') : t('Add New API Key', 'নতুন এপিআই কী যুক্ত করুন')}</span>
                 </h3>
                 <button 
                   type="button"
                   onClick={handleCloseModal}
-                  className="text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+                  className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-xl hover:bg-secondary cursor-pointer"
                 >
                   <X size={18} />
                 </button>
               </div>
 
               {actionError && (
-                <div className="mx-5 mt-4 p-3 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 text-xs">
+                <div className="mx-5 mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs">
                   {actionError}
                 </div>
               )}

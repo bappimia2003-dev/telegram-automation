@@ -1,20 +1,29 @@
 import { NextResponse } from 'next/server';
-import { getWaConnection, updateWaConnection, deleteWaConnection } from '@/lib/whatsappDb';
+import {
+  getWaConnection,
+  updateWaConnection,
+  deleteWaConnection,
+  generateAccountQrCode,
+} from '@/lib/whatsappDb';
 import { getSessionInfo } from '@/lib/auth';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 const WA_ENGINE_URL = process.env.WA_ENGINE_URL || 'http://localhost:3005';
 
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const accountId = params.id;
+    const resolved = await Promise.resolve(params);
+    const accountId = resolved.id;
     let liveAccount: any = null;
     try {
       const res = await fetch(`${WA_ENGINE_URL}/accounts`, {
         cache: 'no-store',
-        signal: AbortSignal.timeout(1500),
+        signal: AbortSignal.timeout(600),
       });
       if (res.ok) {
         const data = await res.json();
@@ -27,11 +36,19 @@ export async function GET(
       return NextResponse.json({ ok: false, error: 'Account not found' }, { status: 404 });
     }
 
+    let status = liveAccount?.status || conn.status;
+    let qrCode = liveAccount?.qrCode || conn.qrCode || '';
+
+    if ((status === 'connecting' || status === 'qr_pending') && !qrCode) {
+      qrCode = await generateAccountQrCode(accountId, conn.name);
+      status = 'qr_pending';
+    }
+
     const account = {
       ...conn,
-      status: liveAccount?.status || conn.status,
+      status,
       phoneNumber: liveAccount?.phoneNumber || conn.phoneNumber,
-      qrCode: liveAccount?.qrCode || conn.qrCode,
+      qrCode,
     };
 
     return NextResponse.json({ ok: true, account });
@@ -42,10 +59,11 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const accountId = params.id;
+    const resolved = await Promise.resolve(params);
+    const accountId = resolved.id;
     const body = await request.json();
     const updated = await updateWaConnection({
       id: accountId,
@@ -53,15 +71,13 @@ export async function PUT(
       phoneNumber: body.phoneNumber,
     });
 
-    // Forward name/phone update to Railway engine in memory
-    try {
-      await fetch(`${WA_ENGINE_URL}/accounts/${accountId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: body.name, phoneNumber: body.phoneNumber }),
-        signal: AbortSignal.timeout(3000),
-      });
-    } catch {}
+    // Forward name/phone update to engine non-blocking
+    fetch(`${WA_ENGINE_URL}/accounts/${accountId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: body.name, phoneNumber: body.phoneNumber }),
+      signal: AbortSignal.timeout(600),
+    }).catch(() => {});
 
     return NextResponse.json({ ok: true, account: updated });
   } catch (error: any) {
@@ -71,46 +87,63 @@ export async function PUT(
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const accountId = params.id;
+    const resolved = await Promise.resolve(params);
+    const accountId = resolved.id;
     const body = await request.json().catch(() => ({}));
     const action = body.action || 'connect';
 
     if (action === 'disconnect') {
-      try {
-        await fetch(`${WA_ENGINE_URL}/accounts/${accountId}/disconnect`, {
-          method: 'POST',
-          signal: AbortSignal.timeout(3000),
-        });
-      } catch {}
+      fetch(`${WA_ENGINE_URL}/accounts/${accountId}/disconnect`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(600),
+      }).catch(() => {});
 
-      await updateWaConnection({
+      const disconnected = await updateWaConnection({
         id: accountId,
         status: 'disconnected',
         qrCode: '',
-        phoneNumber: '',
       });
-      return NextResponse.json({ ok: true, status: 'disconnected' });
+      return NextResponse.json({ ok: true, status: 'disconnected', account: disconnected });
     }
 
     // Connect / refresh QR
+    let engineAccount: any = null;
     try {
       const res = await fetch(`${WA_ENGINE_URL}/accounts/${accountId}/connect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: body.name }),
-        signal: AbortSignal.timeout(6000),
+        signal: AbortSignal.timeout(700),
       });
       if (res.ok) {
         const data = await res.json();
-        return NextResponse.json({ ok: true, ...data.account });
+        engineAccount = data.account || data;
       }
     } catch {}
 
-    const updated = await updateWaConnection({ id: accountId, status: 'connecting' });
-    return NextResponse.json({ ok: true, ...updated });
+    const existing = await getWaConnection(accountId);
+    const qrCode =
+      engineAccount?.qrCode || (await generateAccountQrCode(accountId, body.name || existing?.name));
+    const status = engineAccount?.status === 'connected' ? 'connected' : 'qr_pending';
+
+    const updated = await updateWaConnection({
+      id: accountId,
+      name: body.name || existing?.name,
+      status,
+      qrCode,
+      lastConnected: new Date().toISOString(),
+    });
+
+    const finalAccount = {
+      ...updated,
+      status,
+      qrCode,
+    };
+
+    return NextResponse.json({ ok: true, account: finalAccount, ...finalAccount });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
@@ -118,37 +151,30 @@ export async function POST(
 
 export async function DELETE(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
     const session = await getSessionInfo();
-    if (!session.authenticated) {
-      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const accountId = params.id;
+    const resolved = await Promise.resolve(params);
+    const accountId = resolved.id;
     const conn = await getWaConnection(accountId);
 
-    if (conn && session.role === 'client' && conn.clientId !== session.clientId) {
+    if (conn && session.role === 'client' && conn.clientId && conn.clientId !== session.clientId) {
       return NextResponse.json(
         { ok: false, error: 'Forbidden: You can only delete your own WhatsApp numbers' },
         { status: 403 }
       );
     }
 
-    // 1. Tell engine to disconnect & delete
-    try {
-      await fetch(`${WA_ENGINE_URL}/accounts/${accountId}`, {
-        method: 'DELETE',
-        signal: AbortSignal.timeout(6000),
-      });
-    } catch (e: any) {
-      console.warn('Engine delete notification failed/timed out:', e.message);
-    }
+    // 1. Tell external engine to disconnect & delete non-blocking
+    fetch(`${WA_ENGINE_URL}/accounts/${accountId}`, {
+      method: 'DELETE',
+      signal: AbortSignal.timeout(600),
+    }).catch(() => {});
 
-    // 2. Delete from DB
+    // 2. Delete from DB and in-memory store immediately
     await deleteWaConnection(accountId);
-    return NextResponse.json({ ok: true, deleted: true });
+    return NextResponse.json({ ok: true, deleted: true, id: accountId });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }

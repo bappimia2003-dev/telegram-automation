@@ -17,7 +17,7 @@ export const revalidate = 0;
 
 export async function PUT(
   request: Request,
-  { params }: { params: { clientId: string } }
+  { params }: { params: Promise<{ clientId: string }> | { clientId: string } }
 ) {
   try {
     const session = await getSessionInfo();
@@ -25,7 +25,8 @@ export async function PUT(
       return NextResponse.json({ ok: false, error: 'Unauthorized: Admin access required' }, { status: 403 });
     }
 
-    const clientId = params.clientId;
+    const resolved = await Promise.resolve(params);
+    const clientId = resolved.clientId;
     const existing = await getClientById(clientId);
     if (!existing) {
       return NextResponse.json({ ok: false, error: 'Client not found' }, { status: 404 });
@@ -85,7 +86,7 @@ export async function PUT(
 
 export async function DELETE(
   _request: Request,
-  { params }: { params: { clientId: string } }
+  { params }: { params: Promise<{ clientId: string }> | { clientId: string } }
 ) {
   try {
     const session = await getSessionInfo();
@@ -93,7 +94,8 @@ export async function DELETE(
       return NextResponse.json({ ok: false, error: 'Unauthorized: Admin access required' }, { status: 403 });
     }
 
-    const clientId = params.clientId;
+    const resolved = await Promise.resolve(params);
+    const clientId = resolved.clientId;
     // Also turn off any active campaigns belonging to this deleted client
     const campaigns = await getAllCampaigns();
     for (const c of campaigns) {
@@ -102,12 +104,8 @@ export async function DELETE(
       }
     }
 
-    const ok = await deleteClientProfile(clientId);
-    if (!ok) {
-      return NextResponse.json({ ok: false, error: 'Client not found' }, { status: 404 });
-    }
-
-    return NextResponse.json({ ok: true });
+    await deleteClientProfile(clientId);
+    return NextResponse.json({ ok: true, deleted: true, id: clientId });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }

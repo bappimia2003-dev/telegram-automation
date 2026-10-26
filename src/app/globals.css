@@ -1,54 +1,52 @@
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Manrope:wght@500;600;700;800&family=Hind+Siliguri:wght@500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: #F4F1EB;
-    --foreground: #1A1A1A;
-    --card: #FBF9F4;
-    --card-foreground: #1A1A1A;
-    --popover: #FBF9F4;
-    --popover-foreground: #1A1A1A;
-    --primary: #164E43;
+    --background: #FAF9F5;
+    --foreground: #141413;
+    --card: #FFFFFF;
+    --card-foreground: #141413;
+    --popover: #FFFFFF;
+    --popover-foreground: #141413;
+    --primary: #075E54;
     --primary-foreground: #FFFFFF;
-    --secondary: #EDE8DE;
-    --secondary-foreground: #374151;
-    --muted: #E6E2D8;
-    --muted-foreground: #6B7280;
-    --accent: #164E43;
+    --secondary: #F0EFEA;
+    --secondary-foreground: #141413;
+    --muted: #F0EFEA;
+    --muted-foreground: #6B6A65;
+    --accent: #D97757;
     --accent-foreground: #FFFFFF;
     --destructive: #DC2626;
     --destructive-foreground: #FFFFFF;
-    --border: #E6E2D8;
-    --input: #E6E2D8;
-    --ring: #164E43;
-    --radius: 1rem;
+    --border: #E6E4DD;
+    --input: #E6E4DD;
+    --ring: #075E54;
+    --radius: 0.875rem;
   }
 
   .dark {
-    --background: #111215;
-    --foreground: #F3F4F6;
-    --card: #181A1F;
-    --card-foreground: #F3F4F6;
-    --popover: #181A1F;
-    --popover-foreground: #F3F4F6;
-    --primary: #164E43;
-    --primary-foreground: #FFFFFF;
-    --secondary: #1F2228;
-    --secondary-foreground: #E5E7EB;
-    --muted: #262930;
-    --muted-foreground: #9CA3AF;
-    --accent: #164E43;
-    --accent-foreground: #FFFFFF;
+    --background: #0B141A;
+    --foreground: #F1F5F9;
+    --card: #111B21;
+    --card-foreground: #F1F5F9;
+    --popover: #111B21;
+    --popover-foreground: #F1F5F9;
+    --primary: #00A884;
+    --primary-foreground: #0B141A;
+    --secondary: #1C272E;
+    --secondary-foreground: #F1F5F9;
+    --muted: #1C272E;
+    --muted-foreground: #8696A0;
+    --accent: #00A884;
+    --accent-foreground: #0B141A;
     --destructive: #EF4444;
     --destructive-foreground: #FFFFFF;
-    --border: #22262C;
-    --input: #262930;
-    --ring: #164E43;
-    --radius: 1rem;
+    --border: #202C33;
+    --input: #202C33;
+    --ring: #00A884;
+    --radius: 0.875rem;
   }
 
   * {
@@ -57,6 +55,11 @@
 
   html {
     scroll-behavior: smooth;
+    font-family: var(--font-sans), var(--font-bangla), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  html[data-lang="bn"] {
+    font-family: var(--font-bangla), var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
 
   html, body {
@@ -67,43 +70,96 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings: "rlig" 1, "calt" 1, "tnum" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    transition: background-color 0.25s ease, color 0.25s ease;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 }
 
-/* Scrollbars */
+/* Smooth international scrollbars for Windows & Android */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--background);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--muted);
-  border-radius: 3px;
+  background: rgba(107, 106, 101, 0.26);
+  border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--muted-foreground);
+  background: rgba(107, 106, 101, 0.45);
 }
 
 @layer utilities {
-  .pr {
-    transition: transform 0.18s cubic-bezier(0.3, 1.6, 0.5, 1);
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
   }
-  .pr:active {
-    transform: scale(0.96);
+  .font-sans-main {
+    font-family: var(--font-sans), var(--font-bangla), system-ui, sans-serif;
   }
-  .font-sora {
-    font-family: 'Sora', system-ui, sans-serif;
-  }
-  .font-manrope {
-    font-family: 'Manrope', system-ui, sans-serif;
+  .font-mono-numbers {
+    font-family: var(--font-mono), monospace;
+    font-variant-numeric: tabular-nums;
   }
   .font-hind {
-    font-family: 'Hind Siliguri', system-ui, sans-serif;
+    font-family: var(--font-bangla), system-ui, sans-serif;
+  }
+
+  /* Day Mode Floating Box Under-Shadow inspired by Reference Design */
+  .day-box-shadow {
+    box-shadow:
+      0 10px 28px -6px rgba(20, 20, 19, 0.065),
+      0 3px 10px -2px rgba(20, 20, 19, 0.04),
+      0 1px 2px 0 rgba(20, 20, 19, 0.03);
+  }
+  .dark .day-box-shadow {
+    box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.4);
+  }
+
+  .day-floating-box {
+    box-shadow:
+      0 18px 42px -10px rgba(20, 20, 19, 0.09),
+      0 6px 16px -4px rgba(20, 20, 19, 0.05),
+      0 1px 3px 0 rgba(20, 20, 19, 0.04);
+  }
+  .dark .day-floating-box {
+    box-shadow: 0 12px 32px -6px rgba(0, 0, 0, 0.55);
+  }
+
+  @keyframes qr-laser {
+    0% {
+      top: 4%;
+      opacity: 0.85;
+    }
+    50% {
+      top: 92%;
+      opacity: 1;
+    }
+    100% {
+      top: 4%;
+      opacity: 0.85;
+    }
+  }
+
+  @keyframes qr-bracket {
+    0%, 100% {
+      opacity: 0.8;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.03);
+    }
+  }
+
+  .animate-qr-laser {
+    animation: qr-laser 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  .animate-qr-bracket {
+    animation: qr-bracket 2s ease-in-out infinite;
   }
 }

@@ -116,7 +116,6 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
   };
 
   const handleDisconnect = async (accountId: string) => {
-    if (!confirm('Are you sure you want to disconnect this WhatsApp number?')) return;
     setLoading(true);
     try {
       await fetch(`/api/whatsapp/accounts/${accountId}`, {
@@ -134,7 +133,6 @@ export function WhatsAppStatus({ onStatusChange }: WhatsAppStatusProps) {
   };
 
   const handleDeleteAccount = async (accountId: string) => {
-    if (!confirm('Are you sure you want to delete this WhatsApp number? All linked campaigns will default to any number.')) return;
     setLoading(true);
     try {
       await fetch(`/api/whatsapp/accounts/${accountId}`, { method: 'DELETE' });

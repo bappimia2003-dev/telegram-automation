@@ -13,7 +13,6 @@ import {
   CheckCircle2, 
   Layers, 
   Send, 
-  Sparkles,
   ShieldCheck,
   Edit3,
   Trash2,
@@ -22,12 +21,15 @@ import {
   X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { StatsCard } from '@/components/StatsCard';
 import { CampaignCard } from '@/components/CampaignCard';
+import { WhatsAppQrScanner } from '@/components/WhatsAppQrScanner';
 import { WaCampaign, WaConnection, WaMessageLog } from '@/lib/whatsappTypes';
+import { cn } from '@/lib/utils';
 
 export default function WhatsAppNumberDetailPage() {
   const params = useParams();
@@ -40,10 +42,13 @@ export default function WhatsAppNumberDetailPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Edit modal
+  // Edit modal & Confirm dialogs
   const [showEdit, setShowEdit] = useState(false);
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false);
+  const [confirmDeleteCampId, setConfirmDeleteCampId] = useState<string | null>(null);
 
   const fetchNumberData = async () => {
     try {
@@ -90,21 +95,29 @@ export default function WhatsAppNumberDetailPage() {
   const handleConnect = async () => {
     setActionLoading(true);
     try {
-      await fetch(`/api/whatsapp/accounts/${accountId}`, {
+      const res = await fetch(`/api/whatsapp/accounts/${accountId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'connect' }),
+        body: JSON.stringify({ action: 'connect', name: account?.name }),
       });
+      const data = await res.json().catch(() => ({}));
+      const resolvedAcc = data.account || data;
+      if (resolvedAcc && (resolvedAcc.qrCode || resolvedAcc.status)) {
+        setAccount((prev) => ({
+          ...(prev || resolvedAcc),
+          ...resolvedAcc,
+          qrCode: resolvedAcc.qrCode || prev?.qrCode || '',
+        }));
+      }
       await fetchNumberData();
-    } catch (err) {
-      console.error(err);
+    } catch {
+      // Ignore transient network errors
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleDisconnect = async () => {
-    if (!confirm('Are you sure you want to disconnect this WhatsApp number?')) return;
     setActionLoading(true);
     try {
       await fetch(`/api/whatsapp/accounts/${accountId}`, {
@@ -113,10 +126,29 @@ export default function WhatsAppNumberDetailPage() {
         body: JSON.stringify({ action: 'disconnect' }),
       });
       await fetchNumberData();
-    } catch (err) {
-      console.error(err);
+    } catch {
+      // Ignore transient network errors
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleDeleteNumber = async () => {
+    setActionLoading(true);
+    try {
+      const saved = localStorage.getItem('wa_deleted_account_ids');
+      const list = saved ? JSON.parse(saved) : [];
+      if (!list.includes(accountId)) list.push(accountId);
+      localStorage.setItem('wa_deleted_account_ids', JSON.stringify(list));
+    } catch {}
+
+    try {
+      await fetch(`/api/whatsapp/accounts/${accountId}`, { method: 'DELETE' });
+    } catch {}
+    if (typeof window !== 'undefined') {
+      window.location.assign('/whatsapp');
+    } else {
+      router.push('/whatsapp');
     }
   };
 
@@ -134,21 +166,19 @@ export default function WhatsAppNumberDetailPage() {
         body: JSON.stringify({ name: newName, phoneNumber: newPhone }),
       });
       await fetchNumberData();
-    } catch (err) {
-      console.error(err);
+    } catch {
+      // Ignore transient network errors
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleDeleteCampaign = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this campaign?')) return;
+    setCampaigns((prev) => prev.filter((c) => c.id !== id));
     try {
       await fetch(`/api/whatsapp/campaigns/${id}`, { method: 'DELETE' });
       await fetchNumberData();
-    } catch (err) {
-      console.error(err);
-    }
+    } catch {}
   };
 
   if (loading && !account) {
@@ -172,11 +202,12 @@ export default function WhatsAppNumberDetailPage() {
       {/* Top Navigation */}
       <div className="flex items-center justify-between">
         <Link 
+          prefetch={false}
           href="/whatsapp" 
-          className="inline-flex items-center text-xs sm:text-sm font-semibold text-[#164E43] dark:text-[#34D399] hover:underline transition-colors"
+          className="inline-flex items-center text-xs sm:text-sm font-semibold text-[#075E54] dark:text-[#00A884] hover:underline transition-colors"
         >
           <ArrowLeft className="w-4 h-4 mr-1.5" />
-          Back to WhatsApp Dashboard
+          <span>Back to WhatsApp Dashboard</span>
         </Link>
 
         <div className="flex items-center gap-2">
@@ -188,51 +219,61 @@ export default function WhatsAppNumberDetailPage() {
               setEditPhone(account?.phoneNumber || '');
               setShowEdit(true);
             }}
-            className="text-xs border-[#E4DFD2] dark:border-[#262930] hover:bg-[#EDE8DE] dark:hover:bg-[#1F2228] text-gray-700 dark:text-gray-200 rounded-xl font-bold shadow-xs h-8 px-3"
+            className="text-xs border-border bg-card hover:bg-secondary text-foreground rounded-lg font-bold h-8 px-3 cursor-pointer"
           >
-            <Edit3 className="w-3.5 h-3.5 mr-1 text-[#164E43] dark:text-[#34D399]" />
-            Edit Name & Phone
+            <Edit3 className="w-3.5 h-3.5 mr-1.5 text-[#075E54] dark:text-[#00A884]" />
+            <span>Edit Name & Phone</span>
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setConfirmDeleteOpen(true)}
+            disabled={actionLoading}
+            className="text-xs border-red-500/30 bg-card hover:bg-red-500/10 text-red-600 dark:text-red-400 rounded-lg font-bold h-8 px-3 cursor-pointer"
+          >
+            <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+            <span>Delete Number</span>
           </Button>
         </div>
       </div>
 
       {/* Number Profile & Live Connection Banner */}
-      <div className="rounded-[20px] bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E4DFD2] dark:border-[#262930] shadow-xs p-5 sm:p-6">
+      <div className="rounded-2xl bg-card border border-border p-5 sm:p-6 day-box-shadow">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
           <div className="flex items-start gap-4">
-            <div className={`w-12 h-12 rounded-[14px] flex items-center justify-center shrink-0 ${
+            <div className={cn(
+              "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
               isConnected 
-                ? 'bg-[#164E43] text-white shadow-xs' 
-                : 'bg-amber-100 text-amber-700'
-            }`}>
+                ? "bg-[#075E54] dark:bg-[#00A884] text-white dark:text-[#0B141A]" 
+                : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20"
+            )}>
               <Smartphone className="w-6 h-6" />
             </div>
 
             <div className="space-y-1">
               <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white font-['Sora',sans-serif]">
+                <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-foreground">
                   {account?.name || (accountId === 'main' ? 'Primary WhatsApp' : `SIM ${accountId.slice(-4)}`)}
                 </h1>
-                <Badge 
-                  variant="outline" 
-                  className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                    isConnected 
-                      ? 'bg-[#E3F1EA] dark:bg-[#1E2D27] text-[#164F43] dark:text-[#5FD1A5] border-[#B7DFCD] dark:border-[#264E3D]' 
-                      : isPending 
-                      ? 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse'
-                      : 'bg-gray-100 text-gray-500 border-gray-200'
-                  }`}
-                >
-                  {isConnected ? '🟢 Connected' : isPending ? '🟡 Scan QR Code' : '⚪ Disconnected'}
-                </Badge>
+                <span className={cn(
+                  "inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-md",
+                  isConnected 
+                    ? "bg-[#25D366]/15 text-[#075E54] dark:text-[#00A884]" 
+                    : isPending 
+                    ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                    : "bg-secondary text-muted-foreground"
+                )}>
+                  <span>{isConnected ? 'Connected' : isPending ? 'Scan Required' : 'Disconnected'}</span>
+                </span>
               </div>
 
-              <div className="text-xs sm:text-sm font-mono font-bold text-gray-700 dark:text-gray-300">
+              <div className="text-xs sm:text-sm font-mono tabular-nums font-bold text-muted-foreground">
                 {account?.phoneNumber ? (
-                  <span>+{account.phoneNumber.replace(/^\+/, '')}</span>
+                  <span className="text-foreground">+{account.phoneNumber.replace(/^\+/, '')}</span>
                 ) : (
-                  <span className="text-gray-400 italic font-sans text-xs">
-                    {isConnected ? 'Device linked' : 'No phone linked yet - scan QR below'}
+                  <span className="italic font-sans text-xs">
+                    {isConnected ? 'Device linked' : 'No phone linked yet - scan QR code below'}
                   </span>
                 )}
               </div>
@@ -245,77 +286,45 @@ export default function WhatsAppNumberDetailPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleDisconnect}
+                onClick={() => setConfirmDisconnectOpen(true)}
                 disabled={actionLoading}
-                className="border-red-200 text-red-600 hover:bg-red-50 text-xs rounded-xl font-bold shadow-xs h-9"
+                className="border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 text-xs rounded-lg font-bold h-9 cursor-pointer"
               >
                 <Power className="w-3.5 h-3.5 mr-1.5" />
-                Disconnect Number
+                <span>Disconnect Device</span>
               </Button>
             ) : (
               <Button
                 size="sm"
                 onClick={handleConnect}
                 disabled={actionLoading}
-                className="bg-[#164E43] hover:bg-[#124238] text-white text-xs rounded-xl font-bold shadow-xs h-9 active:scale-95 transition-transform"
+                className="bg-[#075E54] hover:bg-[#064E46] dark:bg-[#00A884] dark:hover:bg-[#008f6f] text-white dark:text-[#0B141A] text-xs rounded-lg font-bold h-9 active:scale-95 transition-transform"
               >
-                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-                Refresh Connection
+                <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", actionLoading && "animate-spin")} />
+                <span>Refresh Connection</span>
               </Button>
             )}
           </div>
         </div>
 
-        {/* QR Code Scanner (If not connected) */}
+        {/* QR Code Laser Scanner (If not connected) */}
         {!isConnected && (
-          <div className="mt-5 pt-5 border-t border-[#E4DFD2] dark:border-[#262930]">
-            <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#121418] border border-[#E4DFD2] dark:border-[#262930] flex flex-col sm:flex-row items-center gap-6">
-              <div className="p-3 bg-white rounded-xl shadow-xs border border-gray-200 shrink-0 flex items-center justify-center">
-                {account?.qrCode ? (
-                  <img
-                    src={account.qrCode}
-                    alt="WhatsApp QR Code"
-                    className="w-48 h-48 sm:w-52 sm:h-52 object-contain"
-                  />
-                ) : (
-                  <div className="w-48 h-48 sm:w-52 sm:h-52 flex flex-col items-center justify-center text-gray-600 text-xs gap-2">
-                    <RefreshCw className="w-6 h-6 animate-spin text-[#164E43]" />
-                    <span>Generating QR code...</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-3 text-xs">
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
-                  এই নম্বরে WhatsApp কানেক্ট করতে QR কোড স্ক্যান করুন:
-                </h4>
-                <ol className="space-y-2 text-gray-500 list-decimal pl-4">
-                  <li>আপনার ফোনের <strong className="text-gray-900 dark:text-white">WhatsApp</strong> খুলুন</li>
-                  <li><strong className="text-gray-900 dark:text-white">Settings</strong> বা ৩-ডট মেনুতে যান</li>
-                  <li><strong className="text-gray-900 dark:text-white">Linked Devices</strong> সিলেক্ট করুন</li>
-                  <li><strong className="text-gray-900 dark:text-white">Link a Device</strong> এ চাপ দিয়ে ক্যামেরার সামনে এই QR কোডটি ধরুন</li>
-                </ol>
-                <div className="pt-2 flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleConnect}
-                    disabled={actionLoading}
-                    className="text-xs border-[#E4DFD2] dark:border-[#262930] hover:bg-[#EDE8DE] dark:hover:bg-[#1F2228] rounded-xl font-bold shadow-xs"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5 mr-1" />
-                    Refresh QR Code
-                  </Button>
-                  <span className="text-[11px] text-gray-500">Auto-refreshes every 4s</span>
-                </div>
-              </div>
-            </div>
+          <div className="mt-5 pt-5 border-t border-border">
+            <WhatsAppQrScanner
+              qrCode={account?.qrCode}
+              status={account?.status || 'qr_pending'}
+              accountName={account?.name}
+              phoneNumber={account?.phoneNumber}
+              onRefresh={handleConnect}
+              refreshing={actionLoading}
+              refreshIntervalSeconds={4}
+            />
           </div>
         )}
       </div>
 
-      {/* Stats for this Number (Compact 2 cols on mobile, 3 cols on desktop) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4">
+      {/* Stats for this Number */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <StatsCard
           title="Assigned Campaigns"
           value={campaigns.length}
@@ -337,78 +346,128 @@ export default function WhatsAppNumberDetailPage() {
       {/* Campaigns Section for this Number */}
       <div className="space-y-3.5 pt-2">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white font-['Sora',sans-serif] flex items-center gap-2">
+          <h2 className="text-sm sm:text-base font-bold text-foreground flex items-center gap-2">
             <span>Campaigns on this Number</span>
-            <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-[#E3F1EA] dark:bg-[#1E2D27] text-[#164F43] dark:text-[#5FD1A5]">
+            <span className="text-xs font-mono tabular-nums font-bold px-2 py-0.5 rounded-md bg-secondary text-foreground">
               {campaigns.length}
             </span>
           </h2>
 
           <Link href={`/whatsapp/campaigns/new?accountId=${accountId}&returnTo=/whatsapp/numbers/${accountId}`}>
-            <Button className="bg-[#164E43] hover:bg-[#124238] text-white font-bold text-xs h-9 px-3.5 rounded-xl shadow-xs flex items-center gap-1.5 active:scale-95 transition-transform">
-              <Plus className="w-4 h-4 mr-1" />
-              Add Campaign
+            <Button className="bg-[#075E54] hover:bg-[#064E46] dark:bg-[#00A884] dark:hover:bg-[#008f6f] text-white dark:text-[#0B141A] font-bold text-xs h-8 px-3.5 rounded-lg flex items-center gap-1.5 active:scale-95 transition-transform">
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Campaign</span>
             </Button>
           </Link>
         </div>
 
         {campaigns.length === 0 ? (
-          <div className="text-center py-14 px-4 rounded-[20px] bg-[#FBF9F4] dark:bg-[#181A1F] border border-dashed border-[#E4DFD2] dark:border-[#262930] space-y-3">
-            <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 flex items-center justify-center mx-auto">
-              <Sparkles className="w-6 h-6" />
+          <div className="text-center py-12 px-4 rounded-2xl bg-card border border-dashed border-border day-box-shadow space-y-3">
+            <div className="w-10 h-10 rounded-xl bg-[#075E54]/10 dark:bg-[#00A884]/15 text-[#075E54] dark:text-[#00A884] flex items-center justify-center mx-auto">
+              <Layers className="w-5 h-5" />
             </div>
-            <h3 className="text-base font-semibold text-gray-900 dark:text-white">No campaigns assigned to this number yet</h3>
-            <div className="pt-2">
-              <Link href={`/whatsapp/campaigns/new?accountId=${accountId}&returnTo=/whatsapp/numbers/${accountId}`}>
-                <Button className="bg-[#164E43] hover:bg-[#124238] text-white font-semibold text-xs px-5 rounded-xl shadow-sm">
-                  <Plus className="w-4 h-4 mr-1.5" />
-                  Create Campaign for this Number
+            <h3 className="text-sm font-bold text-foreground">No campaigns assigned to this number yet</h3>
+            <div className="pt-1">
+              <Link prefetch={false} href={`/whatsapp/campaigns/new?accountId=${accountId}&returnTo=/whatsapp/numbers/${accountId}`}>
+                <Button className="bg-[#075E54] hover:bg-[#064E46] dark:bg-[#00A884] dark:hover:bg-[#008f6f] text-white dark:text-[#0B141A] font-bold text-xs h-8 px-4 rounded-lg">
+                  <Plus className="w-3.5 h-3.5 mr-1.5" />
+                  <span>Create Campaign for this Number</span>
                 </Button>
               </Link>
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 items-start">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 items-start">
             {campaigns.map((camp) => (
               <CampaignCard
                 key={camp.id}
                 campaign={camp}
                 account={account || undefined}
                 accounts={account ? [account] : []}
+                logs={logs}
                 onToggleActive={fetchNumberData}
-                onDelete={handleDeleteCampaign}
+                onDelete={(id) => setConfirmDeleteCampId(id)}
               />
             ))}
           </div>
         )}
       </div>
 
+      {/* Confirm Delete Number Modal (OK / Cancel) */}
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="Delete WhatsApp Number?"
+        description={`Are you sure you want to delete "${account?.name || accountId}"? Click OK to confirm or Cancel to keep it.`}
+        confirmLabel="OK, Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        loading={actionLoading}
+        onConfirm={async () => {
+          setConfirmDeleteOpen(false);
+          await handleDeleteNumber();
+        }}
+        onCancel={() => setConfirmDeleteOpen(false)}
+      />
+
+      {/* Confirm Disconnect Modal (OK / Cancel) */}
+      <ConfirmDialog
+        open={confirmDisconnectOpen}
+        title="Disconnect WhatsApp Number?"
+        description={`Disconnect "${account?.name || accountId}" from active session?`}
+        confirmLabel="OK, Disconnect"
+        cancelLabel="Cancel"
+        variant="warning"
+        loading={actionLoading}
+        onConfirm={async () => {
+          setConfirmDisconnectOpen(false);
+          await handleDisconnect();
+        }}
+        onCancel={() => setConfirmDisconnectOpen(false)}
+      />
+
+      {/* Confirm Delete Campaign Modal (OK / Cancel) */}
+      <ConfirmDialog
+        open={Boolean(confirmDeleteCampId)}
+        title="Delete Campaign?"
+        description="Are you sure you want to delete this campaign? Click OK to confirm or Cancel to keep it."
+        confirmLabel="OK, Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={async () => {
+          if (!confirmDeleteCampId) return;
+          const id = confirmDeleteCampId;
+          setConfirmDeleteCampId(null);
+          await handleDeleteCampaign(id);
+        }}
+        onCancel={() => setConfirmDeleteCampId(null)}
+      />
+
       {/* Message Delivery Logs for this Number */}
-      <div className="space-y-3 pt-4 border-t border-[#E4DFD2] dark:border-[#262930]">
+      <div className="space-y-3 pt-4 border-t border-border">
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-gray-900 dark:text-white font-['Sora',sans-serif] flex items-center gap-2">
-            <Clock className="w-4 h-4 text-[#164E43] dark:text-[#34D399]" />
+          <h3 className="text-sm sm:text-base font-bold text-foreground flex items-center gap-2">
+            <Clock className="w-4 h-4 text-[#075E54] dark:text-[#00A884]" />
             <span>Recent Delivery Logs</span>
           </h3>
         </div>
 
         {logs.length === 0 ? (
-          <p className="text-xs text-gray-500 italic p-4 rounded-[16px] bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E4DFD2] dark:border-[#262930]">
+          <p className="text-xs text-muted-foreground p-4 rounded-xl bg-card border border-border">
             No message logs yet for this number.
           </p>
         ) : (
-          <div className="rounded-[18px] border border-[#E4DFD2] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#181A1F] overflow-hidden divide-y divide-[#E4DFD2] dark:divide-[#262930] text-xs shadow-xs">
+          <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border text-xs">
             {logs.map((log) => (
               <div key={log.id} className="p-3 flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <p className="font-medium text-gray-900 dark:text-white">{log.phoneNumber} ({log.contactName || 'Lead'})</p>
-                  <p className="text-[11px] text-gray-500">
-                    Sent {log.messageType.toUpperCase()} • {new Date(log.sentAt).toLocaleTimeString()}
+                  <p className="font-mono font-bold text-foreground">{log.phoneNumber} · {log.contactName || 'Lead'}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {log.messageType.toUpperCase()} · {new Date(log.sentAt).toLocaleTimeString()}
                   </p>
                 </div>
-                <Badge variant="outline" className="bg-[#E3F1EA] dark:bg-[#1E2D27] text-[#164F43] dark:text-[#5FD1A5] border-[#B7DFCD] dark:border-[#264E3D] text-[10px]">
+                <span className="text-[11px] font-semibold text-[#075E54] dark:text-[#00A884]">
                   Delivered
-                </Badge>
+                </span>
               </div>
             ))}
           </div>
@@ -417,21 +476,21 @@ export default function WhatsAppNumberDetailPage() {
 
       {/* Modal: Edit Name and Phone */}
       {showEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 animate-in fade-in">
-          <div className="bg-white dark:bg-[#181A1F] border border-[#E4DFD2] dark:border-[#262930] rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E4DFD2] dark:border-[#262930]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6 shadow-xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-[#E3F1EA] dark:bg-[#1E2D27] text-[#164F43] dark:text-[#5FD1A5] flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-[#075E54]/10 dark:bg-[#00A884]/15 text-[#075E54] dark:text-[#00A884] flex items-center justify-center">
                   <Edit3 className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-gray-900 dark:text-white">Edit Number Details</h3>
-                  <p className="text-xs text-gray-500">Update SIM nickname or phone number</p>
+                  <h3 className="text-base font-bold text-foreground">Edit Number Details</h3>
+                  <p className="text-xs text-muted-foreground">Update SIM nickname or phone number</p>
                 </div>
               </div>
               <button 
                 onClick={() => setShowEdit(false)}
-                className="text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                className="text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -439,42 +498,42 @@ export default function WhatsAppNumberDetailPage() {
 
             <form onSubmit={handleUpdate} className="space-y-4">
               <div className="space-y-2">
-                <label className="text-xs font-medium text-gray-900 dark:text-gray-200">
+                <label className="text-xs font-semibold text-foreground">
                   SIM / Account Nickname *
                 </label>
                 <Input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   required
-                  className="bg-white dark:bg-[#121418] border-[#E4DFD2] dark:border-[#262930] text-sm"
+                  className="text-sm"
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium text-gray-900 dark:text-gray-200">
+                <label className="text-xs font-semibold text-foreground">
                   WhatsApp Phone Number
                 </label>
                 <Input
                   placeholder="e.g. 8801712345678"
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
-                  className="bg-white dark:bg-[#121418] border-[#E4DFD2] dark:border-[#262930] text-sm font-mono"
+                  className="text-sm font-mono"
                 />
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-3 border-t border-[#E4DFD2] dark:border-[#262930]">
+              <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-border">
                 <Button
                   type="button"
                   variant="ghost"
                   onClick={() => setShowEdit(false)}
-                  className="text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white rounded-xl font-semibold"
+                  className="text-xs"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={actionLoading || !editName.trim()}
-                  className="bg-[#164E43] hover:bg-[#124238] text-white font-semibold text-xs px-4 rounded-xl shadow-xs"
+                  className="bg-[#075E54] hover:bg-[#064E46] dark:bg-[#00A884] dark:hover:bg-[#008f6f] text-white dark:text-[#0B141A] font-bold text-xs px-4"
                 >
                   {actionLoading ? 'Saving...' : 'Update Details'}
                 </Button>

@@ -1,142 +1,123 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { StatsCard } from '@/components/StatsCard';
 import { WhatsAppNumbers } from '@/components/WhatsAppNumbers';
 import { CampaignCard } from '@/components/CampaignCard';
 import { WhatsAppMessageLog } from '@/components/WhatsAppMessageLog';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useLanguage } from '@/components/LanguageProvider';
 import { 
   Plus, 
   Send, 
-  Layers, 
   Users, 
   CheckCircle2, 
   Smartphone,
-  Sparkles,
   Phone,
+  Search,
+  Table as TableIcon,
+  LayoutGrid,
+  Trash2,
+  Edit,
+  MessageSquare,
+  Layers,
+  Bot,
+  Webhook,
+  Play,
+  Pause,
+  CheckSquare,
   ChevronDown,
-  Target
+  Loader2,
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { WaCampaign, WaDashboardStats, WaConnection } from '@/lib/whatsappTypes';
+import { WaCampaign, WaDashboardStats, WaConnection, WaMessageLog } from '@/lib/whatsappTypes';
 
 export default function WhatsAppDashboardPage() {
-  const [followupData, setFollowupData] = useState<any>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('wa_cached_followup');
-        if (cached) return JSON.parse(cached);
-      } catch {}
-    }
-    return null;
-  });
-  const [campaigns, setCampaigns] = useState<WaCampaign[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('wa_cached_campaigns');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch {}
-    }
-    return [];
-  });
-  const [accounts, setAccounts] = useState<WaConnection[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('wa_cached_accounts');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch {}
-    }
-    return [];
-  });
+  const { t } = useLanguage();
+  const [followupData, setFollowupData] = useState<any>(null);
+  const [campaigns, setCampaigns] = useState<WaCampaign[]>([]);
+  const [accounts, setAccounts] = useState<WaConnection[]>([]);
+  const [logs, setLogs] = useState<WaMessageLog[]>([]);
   const [selectedFilter, setSelectedFilter] = useState<string>('all');
-  const [stats, setStats] = useState<WaDashboardStats>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('wa_cached_stats');
-        if (cached) {
-          return JSON.parse(cached);
-        }
-      } catch {}
-    }
-    return {
-      totalCampaigns: 0,
-      activeCampaigns: 0,
-      totalSent: 0,
-      uniqueUsers: 0,
-      connectionStatus: 'disconnected',
-    };
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused'>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [selectedCampaignIds, setSelectedCampaignIds] = useState<Set<string>>(new Set());
+  const [stats, setStats] = useState<WaDashboardStats>({
+    totalCampaigns: 0,
+    activeCampaigns: 0,
+    totalSent: 0,
+    uniqueUsers: 0,
+    connectionStatus: 'disconnected',
   });
-  const [loading, setLoading] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('wa_cached_campaigns');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) return false;
-        }
-      } catch {}
-    }
-    return true;
-  });
+  const [loading, setLoading] = useState<boolean>(true);
   const [openAddNumberModal, setOpenAddNumberModal] = useState<boolean>(false);
-  const [showRunningCampaigns, setShowRunningCampaigns] = useState<boolean>(true);
   const [authData, setAuthData] = useState<any>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [confirmDeleteCamp, setConfirmDeleteCamp] = useState<WaCampaign | null>(null);
+  const [bulkActionLoading, setBulkActionLoading] = useState<'activate' | 'pause' | 'delete' | null>(null);
+  const [bulkMenuOpen, setBulkMenuOpen] = useState<boolean>(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState<boolean>(false);
+
+  const safeFetchJson = async (url: string) => {
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) return {};
+      const text = await res.text();
+      if (!text || text.trim().startsWith('<')) return {};
+      return JSON.parse(text);
+    } catch {
+      return {};
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
-      const [campRes, statusRes, accountsRes, followupRes, authRes] = await Promise.all([
-        fetch(`/api/whatsapp/campaigns?t=${Date.now()}`, { cache: 'no-store' }),
-        fetch(`/api/whatsapp/status?t=${Date.now()}`, { cache: 'no-store' }),
-        fetch(`/api/whatsapp/accounts?t=${Date.now()}`, { cache: 'no-store' }),
-        fetch(`/api/whatsapp/followup?t=${Date.now()}`, { cache: 'no-store' }),
-        fetch(`/api/auth?t=${Date.now()}`, { cache: 'no-store' }),
+      const [campData, statusData, accountsData, fupData, logsData, authJson] = await Promise.all([
+        safeFetchJson(`/api/whatsapp/campaigns?t=${Date.now()}`),
+        safeFetchJson(`/api/whatsapp/status?t=${Date.now()}`),
+        safeFetchJson(`/api/whatsapp/accounts?t=${Date.now()}`),
+        safeFetchJson(`/api/whatsapp/followup?t=${Date.now()}`),
+        safeFetchJson(`/api/whatsapp/logs?limit=200&t=${Date.now()}`),
+        safeFetchJson(`/api/auth?t=${Date.now()}`),
       ]);
 
-      const campData = await campRes.json().catch(() => ({}));
-      const statusData = await statusRes.json().catch(() => ({}));
-      const accountsData = await accountsRes.json().catch(() => ({}));
-      const fupData = await followupRes.json().catch(() => ({}));
-      const authJson = await authRes.json().catch(() => ({}));
+      if (authJson?.authenticated) setAuthData(authJson);
+      if (fupData && fupData.ok) setFollowupData(fupData);
 
-      if (authJson?.authenticated) {
-        setAuthData(authJson);
-        if (authJson.role === 'client') {
-          setShowRunningCampaigns(true);
+      let list: WaCampaign[] = Array.isArray(campData.campaigns) ? campData.campaigns : [];
+      try {
+        const savedDeletedCamps = localStorage.getItem('wa_deleted_campaign_ids');
+        if (savedDeletedCamps) {
+          const deletedCampSet = new Set(JSON.parse(savedDeletedCamps));
+          list = list.filter((c) => !deletedCampSet.has(c.id));
         }
-      }
-
-      if (fupData && fupData.ok) {
-        setFollowupData(fupData);
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('wa_cached_followup', JSON.stringify(fupData));
-          } catch {}
-        }
-      }
-
-      const list: WaCampaign[] = Array.isArray(campData.campaigns) ? campData.campaigns : [];
+      } catch {}
+      list = list.map((c) => ({
+        ...c,
+        name: c.name === 'Gemini Pro AI Support' ? 'JalaBot Pro Support' : c.name,
+      }));
       setCampaigns(list);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('wa_cached_campaigns', JSON.stringify(list));
-        } catch {}
-      }
 
-      const accs: WaConnection[] = Array.isArray(accountsData.accounts) ? accountsData.accounts : [];
+      let accs: WaConnection[] = Array.isArray(accountsData.accounts) ? accountsData.accounts : [];
+      try {
+        const savedDeleted = localStorage.getItem('wa_deleted_account_ids');
+        if (savedDeleted) {
+          const deletedSet = new Set(JSON.parse(savedDeleted));
+          accs = accs.filter((a) => !deletedSet.has(a.id));
+        }
+      } catch {}
+      accs = accs.map((a) => ({
+        ...a,
+        name: a.name === 'Gemini WhatsApp' ? 'JalaBot Official SIM' : a.name,
+      }));
       setAccounts(accs);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('wa_cached_accounts', JSON.stringify(accs));
-        } catch {}
-      }
+
+      const logList: WaMessageLog[] = Array.isArray(logsData.logs) ? logsData.logs : [];
+      setLogs(logList);
 
       let freshStats: WaDashboardStats;
       if (statusData.ok && statusData.stats) {
@@ -151,13 +132,8 @@ export default function WhatsAppDashboardPage() {
         };
       }
       setStats(freshStats);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('wa_cached_stats', JSON.stringify(freshStats));
-        } catch {}
-      }
-    } catch (err) {
-      console.error('Failed to fetch WhatsApp dashboard data:', err);
+    } catch {
+      // Transient fetch errors are safely ignored
     } finally {
       setLoading(false);
     }
@@ -165,349 +141,786 @@ export default function WhatsAppDashboardPage() {
 
   useEffect(() => {
     fetchDashboardData();
+    const interval = setInterval(fetchDashboardData, 15000);
+    return () => clearInterval(interval);
   }, []);
 
-  const handleDeleteCampaign = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this campaign? All message logs for this campaign will also be deleted.')) {
-      return;
+  const handleToggleCampaign = async (id: string, currentActive: boolean) => {
+    setTogglingId(id);
+    const newActive = !currentActive;
+    setCampaigns(prev => prev.map(c => c.id === id ? { ...c, isActive: newActive } : c));
+    try {
+      await fetch(`/api/whatsapp/campaigns/${id}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: newActive }),
+      });
+      await fetchDashboardData();
+    } catch {
+      setCampaigns(prev => prev.map(c => c.id === id ? { ...c, isActive: currentActive } : c));
+    } finally {
+      setTogglingId(null);
     }
+  };
+
+  const handleDeleteCampaign = async (id: string) => {
+    try {
+      const saved = localStorage.getItem('wa_deleted_campaign_ids');
+      const arr = saved ? JSON.parse(saved) : [];
+      if (!arr.includes(id)) arr.push(id);
+      localStorage.setItem('wa_deleted_campaign_ids', JSON.stringify(arr));
+    } catch {}
+    setCampaigns((prev) => prev.filter((c) => c.id !== id));
     try {
       await fetch(`/api/whatsapp/campaigns/${id}`, { method: 'DELETE' });
       await fetchDashboardData();
-    } catch (err) {
-      console.error('Failed deleting campaign:', err);
-    }
+    } catch {}
   };
 
-  const handleToggleFollowup = async () => {
-    if (!followupData) return;
-    const currentVal = Boolean(followupData.settings?.auto_followup);
-    const newVal = !currentVal;
+  const handleBulkToggle = async (targetActive: boolean) => {
+    if (selectedCampaignIds.size === 0 || bulkActionLoading) return;
+    const ids = Array.from(selectedCampaignIds);
+    setBulkMenuOpen(false);
+    setBulkActionLoading(targetActive ? 'activate' : 'pause');
 
-    setFollowupData((prev: any) => ({
-      ...prev,
-      settings: { ...prev?.settings, auto_followup: newVal },
-    }));
-
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('wa_followup_auto_followup', String(newVal));
-      } catch {}
-    }
+    // Optimistic UI update
+    setCampaigns((prev) =>
+      prev.map((c) => (selectedCampaignIds.has(c.id) ? { ...c, isActive: targetActive } : c))
+    );
+    try {
+      ids.forEach((id) => {
+        localStorage.setItem(`wa_camp_active_${id}`, String(targetActive));
+      });
+    } catch {}
 
     try {
-      await fetch('/api/whatsapp/followup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'toggle_setting',
-          key: 'auto_followup',
-          value: newVal,
-        }),
-      });
-      fetchDashboardData();
-    } catch (err) {
-      console.error('Failed to toggle followup from main page:', err);
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/whatsapp/campaigns/${id}/toggle`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ isActive: targetActive }),
+          })
+        )
+      );
+      setSelectedCampaignIds(new Set());
+      await fetchDashboardData();
+    } catch {
+      await fetchDashboardData();
+    } finally {
+      setBulkActionLoading(null);
     }
   };
 
-  // Filtered campaigns based on tab selection
-  const filteredCampaigns = campaigns.filter(c => {
-    if (selectedFilter === 'all') return true;
-    return c.accountId === selectedFilter || (!c.accountId && selectedFilter === 'main') || c.accountId === 'all';
-  });
+  const handleBulkDelete = async () => {
+    if (selectedCampaignIds.size === 0 || bulkActionLoading) return;
+    const ids = Array.from(selectedCampaignIds);
+    setBulkMenuOpen(false);
+    setBulkActionLoading('delete');
+
+    try {
+      const saved = localStorage.getItem('wa_deleted_campaign_ids');
+      const arr: string[] = saved ? JSON.parse(saved) : [];
+      ids.forEach((id) => {
+        if (!arr.includes(id)) arr.push(id);
+      });
+      localStorage.setItem('wa_deleted_campaign_ids', JSON.stringify(arr));
+    } catch {}
+
+    setCampaigns((prev) => prev.filter((c) => !selectedCampaignIds.has(c.id)));
+
+    try {
+      await Promise.all(
+        ids.map((id) => fetch(`/api/whatsapp/campaigns/${id}`, { method: 'DELETE' }))
+      );
+      setSelectedCampaignIds(new Set());
+      await fetchDashboardData();
+    } catch {
+      await fetchDashboardData();
+    } finally {
+      setBulkActionLoading(null);
+      setConfirmBulkDelete(false);
+    }
+  };
+
+  // Filtered campaigns
+  const filteredCampaigns = useMemo(() => {
+    return campaigns.filter(c => {
+      if (selectedFilter !== 'all') {
+        const matchesAcc = c.accountId === selectedFilter || (!c.accountId && selectedFilter === 'main') || c.accountId === 'all';
+        if (!matchesAcc) return false;
+      }
+      if (statusFilter === 'active' && !c.isActive) return false;
+      if (statusFilter === 'paused' && c.isActive) return false;
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesName = c.name.toLowerCase().includes(q);
+        const matchesKw = c.keywords?.toLowerCase().includes(q);
+        const matchesDesc = c.description?.toLowerCase().includes(q);
+        if (!matchesName && !matchesKw && !matchesDesc) return false;
+      }
+
+      return true;
+    });
+  }, [campaigns, selectedFilter, statusFilter, searchQuery]);
 
   const connectedAccountsCount = accounts.filter(a => a.status === 'connected').length;
-  const isClient = authData?.role === 'client';
-  const clientInfo = authData?.client;
-  const isClientExpired = Boolean(clientInfo?.isExpired);
-  const numberQuotaReached = isClient && clientInfo && accounts.length >= clientInfo.maxWhatsappNumbers;
-  const campaignQuotaReached = isClient && clientInfo && campaigns.length >= clientInfo.maxCampaigns;
+
+  const toggleSelectAll = () => {
+    if (selectedCampaignIds.size === filteredCampaigns.length) {
+      setSelectedCampaignIds(new Set());
+    } else {
+      setSelectedCampaignIds(new Set(filteredCampaigns.map(c => c.id)));
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    const next = new Set(selectedCampaignIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedCampaignIds(next);
+  };
+
+  // Compute per-campaign Delivery Rate and Webhook Status
+  const getCampaignTelemetry = (camp: WaCampaign) => {
+    const campLogs = logs.filter(l => l.campaignId === camp.id);
+    const sentLogs = campLogs.filter(l => l.status === 'sent').length;
+    const failedLogs = campLogs.filter(l => l.status === 'failed').length;
+
+    let deliveryRate = 100;
+    if (sentLogs + failedLogs > 0) {
+      deliveryRate = Math.round((sentLogs / (sentLogs + failedLogs)) * 1000) / 10;
+    }
+
+    const isAll = !camp.accountId || camp.accountId === 'all';
+    const acc = accounts.find(a => a.id === camp.accountId);
+    const isDeviceOnline = isAll
+      ? accounts.some(a => a.status === 'connected') || accounts.length === 0
+      : acc?.status === 'connected';
+
+    const webhookStatus = !camp.isActive
+      ? { label: 'Muted', detail: 'Paused', tone: 'text-muted-foreground' }
+      : isDeviceOnline
+      ? { label: 'Listening', detail: '200 OK', tone: 'text-[#075E54] dark:text-[#00A884]' }
+      : { label: 'Standby', detail: 'Wait SIM', tone: 'text-amber-600 dark:text-amber-400' };
+
+    const mediaParts: string[] = [];
+    if (camp.welcomeMessage?.trim()) mediaParts.push('Text');
+    if (camp.imageUrl?.trim()) mediaParts.push('Image');
+    if (camp.audioUrl?.trim()) mediaParts.push('Audio');
+    if (camp.videoUrl?.trim()) mediaParts.push('Video');
+    if (camp.documentUrl?.trim()) mediaParts.push('Doc');
+
+    return {
+      deliveryRate,
+      failedLogs,
+      webhookStatus,
+      isAll,
+      acc,
+      accountLabel: isAll ? 'All Devices' : (acc?.name || camp.accountId || 'Primary'),
+      mediaSummary: mediaParts.length > 0 ? mediaParts.join(' · ') : 'Sequence',
+    };
+  };
 
   return (
-    <div className="space-y-8 pb-16">
-      {/* Client Profile & Quota Summary Card (Visible when logged in as Client) */}
-      {isClient && clientInfo && (
-        <div className="rounded-2xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930] p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="relative">
-              {clientInfo.remainingDays !== null && clientInfo.remainingDays !== undefined && (
-                <span
-                  className={cn(
-                    "absolute -top-2.5 -right-2.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-extrabold shadow-sm border leading-tight",
-                    isClientExpired || clientInfo.remainingDays <= 0
-                      ? "bg-red-600 text-white border-red-400 animate-pulse"
-                      : clientInfo.remainingDays <= 5
-                      ? "bg-amber-500 text-white border-amber-300"
-                      : "bg-[#164E43] text-white border-[#227968]"
-                  )}
-                >
-                  {isClientExpired || clientInfo.remainingDays <= 0 ? '0d' : `${clientInfo.remainingDays}d`}
-                </span>
-              )}
-              <div className="w-12 h-12 rounded-2xl bg-[#164E43]/10 dark:bg-[#34D399]/10 border border-[#164E43]/20 dark:border-[#34D399]/20 flex items-center justify-center text-[#164E43] dark:text-[#34D399] font-extrabold text-lg">
-                {clientInfo.name.charAt(0).toUpperCase()}
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base font-extrabold text-gray-900 dark:text-white">{clientInfo.name}</h3>
-                <span
-                  className={cn(
-                    "text-[11px] font-bold px-2.5 py-0.5 rounded-full border",
-                    isClientExpired
-                      ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30"
-                      : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
-                  )}
-                >
-                  {isClientExpired
-                    ? '⚠️ Expired — Campaigns Auto Off'
-                    : clientInfo.remainingDays !== null
-                    ? `⏳ ${clientInfo.remainingDays} Days Remaining`
-                    : 'Active Plan'}
-                </span>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                আপনার নির্ধারিত প্যানেল লিমিট ও সাবস্ক্রিপশন স্ট্যাটাস
-              </p>
-            </div>
+    <div className="space-y-6 pb-16">
+      {/* 1. Header Toolbar with Telegram Blue Switcher Above WhatsApp Command Center */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-card border border-border p-4 sm:px-5 day-box-shadow">
+        <div className="flex items-start sm:items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-[#075E54]/12 dark:bg-[#00A884]/15 text-[#075E54] dark:text-[#00A884] flex items-center justify-center shrink-0">
+            <MessageSquare className="w-5 h-5" />
           </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center">
-            <div className="px-3.5 py-2 rounded-xl bg-[#F4F1EB] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930]">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                WhatsApp Numbers
-              </div>
-              <div className="text-sm font-extrabold text-gray-900 dark:text-white mt-0.5">
-                {accounts.length} / {clientInfo.maxWhatsappNumbers} Used
-              </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <Link
+                prefetch={false}
+                href="/dashboard"
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-extrabold bg-[#0088CC] hover:bg-[#0077B5] dark:bg-[#229ED9] dark:hover:bg-[#1E8CC0] text-white shadow-xs transition-all"
+              >
+                <Bot className="w-3 h-3" />
+                <span>{t('Telegram Bot Hub', 'টেলিগ্রাম বট হাব')}</span>
+              </Link>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#075E54]/12 dark:bg-[#00A884]/15 text-[#075E54] dark:text-[#00A884]">
+                <Smartphone className="w-3 h-3" />
+                <span>{t('WhatsApp Active', 'হোয়াটসঅ্যাপ সক্রিয়')}</span>
+              </span>
             </div>
-            <div className="px-3.5 py-2 rounded-xl bg-[#F4F1EB] dark:bg-[#121418] border border-[#E6E2D8] dark:border-[#262930]">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                Campaigns Quota
-              </div>
-              <div className="text-sm font-extrabold text-gray-900 dark:text-white mt-0.5">
-                {campaigns.length} / {clientInfo.maxCampaigns} Used
-              </div>
-            </div>
+            <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground">
+              {t('WhatsApp Business Command Center', 'হোয়াটসঅ্যাপ বিজনেস কমান্ড সেন্টার')}
+            </h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {t(
+                'Manage multi-SIM connections, automated auto-replies, and scheduled delivery campaigns',
+                'মাল্টি-সিম সংযোগ, স্বয়ংক্রিয় অটো-রিপ্লাই এবং শিডিউলড মেসেজ ক্যাম্পেইন পরিচালনা করুন'
+              )}
+            </p>
           </div>
         </div>
-      )}
 
-      {/* Quick Action Buttons */}
-      <div className="grid grid-cols-2 sm:flex sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto sm:justify-end">
-        {!isClient && (
-          <Link href="/whatsapp/clients" className="col-span-2 sm:col-span-1 w-full sm:w-auto">
-            <Button
-              variant="outline"
-              className="w-full h-11 sm:h-10 px-4 rounded-[14px] sm:rounded-xl border-[1.5px] border-[#E6E2D8] dark:border-[#262930] bg-[#FBF9F4] dark:bg-[#181A1F] text-gray-900 dark:text-white hover:bg-[#EDE8DE] dark:hover:bg-[#22262C] font-bold text-sm sm:text-xs flex items-center justify-center gap-2"
-            >
-              <Users className="w-4 h-4 shrink-0 text-[#164E43] dark:text-[#34D399]" />
-              <span>Clients Panel</span>
-            </Button>
-          </Link>
-        )}
-
-        <Link href="/whatsapp/targeted-followup" className="col-span-2 sm:col-span-1 w-full sm:w-auto">
+        <div className="flex items-center gap-2">
           <Button
+            size="sm"
             variant="outline"
-            className="w-full h-11 sm:h-10 px-4 rounded-[14px] sm:rounded-xl border-[1.5px] border-[#164E43]/40 dark:border-[#34D399]/40 bg-[#164E43]/5 dark:bg-[#34D399]/5 text-[#164E43] dark:text-[#34D399] hover:bg-[#164E43]/10 font-bold text-sm sm:text-xs flex items-center justify-center gap-2"
+            onClick={() => setOpenAddNumberModal(true)}
+            className="text-xs font-semibold h-9 rounded-xl border-border bg-secondary/70 hover:bg-secondary text-foreground cursor-pointer"
           >
-            <Target className="w-4 h-4 shrink-0 text-[#164E43] dark:text-[#34D399]" />
-            <span>Targeted Follow-up</span>
+            <Smartphone className="w-3.5 h-3.5 mr-1.5 text-[#075E54] dark:text-[#00A884]" />
+            <span>{t('Connect Device', 'ডিভাইস যুক্ত করুন')}</span>
           </Button>
-        </Link>
 
-        {isClientExpired || campaignQuotaReached ? (
-          <Button
-            type="button"
-            onClick={() =>
-              alert(
-                isClientExpired
-                  ? 'আপনার প্ল্যানের মেয়াদ শেষ হয়ে গেছে (0 Days Left)। নতুন ক্যাম্পেইন তৈরি করতে অ্যাডমিনের সাথে যোগাযোগ করুন।'
-                  : `আপনার ক্যাম্পেইন লিমিট পূর্ণ হয়ে গেছে (${clientInfo?.maxCampaigns}/${clientInfo?.maxCampaigns})।`
-              )
-            }
-            className="w-full sm:w-auto h-11 sm:h-10 px-4 rounded-[14px] sm:rounded-xl bg-gray-400 dark:bg-gray-700 text-white font-bold text-sm sm:text-xs flex items-center justify-center gap-2 cursor-not-allowed opacity-80"
-          >
-            <Plus className="w-4 h-4 shrink-0" />
-            <span>New Campaign {campaignQuotaReached ? '(Full)' : '(Expired)'}</span>
-          </Button>
-        ) : (
-          <Link href="/whatsapp/campaigns/new" className="w-full sm:w-auto">
-            <Button className="w-full h-11 sm:h-10 px-4 rounded-[14px] sm:rounded-xl bg-[#164E43] hover:bg-[#124238] text-white font-bold text-sm sm:text-xs shadow-sm flex items-center justify-center gap-2 active:scale-95 transition-transform">
-              <Plus className="w-4 h-4 shrink-0" />
-              <span>New Campaign</span>
+          <Link prefetch={false} href="/whatsapp/campaigns/new">
+            <Button
+              size="sm"
+              className="text-xs font-bold h-9 rounded-xl bg-[#075E54] hover:bg-[#064E46] dark:bg-[#00A884] dark:hover:bg-[#008f6f] text-white dark:text-[#111B21] day-box-shadow cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              <span>{t('Create Campaign', 'ক্যাম্পেইন তৈরি করুন')}</span>
             </Button>
           </Link>
-        )}
-
-        <Button 
-          type="button"
-          onClick={() => {
-            if (isClientExpired) {
-              alert('আপনার প্ল্যানের মেয়াদ শেষ হয়ে গেছে (0 Days Left)। অ্যাডমিনের সাথে যোগাযোগ করুন।');
-              return;
-            }
-            if (numberQuotaReached) {
-              alert(`আপনার হোয়াটসঅ্যাপ নাম্বার লিমিট পূর্ণ হয়ে গেছে (${clientInfo?.maxWhatsappNumbers}/${clientInfo?.maxWhatsappNumbers})।`);
-              return;
-            }
-            setOpenAddNumberModal(true);
-          }}
-          variant="outline"
-          className="w-full sm:w-auto h-11 sm:h-10 px-4 rounded-[14px] sm:rounded-xl border-[1.5px] border-[#164F43] dark:border-[#34D399] text-[#164F43] dark:text-[#34D399] hover:bg-[#164F43]/10 dark:hover:bg-[#34D399]/10 font-bold text-sm sm:text-xs flex items-center justify-center gap-2 active:scale-95 transition-transform"
-        >
-          <Plus className="w-4 h-4 shrink-0" />
-          <span>Add Number {numberQuotaReached ? `(${accounts.length}/${clientInfo?.maxWhatsappNumbers})` : ''}</span>
-        </Button>
+        </div>
       </div>
 
-      {/* Stats Cards (2 cols on mobile, 4 cols on desktop) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+      {/* 2. High-Density KPI Metric Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         <StatsCard
-          title="WhatsApp Numbers"
-          value={
-            isClient && clientInfo
-              ? `${accounts.length} / ${clientInfo.maxWhatsappNumbers} Allowed`
-              : `${connectedAccountsCount} / ${accounts.length || 1} Connected`
-          }
+          title="Connected Numbers"
+          value={`${connectedAccountsCount} / ${accounts.length || 1}`}
+          subtitle={`${accounts.length} registered devices`}
           icon={Smartphone}
         />
         <StatsCard
-          title="Running Campaigns"
-          value={
-            isClient && clientInfo
-              ? `${stats.activeCampaigns} (${campaigns.length}/${clientInfo.maxCampaigns})`
-              : stats.activeCampaigns
-          }
+          title="Active Campaigns"
+          value={stats.activeCampaigns}
+          subtitle={`Out of ${campaigns.length} total`}
           icon={CheckCircle2}
         />
         <StatsCard
-          title="Total Delivered"
+          title="Messages Sent"
           value={stats.totalSent}
+          subtitle="Delivered via Baileys engine"
           icon={Send}
         />
         <StatsCard
-          title="Unique Customers"
+          title="Unique Leads"
           value={stats.uniqueUsers}
+          subtitle="Direct customer inquiries"
           icon={Users}
         />
       </div>
 
-      {/* 1. Connected WhatsApp Numbers Section */}
-      <WhatsAppNumbers 
-        accounts={accounts}
-        campaigns={campaigns} 
-        onDataChange={fetchDashboardData}
-        externalAddModalOpen={openAddNumberModal}
-        onCloseExternalAddModal={() => setOpenAddNumberModal(false)}
-      />
+      {/* 3. Connected Numbers High-Density Table & Device Strip */}
+      <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 day-box-shadow">
+        <WhatsAppNumbers 
+          accounts={accounts}
+          campaigns={campaigns}
+          logs={logs}
+          onDataChange={fetchDashboardData}
+          externalAddModalOpen={openAddNumberModal}
+          onCloseExternalAddModal={() => setOpenAddNumberModal(false)}
+        />
+      </div>
 
-      {/* 2. All Running Campaigns Section (Collapsible - shows ONLY on click) */}
-      <div className="space-y-3 pt-3 border-t border-[#E6E2D8] dark:border-[#262930]">
-        <div className="flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => setShowRunningCampaigns(prev => !prev)}
-            className="flex items-center gap-2 group cursor-pointer text-left focus:outline-none select-none hover:opacity-80 transition-opacity"
-          >
-            <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 font-['Sora',sans-serif]">
-              <span>All Running Campaigns</span>
-              <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-[#E3F1EA] dark:bg-[#1E2D27] text-[#164F43] dark:text-[#5FD1A5]">
-                {campaigns.length}
+      {/* 4. High-Density Campaigns Section */}
+      <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 day-box-shadow space-y-4">
+        {/* Table Controls Bar */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-border">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Master Select All Checkbox (Works for both Table and Card views) */}
+            <label className="inline-flex items-center gap-2 cursor-pointer select-none px-2.5 py-1.5 rounded-lg bg-secondary/60 hover:bg-secondary border border-border text-xs font-bold text-foreground transition-colors">
+              <input
+                type="checkbox"
+                checked={filteredCampaigns.length > 0 && selectedCampaignIds.size === filteredCampaigns.length}
+                onChange={toggleSelectAll}
+                className="w-3.5 h-3.5 rounded border-border text-[#075E54] focus:ring-0 cursor-pointer"
+              />
+              <span>{t('Select All', 'সব নির্বাচন')}</span>
+            </label>
+
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm sm:text-base font-bold text-foreground">
+                {t('Campaigns Directory', 'ক্যাম্পেইন তালিকা')}
+              </h2>
+              <span className="text-xs font-mono tabular-nums font-semibold text-muted-foreground">
+                ({filteredCampaigns.length})
               </span>
-            </h2>
-          </button>
+            </div>
+          </div>
 
-          <Link href="/whatsapp/campaigns/new">
-            <Button variant="outline" size="sm" className="text-xs border-[#E6E2D8] dark:border-[#262930] text-emerald-700 dark:text-emerald-400 hover:bg-[#EDE8DE] dark:hover:bg-[#1F2228] h-8 px-3 rounded-lg">
-              <Plus className="w-3.5 h-3.5 mr-1" />
-              Add Campaign
-            </Button>
-          </Link>
+          {/* Search, Filter Tabs & View Toggle */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Search Input */}
+            <div className="relative w-full sm:w-56">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search campaigns..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#075E54] dark:focus:ring-[#00A884]"
+              />
+            </div>
+
+            {/* Status Segmented Control */}
+            <div className="flex items-center p-0.5 bg-secondary rounded-lg">
+              {(['all', 'active', 'paused'] as const).map(tab => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setStatusFilter(tab)}
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-semibold rounded-md transition-all capitalize cursor-pointer",
+                    statusFilter === tab 
+                      ? "bg-card text-foreground shadow-xs font-bold" 
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            {/* View Switcher: Table vs Cards */}
+            <div className="flex items-center p-0.5 bg-secondary rounded-lg">
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                title="Compact Table View"
+                className={cn(
+                  "p-1.5 rounded-md transition-all cursor-pointer",
+                  viewMode === 'table' ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <TableIcon className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('cards')}
+                title="Card Grid View"
+                className={cn(
+                  "p-1.5 rounded-md transition-all cursor-pointer",
+                  viewMode === 'cards' ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Filter Tabs & Campaigns Grid (Shown ONLY when clicked) */}
-        {showRunningCampaigns && (
-          <div className="space-y-3 pt-1">
-            {/* Filter Tabs by Number */}
-            {accounts.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1 pb-1">
+        {/* Prominent Bulk Action Menu Bar when 1 or more campaigns are selected */}
+        {selectedCampaignIds.size > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 rounded-xl bg-[#075E54]/8 dark:bg-[#00A884]/12 border border-[#075E54]/30 dark:border-[#00A884]/30 animate-in fade-in">
+            <div className="flex items-center gap-2.5">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#075E54] dark:bg-[#00A884] text-white dark:text-[#0B141A] text-xs font-extrabold font-mono tabular-nums shadow-xs">
+                <CheckSquare className="w-3.5 h-3.5" />
+                <span>
+                  {selectedCampaignIds.size} {t('Selected', 'টি নির্বাচিত')}
+                </span>
+              </span>
+              <span className="text-xs text-muted-foreground font-medium">
+                {t(
+                  'Apply bulk status changes to all selected campaigns at once:',
+                  'নির্বাচিত সব ক্যাম্পেইনে একসাথে বাল্ক অ্যাকশন প্রয়োগ করুন:'
+                )}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 relative">
+              {/* Quick Activate Selected Button */}
+              <button
+                type="button"
+                disabled={Boolean(bulkActionLoading)}
+                onClick={() => handleBulkToggle(true)}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#075E54] hover:bg-[#064E46] dark:bg-[#00A884] dark:hover:bg-[#008f6f] text-white dark:text-[#0B141A] text-xs font-extrabold shadow-xs transition-all cursor-pointer disabled:opacity-60"
+              >
+                {bulkActionLoading === 'activate' ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                )}
+                <span>{t('Activate Selected', 'সক্রিয় করুন (Activate)')}</span>
+              </button>
+
+              {/* Quick Pause Selected Button */}
+              <button
+                type="button"
+                disabled={Boolean(bulkActionLoading)}
+                onClick={() => handleBulkToggle(false)}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-extrabold transition-all cursor-pointer disabled:opacity-60"
+              >
+                {bulkActionLoading === 'pause' ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Pause className="w-3.5 h-3.5" />
+                )}
+                <span>{t('Pause Selected', 'বিরতি দিন (Pause)')}</span>
+              </button>
+
+              {/* Bulk Action Dropdown Menu */}
+              <div className="relative">
                 <button
-                  onClick={() => setSelectedFilter('all')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                    selectedFilter === 'all'
-                      ? 'bg-[#164E43] text-white border-[#164E43] shadow-xs'
-                      : 'bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-800 dark:text-gray-200 hover:bg-[#EDE8DE] dark:hover:bg-[#22262C] hover:text-gray-900 dark:hover:text-white'
-                  }`}
+                  type="button"
+                  onClick={() => setBulkMenuOpen((prev) => !prev)}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-card hover:bg-secondary text-foreground border border-border text-xs font-bold transition-colors cursor-pointer"
                 >
-                  🌐 All Numbers ({campaigns.length})
+                  <span>{t('Bulk Menu', 'বাল্ক মেনু')}</span>
+                  <ChevronDown className="w-3.5 h-3.5" />
                 </button>
 
-                {accounts.map(acc => {
-                  const count = campaigns.filter(c => c.accountId === acc.id || (!c.accountId && acc.id === 'main') || c.accountId === 'all').length;
-                  const phoneLabel = acc.phoneNumber ? ` (+${acc.phoneNumber.replace(/^\+/, '')})` : '';
-                  return (
+                {bulkMenuOpen && (
+                  <div className="absolute right-0 mt-1.5 w-52 rounded-xl bg-card border border-border day-box-shadow py-1.5 z-50 text-xs">
                     <button
-                      key={acc.id}
-                      onClick={() => setSelectedFilter(acc.id)}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                        selectedFilter === acc.id
-                          ? 'bg-[#164E43] text-white border-[#164E43] shadow-xs'
-                          : 'bg-[#FAF8F5] dark:bg-[#181A1F] border-[#E6E2D8] dark:border-[#262930] text-gray-800 dark:text-gray-200 hover:bg-[#EDE8DE] dark:hover:bg-[#22262C] hover:text-gray-900 dark:hover:text-white'
-                      }`}
+                      type="button"
+                      onClick={() => handleBulkToggle(true)}
+                      className="w-full px-3.5 py-2 text-left hover:bg-secondary flex items-center gap-2 font-semibold text-emerald-600 dark:text-emerald-400 cursor-pointer"
                     >
-                      <Phone className="w-3 h-3 shrink-0 text-emerald-700 dark:text-emerald-400" />
-                      <span>{acc.name}{phoneLabel}</span>
-                      <span className="opacity-75">({count})</span>
+                      <Play className="w-3.5 h-3.5" />
+                      <span>{t('Activate All Selected', 'নির্বাচিত সব সক্রিয় করুন')}</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBulkToggle(false)}
+                      className="w-full px-3.5 py-2 text-left hover:bg-secondary flex items-center gap-2 font-semibold text-amber-600 dark:text-amber-400 cursor-pointer"
+                    >
+                      <Pause className="w-3.5 h-3.5" />
+                      <span>{t('Pause All Selected', 'নির্বাচিত সব পজ করুন')}</span>
+                    </button>
+                    <div className="my-1 border-t border-border" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBulkMenuOpen(false);
+                        setConfirmBulkDelete(true);
+                      }}
+                      className="w-full px-3.5 py-2 text-left hover:bg-red-500/10 flex items-center gap-2 font-bold text-red-600 dark:text-red-400 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{t('Delete Selected Campaigns', 'নির্বাচিত ক্যাম্পেইন মুছুন')}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Clear Selection Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCampaignIds(new Set());
+                  setBulkMenuOpen(false);
+                }}
+                className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground text-xs font-bold transition-colors cursor-pointer"
+                title={t('Clear selection', 'নির্বাচন বাতিল করুন')}
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>{t('Clear', 'বাতিল')}</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Filter by Device Tabs */}
+        {accounts.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-muted-foreground font-semibold mr-1">Device:</span>
+            <button
+              onClick={() => setSelectedFilter('all')}
+              className={cn(
+                "px-2.5 py-1 rounded-md text-xs font-semibold border transition-all cursor-pointer",
+                selectedFilter === 'all'
+                  ? "bg-[#075E54] dark:bg-[#00A884] text-white dark:text-[#0B141A] border-transparent"
+                  : "border-border bg-card text-muted-foreground hover:text-foreground"
+              )}
+            >
+              All Devices
+            </button>
+            {accounts.map(acc => {
+              const count = campaigns.filter(c => c.accountId === acc.id || (!c.accountId && acc.id === 'main') || c.accountId === 'all').length;
+              return (
+                <button
+                  key={acc.id}
+                  onClick={() => setSelectedFilter(acc.id)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-md text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer",
+                    selectedFilter === acc.id
+                      ? "bg-[#075E54] dark:bg-[#00A884] text-white dark:text-[#0B141A] border-transparent"
+                      : "border-border bg-card text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Phone className="w-3 h-3" />
+                  <span>{acc.name || 'Account'}</span>
+                  <span className="opacity-75 font-mono tabular-nums">({count})</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Content View: High-Density Table OR Card Grid */}
+        {loading ? (
+          <div className="space-y-2 py-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-10 bg-secondary rounded-lg animate-pulse" />
+            ))}
+          </div>
+        ) : filteredCampaigns.length === 0 ? (
+          <div className="text-center py-12 px-4 rounded-xl border border-dashed border-border bg-secondary/30">
+            <Layers className="w-8 h-8 text-[#075E54] dark:text-[#00A884] mx-auto mb-2 opacity-60" />
+            <h3 className="text-sm font-bold text-foreground">No campaigns match your filters</h3>
+            <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+              {searchQuery ? 'Try clearing your search query or switching filters.' : 'Create your first campaign to begin automated messaging.'}
+            </p>
+            <Link prefetch={false} href="/whatsapp/campaigns/new" className="inline-block mt-3">
+              <Button size="sm" className="text-xs font-bold bg-[#075E54] dark:bg-[#00A884] text-white dark:text-[#111B21]">
+                <Plus className="w-3.5 h-3.5 mr-1" /> Create Campaign
+              </Button>
+            </Link>
+          </div>
+        ) : viewMode === 'table' ? (
+          /* High-Density Compact Table with Webhook Status & Delivery Rate */
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-secondary/60 text-muted-foreground font-semibold border-b border-border select-none">
+                <tr className="h-9">
+                  <th className="px-3 py-2 w-8">
+                    <input
+                      type="checkbox"
+                      checked={selectedCampaignIds.size > 0 && selectedCampaignIds.size === filteredCampaigns.length}
+                      onChange={toggleSelectAll}
+                      className="rounded border-border text-[#075E54] focus:ring-0 cursor-pointer"
+                    />
+                  </th>
+                  <th className="px-3 py-2">Campaign & Trigger</th>
+                  <th className="px-3 py-2 hidden md:table-cell">Device / Account</th>
+                  <th className="px-3 py-2">Webhook Status</th>
+                  <th className="px-3 py-2 text-right">Delivery Rate</th>
+                  <th className="px-3 py-2 text-center">Status</th>
+                  <th className="px-3 py-2 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredCampaigns.map((camp) => {
+                  const isSelected = selectedCampaignIds.has(camp.id);
+                  const tel = getCampaignTelemetry(camp);
+
+                  return (
+                    <tr 
+                      key={camp.id} 
+                      className={cn(
+                        "hover:bg-secondary/40 transition-colors",
+                        isSelected && "bg-[#075E54]/5 dark:bg-[#00A884]/10"
+                      )}
+                    >
+                      <td className="px-3 py-2.5">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectOne(camp.id)}
+                          className="rounded border-border text-[#075E54] focus:ring-0 cursor-pointer"
+                        />
+                      </td>
+
+                      {/* 1. Campaign Name, Trigger Keywords & Mobile Device Info */}
+                      <td className="px-3 py-2.5">
+                        <div className="flex flex-col gap-0.5 min-w-[140px]">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Link 
+                              prefetch={false}
+                              href={`/whatsapp/campaigns/${camp.id}`}
+                              className="font-bold text-foreground hover:text-[#075E54] dark:hover:text-[#00A884] transition-colors truncate"
+                            >
+                              {camp.name}
+                            </Link>
+                            {camp.isDefault && (
+                              <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                                · Default Fallback
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                            {camp.keywords ? (
+                              <span className="truncate max-w-[200px]">
+                                Keywords: <strong className="text-foreground">{camp.keywords}</strong>
+                              </span>
+                            ) : (
+                              <span>Auto-Send Sequence</span>
+                            )}
+                            <span aria-hidden="true">·</span>
+                            <span>{tel.mediaSummary}</span>
+                            <span className="md:hidden" aria-hidden="true">·</span>
+                            <span className="md:hidden font-medium text-foreground">{tel.accountLabel}</span>
+                          </div>
+
+                          {/* Mobile Inline Actions */}
+                          <div className="flex sm:hidden items-center gap-1.5 mt-1.5">
+                            <Link prefetch={false} href={`/whatsapp/campaigns/${camp.id}`}>
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 h-6 px-2 rounded-md text-[10px] font-bold bg-secondary text-foreground cursor-pointer"
+                              >
+                                <Edit className="w-3 h-3" />
+                                <span>{t('Edit', 'এডিট')}</span>
+                              </button>
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteCamp(camp)}
+                              className="inline-flex items-center gap-1 h-6 px-2 rounded-md text-[10px] font-bold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>{t('Delete', 'ডিলিট')}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* 2. Device / Account (Desktop) */}
+                      <td className="px-3 py-2.5 hidden md:table-cell whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <Smartphone className="w-3.5 h-3.5 text-[#075E54] dark:text-[#00A884] shrink-0" />
+                          <span className="font-medium text-foreground">{tel.accountLabel}</span>
+                        </div>
+                      </td>
+
+                      {/* 3. Webhook Status (Visible on both Desktop & Mobile) */}
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <Webhook className={cn("w-3.5 h-3.5 shrink-0", tel.webhookStatus.tone)} />
+                          <div className="leading-tight">
+                            <span className={cn("font-bold block sm:inline", tel.webhookStatus.tone)}>
+                              {tel.webhookStatus.label}
+                            </span>
+                            <span className="hidden lg:inline text-muted-foreground mx-1" aria-hidden="true">·</span>
+                            <span className="block lg:inline text-[10px] font-mono tabular-nums text-muted-foreground">
+                              {tel.webhookStatus.detail}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* 4. Delivery Rate & Total Sent (Visible on both Desktop & Mobile) */}
+                      <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                        <div className="inline-flex flex-col items-end">
+                          <div className="flex items-center gap-1.5 font-mono tabular-nums">
+                            <span className="font-bold text-foreground">{tel.deliveryRate.toFixed(1)}%</span>
+                            <span className="text-[11px] text-muted-foreground">({camp.totalSent ?? 0})</span>
+                          </div>
+                          <div className="w-14 h-1 bg-secondary rounded-full overflow-hidden mt-1">
+                            <div
+                              className="h-full bg-[#075E54] dark:bg-[#00A884] rounded-full transition-all"
+                              style={{ width: `${Math.min(100, Math.max(0, tel.deliveryRate))}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* 5. Campaign Active / Paused Toggle */}
+                      <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                        <button
+                          type="button"
+                          disabled={togglingId === camp.id}
+                          onClick={() => handleToggleCampaign(camp.id, camp.isActive)}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer",
+                            camp.isActive
+                              ? "bg-[#25D366]/15 text-[#075E54] dark:text-[#00A884]"
+                              : "bg-secondary text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          <span>{camp.isActive ? 'Active' : 'Paused'}</span>
+                        </button>
+                      </td>
+
+                      {/* 6. Actions */}
+                      <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1">
+                          <Link prefetch={false} href={`/whatsapp/campaigns/${camp.id}`}>
+                            <button 
+                              type="button" 
+                              title="Edit / Configure Campaign"
+                              className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                          </Link>
+
+                          <button
+                            type="button"
+                            title="Delete Campaign"
+                            onClick={() => setConfirmDeleteCamp(camp)}
+                            className="p-1.5 rounded-md hover:bg-red-500/10 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   );
                 })}
-              </div>
-            )}
-
-            {/* Campaigns Grid */}
-            {loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-64 rounded-xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-[#E6E2D8] dark:border-[#262930]" />
-                ))}
-              </div>
-            ) : filteredCampaigns.length === 0 ? (
-              <div className="text-center py-14 px-4 rounded-2xl bg-[#FBF9F4] dark:bg-[#181A1F] border border-dashed border-[#E6E2D8] dark:border-[#262930]">
-                <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3">
-                  <Sparkles className="w-6 h-6" />
-                </div>
-                <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-4">
-                  {selectedFilter === 'all' ? 'No campaigns created yet' : 'No campaigns for this number'}
-                </h3>
-                <Link href={selectedFilter === 'all' ? '/whatsapp/campaigns/new' : `/whatsapp/campaigns/new?accountId=${selectedFilter}`}>
-                  <Button className="bg-[#164E43] hover:bg-[#124238] text-white font-semibold text-xs px-5 shadow-sm">
-                    <Plus className="w-4 h-4 mr-1.5" />
-                    Create New Campaign
-                  </Button>
-                </Link>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 items-start">
-                {filteredCampaigns.map((camp) => (
-                  <CampaignCard
-                    key={camp.id}
-                    campaign={camp}
-                    accounts={accounts}
-                    onToggleActive={fetchDashboardData}
-                    onDelete={handleDeleteCampaign}
-                  />
-                ))}
-              </div>
-            )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          /* Cards Grid View */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {filteredCampaigns.map((camp) => (
+              <CampaignCard
+                key={camp.id}
+                campaign={camp}
+                accounts={accounts}
+                logs={logs}
+                selected={selectedCampaignIds.has(camp.id)}
+                onToggleSelect={toggleSelectOne}
+                onToggleActive={fetchDashboardData}
+                onDelete={() => setConfirmDeleteCamp(camp)}
+              />
+            ))}
           </div>
         )}
       </div>
 
-      {/* 3. Message Delivery Logs */}
-      <div className="space-y-3 pt-4 border-t border-[#E6E2D8] dark:border-[#262930]">
+      {/* Confirm Bulk Delete Campaigns Modal (OK / Cancel) */}
+      <ConfirmDialog
+        open={confirmBulkDelete}
+        title={t('Delete Selected Campaigns?', 'নির্বাচিত ক্যাম্পেইনগুলো মুছে ফেলবেন?')}
+        description={t(
+          `Are you sure you want to permanently delete ${selectedCampaignIds.size} selected campaign(s)? Click OK to confirm or Cancel to keep them.`,
+          `আপনি কি নিশ্চিতভাবে নির্বাচিত ${selectedCampaignIds.size}টি ক্যাম্পেইন স্থায়ীভাবে মুছে ফেলতে চান? নিশ্চিত করতে OK এবং না চাইলে Cancel চাপুন।`
+        )}
+        confirmLabel={t('OK, Delete All', 'ওকে, সব মুছুন (OK)')}
+        cancelLabel={t('Cancel', 'বাতিল (Cancel)')}
+        variant="danger"
+        loading={bulkActionLoading === 'delete'}
+        onConfirm={handleBulkDelete}
+        onCancel={() => setConfirmBulkDelete(false)}
+      />
+
+      {/* Confirm Delete Campaign Modal (OK / Cancel) */}
+      <ConfirmDialog
+        open={Boolean(confirmDeleteCamp)}
+        title={t('Delete Campaign?', 'ক্যাম্পেইন মুছে ফেলবেন?')}
+        description={
+          confirmDeleteCamp
+            ? t(
+                `Are you sure you want to delete campaign "${confirmDeleteCamp.name}"? Click OK to confirm or Cancel to keep it.`,
+                `আপনি কি নিশ্চিতভাবে "${confirmDeleteCamp.name}" ক্যাম্পেইনটি মুছে ফেলতে চান? নিশ্চিত করতে OK এবং না চাইলে Cancel চাপুন।`
+              )
+            : ''
+        }
+        confirmLabel={t('OK, Delete', 'ওকে (OK)')}
+        cancelLabel={t('Cancel', 'বাতিল (Cancel)')}
+        variant="danger"
+        onConfirm={async () => {
+          if (!confirmDeleteCamp) return;
+          const id = confirmDeleteCamp.id;
+          setConfirmDeleteCamp(null);
+          await handleDeleteCampaign(id);
+        }}
+        onCancel={() => setConfirmDeleteCamp(null)}
+      />
+
+      {/* 5. Live Message Delivery Logs */}
+      <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 day-box-shadow">
         <WhatsAppMessageLog />
       </div>
     </div>

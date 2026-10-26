@@ -1,0 +1,6 @@
+{
+  "summary":  "Plan to resolve Next.js React hydration mismatch errors caused by synchronous localStorage and window reads inside useState initializers in WhatsAppNumbers, Sidebar, and NewFollowupPage.",
+  "updatedAt":  "2026-10-24T07:29:54.617736903Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

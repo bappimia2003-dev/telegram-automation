@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import * as React from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { 
   LayoutDashboard, 
   Bot, 
@@ -10,259 +10,334 @@ import {
   LogOut, 
   X, 
   PlusCircle, 
-  Sparkles,
-  Users,
-  ShieldCheck,
-  UserCheck,
-  Clock,
-  Target
-} from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Button } from "./ui/button"
-
-const baseWaNavItems = [
-  { href: "/whatsapp", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/whatsapp/new-followup", icon: Sparkles, label: "New Follow-up" },
-  { href: "/whatsapp/targeted-followup", icon: Target, label: "Targeted Follow-up" },
-  { href: "/whatsapp/campaigns/new", icon: PlusCircle, label: "New Campaign" },
-]
-
-const telegramNavItems = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/bots/new", icon: Bot, label: "New Bot" },
-  { href: "/api-keys", icon: Key, label: "API Keys" },
-]
+  Zap, 
+  Users, 
+  Target,
+  MessageSquare,
+  Menu
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useLanguage } from "./LanguageProvider";
 
 export function Sidebar() {
-  const pathname = usePathname()
-  const router = useRouter()
-  const [isOpen, setIsOpen] = React.useState(false)
-  const [authData, setAuthData] = React.useState<any>(null)
-
-  React.useEffect(() => {
-    setIsOpen(false)
-  }, [pathname])
-
-  React.useEffect(() => {
-    const loadAuth = () => {
-      fetch(`/api/auth?t=${Date.now()}`, { cache: "no-store" })
-        .then((r) => r.json())
-        .then((d) => {
-          if (d?.authenticated) setAuthData(d)
-        })
-        .catch(() => {})
+  const pathname = usePathname();
+  const router = useRouter();
+  const { t } = useLanguage();
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [authData, setAuthData] = React.useState<any>(null);
+  const [activeChannel, setActiveChannel] = React.useState<'whatsapp' | 'telegram'>(() => {
+    if (pathname?.startsWith('/dashboard') || pathname?.startsWith('/bots') || pathname?.startsWith('/api-keys')) {
+      return 'telegram';
     }
-    loadAuth()
-    const timer = setInterval(loadAuth, 15000)
-    return () => clearInterval(timer)
-  }, [])
+    return 'whatsapp';
+  });
 
-  const isAdmin = !authData || authData.role === "admin"
-  const waNavItems = isAdmin
-    ? [...baseWaNavItems, { href: "/whatsapp/clients", icon: Users, label: "Clients Panel" }]
-    : baseWaNavItems.filter((item) => item.href !== "/whatsapp/new-followup")
+  const waNavItems = React.useMemo(() => [
+    { href: "/whatsapp", icon: LayoutDashboard, label: t("Overview & Dashboard", "ওভারভিউ ও ড্যাশবোর্ড"), shortLabel: t("Overview", "ওভারভিউ") },
+    { href: "/whatsapp/targeted-followup", icon: Target, label: t("Targeted Follow-up", "টার্গেটেড ফলো-আপ"), shortLabel: t("Targeted", "টার্গেটেড") },
+    { href: "/whatsapp/new-followup", icon: Zap, label: t("Smart Auto-Sequence", "স্মার্ট অটো-সিকোয়েন্স"), shortLabel: t("Sequence", "সিকোয়েন্স") },
+    { href: "/whatsapp/campaigns/new", icon: PlusCircle, label: t("Create Ad Campaign", "অ্যাড ক্যাম্পেইন তৈরি করুন"), shortLabel: t("Campaigns", "ক্যাম্পেইন") },
+  ], [t]);
+
+  const telegramNavItems = React.useMemo(() => [
+    { href: "/dashboard", icon: Bot, label: t("Telegram Bots", "টেলিগ্রাম বটসমূহ"), shortLabel: t("Bots", "বটসমূহ") },
+    { href: "/bots/new", icon: PlusCircle, label: t("Add New Bot", "নতুন বট যুক্ত করুন"), shortLabel: t("Add Bot", "নতুন বট") },
+    { href: "/api-keys", icon: Key, label: t("AI API Keys", "এআই এপিআই কী"), shortLabel: t("API Keys", "এপিআই কী") },
+  ], [t]);
+
+  React.useEffect(() => {
+    setIsOpen(false);
+    if (pathname.startsWith('/dashboard') || pathname.startsWith('/bots') || pathname.startsWith('/api-keys')) {
+      setActiveChannel('telegram');
+    } else {
+      setActiveChannel('whatsapp');
+    }
+  }, [pathname]);
+
+  React.useEffect(() => {
+    const loadAuth = async () => {
+      try {
+        if (typeof window !== 'undefined' && localStorage.getItem('jalabot_logged_out') === 'true') {
+          window.location.assign('/login');
+          return;
+        }
+        const res = await fetch(`/api/auth?t=${Date.now()}`, { cache: "no-store" });
+        if (!res.ok) return;
+        const text = await res.text();
+        if (!text || text.trim().startsWith('<')) return;
+        const d = JSON.parse(text);
+        if (d?.authenticated) {
+          // If client logged in within iframe where cookies are restricted, honor local session meta
+          try {
+            const localMeta = localStorage.getItem('jalabot_session_meta');
+            if (localMeta) {
+              const parsed = JSON.parse(localMeta);
+              if (parsed?.role === 'client' && d.role === 'admin') {
+                setAuthData({ ...d, role: 'client', client: { name: parsed.clientName || 'Client', id: parsed.clientId } });
+                return;
+              }
+            }
+          } catch {}
+          setAuthData(d);
+        }
+      } catch {}
+    };
+    loadAuth();
+    const timer = setInterval(loadAuth, 25000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const isAdmin = !authData || authData.role === "admin";
+  const clientInfo = authData?.client;
+  const remainingDays = clientInfo?.remainingDays;
+
+  const currentNav = activeChannel === 'whatsapp' ? waNavItems : telegramNavItems;
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth', { method: 'DELETE' })
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('wa_cached_campaigns')
-        localStorage.removeItem('wa_cached_accounts')
-        localStorage.removeItem('wa_cached_stats')
-        localStorage.removeItem('wa_cached_followup')
+        localStorage.setItem('jalabot_logged_out', 'true');
+        localStorage.removeItem('jalabot_session_meta');
+        localStorage.removeItem('wa_cached_campaigns');
+        localStorage.removeItem('wa_cached_accounts');
+        localStorage.removeItem('wa_cached_stats');
+        localStorage.removeItem('wa_cached_followup');
+        const isHttps = window.location.protocol === 'https:';
+        const cookieAttr = isHttps
+          ? 'path=/; max-age=0; SameSite=None; Secure; Partitioned'
+          : 'path=/; max-age=0; SameSite=Lax';
+        document.cookie = `tg-auto-session=; ${cookieAttr}`;
       }
-    } catch (e) {
-      console.error(e)
+      await fetch('/api/auth', { method: 'DELETE' });
+    } catch {}
+    if (typeof window !== 'undefined') {
+      window.location.assign('/login');
+    } else {
+      router.push('/login');
     }
-    router.push("/")
-    router.refresh()
-  }
+  };
 
-  const clientInfo = authData?.client
-  const remainingDays = clientInfo?.remainingDays
-  const isExpired = clientInfo?.isExpired
 
   return (
     <>
-      {/* Mobile Hamburger Button */}
+      {/* Mobile Hamburger Button inside Header Left Slot */}
       <button 
         type="button"
         aria-label="Toggle navigation menu"
-        className="md:hidden fixed top-3 left-3 z-40 w-11 h-11 flex flex-col items-center justify-center gap-1.5 rounded-[15px] bg-[#FBF9F4] dark:bg-[#161C25] border border-[#E4DFD2] dark:border-[#222B36] shadow-sm text-[#1B1D1A] dark:text-[#E9EEF2] active:scale-95 transition-transform cursor-pointer"
+        className="md:hidden fixed top-2.5 left-3 z-40 w-9 h-9 flex items-center justify-center rounded-lg bg-card border border-border text-foreground active:scale-95 transition-transform"
         onClick={() => setIsOpen(!isOpen)}
       >
-        <span className="w-4 h-[2px] rounded-full bg-current" />
-        <span className="w-2.5 h-[2px] rounded-full bg-current self-start ml-3.5" />
-        <span className="w-4 h-[2px] rounded-full bg-current" />
+        <Menu className="w-4 h-4" />
       </button>
 
-      {/* Sidebar Panel */}
+      {/* Desktop & Drawer Sidebar Panel */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-40 w-[220px] md:w-64 flex flex-col justify-between bg-[#F3F0E8] dark:bg-[#12171F] border-r border-[#E4DFD2] dark:border-[#222B36] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:shadow-none select-none",
-        "rounded-r-[24px] md:rounded-none shadow-[14px_0_36px_-18px_rgba(0,0,0,0.35)] md:shadow-none",
+        "fixed inset-y-0 left-0 z-40 w-64 flex flex-col justify-between bg-card border-r border-border transition-transform duration-200 ease-out select-none",
         isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
       )}>
-        <div className="flex-1 overflow-y-auto">
-          {/* Header */}
-          <div className="flex h-[64px] items-center justify-between px-3.5 border-b border-[#E4DFD2] dark:border-[#222B36]">
-            <Link href="/whatsapp" className="flex items-center gap-2.5">
-              <div className="w-[34px] h-[34px] rounded-[10px] bg-[#E7E2D5] dark:bg-[#1C2530] border border-[#DDD7C8] dark:border-[#28323F] flex items-center justify-center text-[#164F43] dark:text-[#34D399] shadow-xs">
-                <Bot className="h-4 w-4" />
+        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+          {/* Brand Header */}
+          <div className="h-14 flex items-center justify-between px-4 border-b border-border shrink-0">
+            <Link prefetch={false} href="/whatsapp" className="flex items-center gap-2.5 min-w-0 group">
+              <img
+                src="/jalabot-logo.svg"
+                alt="JalaBot Logo"
+                className="w-8 h-8 rounded-lg shrink-0 shadow-xs group-hover:scale-105 transition-transform"
+              />
+              <div className="flex flex-col min-w-0">
+                <span className="text-sm font-extrabold tracking-tight text-foreground truncate leading-tight">
+                  {t('JalaBot', 'জালাবট')}
+                </span>
+                <span className="text-[10px] font-semibold text-muted-foreground truncate leading-tight">
+                  {t('Automation Suite', 'অটোমেশন স্যুট')}
+                </span>
               </div>
-              <span className="text-[19px] font-bold tracking-tight text-[#1B1D1A] dark:text-[#E9EEF2]">
-                {isAdmin ? "Panel" : (authData?.clientName || "Panel")}
-              </span>
             </Link>
 
             <button 
               aria-label="Close menu"
-              className="md:hidden text-[#6B706A] dark:text-[#7C8794] hover:text-[#1B1D1A] dark:hover:text-white p-1.5 rounded-lg active:scale-95 transition-transform"
+              className="md:hidden text-muted-foreground hover:text-foreground p-1.5 rounded-lg active:scale-95 transition-transform"
               onClick={() => setIsOpen(false)}
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4" />
             </button>
           </div>
-          
+
+          {/* Channel Selector Segment */}
+          <div className="p-3 border-b border-border">
+            <div className="text-[11px] font-semibold text-muted-foreground px-1 mb-2">
+              {t('Active Channel', 'সক্রিয় চ্যানেল')}
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveChannel('telegram');
+                  router.push('/dashboard');
+                }}
+                className={cn(
+                  "w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap bg-[#0088CC] hover:bg-[#0077B5] dark:bg-[#229ED9] dark:hover:bg-[#1E8CC0] text-white shadow-xs",
+                  activeChannel === 'telegram'
+                    ? "ring-2 ring-[#0088CC]/40 dark:ring-[#229ED9]/50 ring-offset-1 ring-offset-card"
+                    : "opacity-90 hover:opacity-100"
+                )}
+              >
+                <Bot className="w-3.5 h-3.5 shrink-0" />
+                <span>{t('Telegram', 'টেলিগ্রাম')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveChannel('whatsapp');
+                  router.push('/whatsapp');
+                }}
+                className={cn(
+                  "w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap bg-[#075E54] hover:bg-[#064E46] dark:bg-[#00A884] dark:hover:bg-[#008f6f] text-white dark:text-[#0B141A] shadow-xs",
+                  activeChannel === 'whatsapp'
+                    ? "ring-2 ring-[#075E54]/40 dark:ring-[#00A884]/50 ring-offset-1 ring-offset-card"
+                    : "opacity-90 hover:opacity-100"
+                )}
+              >
+                <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+                <span>{t('WhatsApp', 'হোয়াটসঅ্যাপ')}</span>
+              </button>
+            </div>
+          </div>
+
           {/* Nav Items */}
-          <nav className="p-2.5 space-y-3">
-            {/* UPPER SECTION: WHATSAPP */}
-            <div>
-              <div className="px-2.5 mb-1.5 text-[10.5px] font-bold tracking-[0.14em] text-[#6B706A] dark:text-[#7C8794] uppercase">
-                WHATSAPP
-              </div>
-              <div className="space-y-1">
-                {waNavItems.map((item) => {
-                  const isActive = item.href === '/whatsapp' 
-                    ? pathname === '/whatsapp'
-                    : pathname.startsWith(item.href);
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={cn(
-                        "flex items-center gap-2.5 rounded-[12px] px-3 py-2.5 text-[13.5px] font-semibold transition-all duration-150 group active:scale-[0.98]",
-                        isActive 
-                          ? "bg-[#164E43] text-white font-bold shadow-sm" 
-                          : "text-[#1B1D1A] dark:text-[#E9EEF2] hover:bg-[#E7E2D5] dark:hover:bg-[#1A222C]"
-                      )}
-                      onClick={() => setIsOpen(false)}
-                    >
-                      <Icon className="h-4 w-4 shrink-0" />
-                      <span>{item.label}</span>
-                    </Link>
-                  );
-                })}
-              </div>
+          <nav className="p-3 space-y-1 flex-1">
+            <div className={cn(
+              "text-[11px] font-semibold px-2 py-1",
+              activeChannel === 'telegram' ? "text-[#0088CC] dark:text-[#229ED9]" : "text-muted-foreground"
+            )}>
+              {activeChannel === 'whatsapp' ? t('WhatsApp Management', 'হোয়াটসঅ্যাপ ম্যানেজমেন্ট') : t('Telegram Bot Hub', 'টেলিগ্রাম বট হাব')}
             </div>
 
-            {isAdmin && (
-              <>
-                <div className="h-[1px] bg-[#E4DFD2] dark:border-t dark:border-[#222B36] mx-1.5" />
-                <div>
-                  <div className="px-2.5 mb-1.5 text-[10.5px] font-bold tracking-[0.14em] text-[#6B706A] dark:text-[#7C8794] uppercase">
-                    TELEGRAM
+            {currentNav.map((item) => {
+              const isActive = item.href === '/whatsapp' || item.href === '/dashboard'
+                ? pathname === item.href
+                : pathname.startsWith(item.href);
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={item.href}
+                  prefetch={false}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center justify-between rounded-lg px-3 py-2.5 text-xs font-semibold transition-colors duration-150",
+                    isActive 
+                      ? activeChannel === 'telegram'
+                        ? "bg-[#0088CC]/12 dark:bg-[#229ED9]/15 text-[#0088CC] dark:text-[#229ED9] font-bold"
+                        : "bg-[#075E54]/10 dark:bg-[#00A884]/15 text-[#075E54] dark:text-[#00A884] font-bold" 
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/70"
+                  )}
+                  onClick={() => setIsOpen(false)}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{item.label}</span>
                   </div>
-                  <div className="space-y-1">
-                    {telegramNavItems.map((item) => {
-                      const isActive = item.href === '/dashboard'
-                        ? (pathname === '/dashboard' || (pathname.startsWith('/bots') && pathname !== '/bots/new'))
-                        : pathname.startsWith(item.href);
-                      const Icon = item.icon;
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          className={cn(
-                            "flex items-center gap-2.5 rounded-[12px] px-3 py-2.5 text-[13.5px] font-semibold transition-all duration-150 group active:scale-[0.98]",
-                            isActive 
-                              ? "bg-[#164E43] text-white font-bold shadow-sm" 
-                              : "text-[#1B1D1A] dark:text-[#E9EEF2] hover:bg-[#E7E2D5] dark:hover:bg-[#1A222C]"
-                          )}
-                          onClick={() => setIsOpen(false)}
-                        >
-                          <Icon className="h-4 w-4 shrink-0" />
-                          <span>{item.label}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
+                </Link>
+              );
+            })}
+
+            {/* Extra Admin Options */}
+            {isAdmin && activeChannel === 'whatsapp' && (
+              <div className="pt-2 mt-2 border-t border-border">
+                <div className="text-[11px] font-semibold text-muted-foreground px-2 py-1">
+                  {t('Administration', 'অ্যাডমিনিস্ট্রেশন')}
                 </div>
-              </>
+                <Link
+                  prefetch={false}
+                  href="/whatsapp/clients"
+                  className={cn(
+                    "flex items-center justify-between rounded-lg px-3 py-2.5 text-xs font-semibold transition-colors",
+                    pathname === '/whatsapp/clients'
+                      ? "bg-[#075E54]/10 dark:bg-[#00A884]/15 text-[#075E54] dark:text-[#00A884] font-bold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/70"
+                  )}
+                  onClick={() => setIsOpen(false)}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Users className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{t('Clients & Access', 'ক্লায়েন্ট ও অ্যাক্সেস')}</span>
+                  </div>
+                </Link>
+              </div>
             )}
           </nav>
         </div>
 
-        {/* Footer Area with Profile / Day Pop-up Badge & Logout */}
-        <div className="p-2.5 border-t border-[#E4DFD2] dark:border-[#222B36] space-y-2">
-          {/* Client Profile Card with Pop-up Day Badge */}
-          {authData?.role === "client" && clientInfo ? (
-            <div className="relative pt-2">
-              {/* Pop-up Day Number Badge on top of Profile */}
-              {remainingDays !== null && remainingDays !== undefined && (
-                <div
-                  className={cn(
-                    "absolute -top-1 right-2.5 z-10 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wide shadow-md border flex items-center gap-1",
-                    isExpired || remainingDays <= 0
-                      ? "bg-red-600 text-white border-red-500 animate-pulse"
-                      : remainingDays <= 5
-                      ? "bg-amber-500 text-white border-amber-400"
-                      : "bg-[#164E43] text-white border-[#1F6E5E]"
-                  )}
-                >
-                  <Clock className="w-2.5 h-2.5" />
-                  <span>{isExpired || remainingDays <= 0 ? "0 Days (Off)" : `${remainingDays}d Left`}</span>
-                </div>
-              )}
-
-              <div className="rounded-[14px] bg-[#E7E2D5] dark:bg-[#1A222C] border border-[#E4DFD2] dark:border-[#222B36] p-2.5 shadow-xs">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-[#164E43]/15 dark:bg-[#34D399]/15 text-[#164E43] dark:text-[#34D399] flex items-center justify-center font-bold text-xs shrink-0">
-                    <UserCheck className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-bold text-[#1B1D1A] dark:text-[#E9EEF2] truncate">
-                      {clientInfo.name}
-                    </div>
-                    <div className="text-[10px] text-[#6B706A] dark:text-[#7C8794]">
-                      Max {clientInfo.maxWhatsappNumbers} SIM • {clientInfo.maxCampaigns} Camp
-                    </div>
-                  </div>
-                </div>
+        {/* Footer Area with Profile status */}
+        <div className="p-3 border-t border-border space-y-2 shrink-0 bg-card">
+          <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-secondary/70 text-xs">
+            <div className="min-w-0">
+              <div className="font-bold text-foreground truncate">
+                {isAdmin ? t('Admin Account', 'অ্যাডমিন অ্যাকাউন্ট') : (clientInfo?.name || 'Client')}
+              </div>
+              <div className="text-[11px] text-muted-foreground truncate">
+                {isAdmin ? t('Master Access', 'মাস্টার অ্যাক্সেস') : `${remainingDays ?? 30} ${t('days left', 'দিন বাকি')}`}
               </div>
             </div>
-          ) : (
-            <div className="h-10 rounded-[12px] bg-[#E7E2D5] dark:bg-[#1A222C] border border-[#E4DFD2] dark:border-[#222B36] flex items-center justify-between px-3 text-[13px] font-bold text-[#1B1D1A] dark:text-[#E9EEF2] shadow-xs">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[#1F9D6B] dark:bg-[#34D399] animate-pulse" />
-                <span>System Active</span>
-              </div>
-              {isAdmin && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#164E43]/15 dark:bg-[#34D399]/15 text-[#164E43] dark:text-[#34D399] flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" /> Admin
-                </span>
-              )}
-            </div>
-          )}
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#075E54]/10 dark:bg-[#00A884]/15 text-[#075E54] dark:text-[#00A884]">
+              {isAdmin ? t('Admin', 'অ্যাডমিন') : t('Client', 'ক্লায়েন্ট')}
+            </span>
+          </div>
 
-          <Button 
-            variant="ghost" 
-            className="w-full justify-start text-[#6B706A] dark:text-[#7C8794] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-950/20 transition-colors text-xs font-bold rounded-[12px] h-8 px-3"
+          <button 
+            type="button"
+            className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-red-600 dark:hover:text-red-400 transition-colors rounded-lg hover:bg-red-500/10 cursor-pointer"
             onClick={handleLogout}
           >
-            <LogOut className="mr-2 h-3.5 w-3.5" />
-            Logout
-          </Button>
+            <span className="flex items-center gap-2">
+              <LogOut className="h-3.5 w-3.5" />
+              <span>{t('Log Out', 'লগ আউট')}</span>
+            </span>
+          </button>
         </div>
+
       </aside>
-      
+
       {/* Mobile Backdrop Overlay */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-[rgba(8,12,10,0.52)] backdrop-blur-[3px] z-30 md:hidden transition-opacity duration-300"
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-30 md:hidden transition-opacity"
           onClick={() => setIsOpen(false)}
         />
       )}
+
+      {/* Android / Mobile Ergonomic Bottom Navigation Bar */}
+      <nav
+        aria-label="Mobile quick navigation"
+        className="md:hidden fixed bottom-0 inset-x-0 z-30 h-14 bg-card/95 backdrop-blur-md border-t border-border flex items-center justify-around px-1 select-none"
+      >
+        {currentNav.map((item) => {
+          const isActive = item.href === '/whatsapp' || item.href === '/dashboard'
+            ? pathname === item.href
+            : pathname.startsWith(item.href);
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              prefetch={false}
+              href={item.href}
+              className={cn(
+                "flex flex-col items-center justify-center gap-0.5 py-1 px-2 rounded-lg min-w-[64px] transition-colors",
+                isActive
+                  ? activeChannel === 'telegram'
+                    ? "text-[#0088CC] dark:text-[#229ED9] font-bold"
+                    : "text-[#075E54] dark:text-[#00A884] font-bold"
+                  : "text-muted-foreground hover:text-foreground font-medium"
+              )}
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              <span className="text-[10px] truncate max-w-[76px]">{item.shortLabel}</span>
+            </Link>
+          );
+        })}
+      </nav>
     </>
-  )
+  );
 }

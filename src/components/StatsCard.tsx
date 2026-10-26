@@ -7,11 +7,11 @@ interface StatsCardProps {
   value: string | number;
   icon: LucideIcon;
   trend?: string;
+  subtitle?: string;
   className?: string;
 }
 
-export function StatsCard({ title, value, icon: Icon, trend, className }: StatsCardProps) {
-  // Extract number and possible suffix like "/ 4 Connected"
+export function StatsCard({ title, value, icon: Icon, trend, subtitle, className }: StatsCardProps) {
   const valStr = String(value);
   const match = valStr.match(/^(\d+)(.*)$/);
   const numPart = match ? match[1] : valStr;
@@ -19,36 +19,47 @@ export function StatsCard({ title, value, icon: Icon, trend, className }: StatsC
 
   return (
     <div className={cn(
-      "rounded-[20px] border border-[#E4DFD2] dark:border-[#222B36] bg-[#FBF9F4] dark:bg-[#181A1F] p-3.5 sm:p-4 transition-all duration-200 shadow-xs hover:border-[#164E43]/40 dark:hover:border-emerald-700/50",
+      "rounded-2xl border border-border bg-card p-4 transition-all duration-200 day-box-shadow hover:border-[#075E54]/35 dark:hover:border-[#00A884]/40 flex flex-col justify-between min-h-[96px]",
       className
     )}>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11.5px] sm:text-xs font-bold text-[#6B706A] dark:text-[#8A9B94] truncate">
+        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider truncate">
           {title}
         </span>
-        <div className="w-[34px] h-[34px] rounded-[12px] bg-[#164E43] text-white flex items-center justify-center shrink-0 shadow-xs">
+        <div className="w-8 h-8 rounded-xl bg-secondary text-[#075E54] dark:bg-[#00A884]/15 dark:text-[#00A884] flex items-center justify-center shrink-0 border border-border/60">
           <Icon className="h-4 w-4" />
         </div>
       </div>
 
-      <div className="mt-1.5 flex items-baseline flex-wrap gap-1 font-mono tabular-nums">
-        <span className="text-[24px] sm:text-[28px] font-bold tracking-tight text-[#164E43] dark:text-[#5FD1A5]">
-          {numPart}
-        </span>
-        {suffixPart && (
-          <span className="text-[11.5px] sm:text-xs font-semibold text-[#6B706A] dark:text-[#8A9B94]">
-            {suffixPart}
+      <div className="mt-2.5 flex items-baseline justify-between gap-2">
+        <div className="flex items-baseline gap-1.5 font-mono tabular-nums">
+          <span className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
+            {numPart}
           </span>
-        )}
+          {suffixPart && (
+            <span className="text-xs font-semibold text-muted-foreground font-sans">
+              {suffixPart}
+            </span>
+          )}
+        </div>
+
         {trend && (
           <span className={cn(
-            "text-[11px] font-bold ml-auto",
-            trend.startsWith("+") ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"
+            "text-xs font-semibold px-2 py-0.5 rounded-lg",
+            trend.startsWith("+") 
+              ? "bg-[#25D366]/15 text-[#075E54] dark:text-[#00A884]" 
+              : "bg-red-500/10 text-red-600 dark:text-red-400"
           )}>
             {trend}
           </span>
         )}
       </div>
+
+      {subtitle && (
+        <p className="text-[11px] font-medium text-muted-foreground mt-1.5 truncate">
+          {subtitle}
+        </p>
+      )}
     </div>
   )
 }
