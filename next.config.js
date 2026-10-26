@@ -1,9 +1,10 @@
 /** @type {import('next').NextConfig} */
 module.exports = (phase) => {
   const isDev = phase === 'phase-development-server';
+  const isVercel = Boolean(process.env.VERCEL);
   return {
-    distDir: isDev ? '.next-dev' : '.next',
-    output: 'standalone',
+    ...(isDev && !isVercel ? { distDir: '.next-dev' } : {}),
+    ...(isVercel ? {} : { output: 'standalone' }),
     compress: true,
     swcMinify: true,
     poweredByHeader: false,
