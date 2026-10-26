@@ -1,11 +1,6 @@
 /** @type {import('next').NextConfig} */
-module.exports = (phase) => {
-  const isDev = phase === 'phase-development-server';
-  const isVercel = Boolean(process.env.VERCEL);
-  return {
-    ...(isDev && !isVercel ? { distDir: '.next-dev' } : {}),
-    ...(isVercel ? {} : { output: 'standalone' }),
-    compress: true,
+const nextConfig = {
+  compress: true,
     swcMinify: true,
     poweredByHeader: false,
     images: {
@@ -26,9 +21,10 @@ module.exports = (phase) => {
         },
       ],
     },
-    experimental: {
-      optimizePackageImports: ['lucide-react', 'framer-motion'],
-    },
-  };
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'framer-motion'],
+  },
 };
+
+module.exports = nextConfig;
 
